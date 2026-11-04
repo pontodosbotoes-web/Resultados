@@ -305,11 +305,9 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS
+# ABA COMPRAS (AGORA AGRUPADA)
 # ==========================================
 with tab_compras:
-    st.markdown("### 🛒 Compras")
-    
     with st.form(key="form_compras"):
         c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1], vertical_alignment="bottom")
         
@@ -328,13 +326,11 @@ with tab_compras:
     if df_compras.empty:
         st.info("Nenhuma compra encontrada para o período.")
     else:
-        tot_qtd = df_compras["Quantidade"].sum()
         tot_val = df_compras["Valor"].sum()
         
-        # Cards Totais
-        c_t1, c_t2 = st.columns(2)
-        c_t1.markdown(f'<div class="card-item" style="background-color: rgba(88,166,255,0.08); border: 1px solid #58a6ff; border-left: 4px solid #58a6ff;"><div class="card-label" style="color: #58a6ff;">📦 Total Comprado (Qtd)</div><div class="card-value" style="color: #58a6ff;">{formatar_decimal(tot_qtd)}</div></div>', unsafe_allow_html=True)
-        c_t2.markdown(f'<div class="card-item" style="background-color: rgba(88,166,255,0.08); border: 1px solid #58a6ff; border-left: 4px solid #58a6ff;"><div class="card-label" style="color: #58a6ff;">💰 Valor Total Comprado</div><div class="card-value" style="color: #58a6ff;">{formatar_moeda(tot_val)}</div></div>', unsafe_allow_html=True)
+        # Apenas o Card de Valor Total (Menor e Alinhado à Esquerda)
+        col_tot, _ = st.columns([1, 2])
+        col_tot.markdown(f'<div class="card-item" style="background-color: rgba(88,166,255,0.08); border: 1px solid #58a6ff; border-left: 4px solid #58a6ff;"><div class="card-label" style="color: #58a6ff;">💰 Valor Total Comprado</div><div class="card-value" style="color: #58a6ff;">{formatar_moeda(tot_val)}</div></div>', unsafe_allow_html=True)
         
         st.write("")
         
@@ -342,20 +338,34 @@ with tab_compras:
         meses_map = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
         df_compras['Mes_Nome'] = df_compras['Mes'].map(meses_map)
         
-        # Prepara os dados para a tabela exibir de forma correta
-        df_exibir = df_compras[['Ano', 'Mes_Nome', 'Loja', 'Departamento', 'Fornecedor', 'Quantidade', 'Valor']].copy()
+        # Agrupar por Departamento e Fornecedor, pivotando os meses
+        df_pivot = df_compras.pivot_table(
+            index=['Departamento', 'Fornecedor'], 
+            columns='Mes_Nome', 
+            values='Valor', 
+            aggfunc='sum'
+        )
         
+        # Garante que todos os meses apareçam na tabela, mesmo se zerados
+        meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+        for m in meses_colunas:
+            if m not in df_pivot.columns:
+                df_pivot[m] = 0.0
+                
+        df_pivot = df_pivot[meses_colunas]
+        df_pivot['Total'] = df_pivot.sum(axis=1)
+        df_pivot = df_pivot.fillna(0)
+        
+        # Ordena primeiro pelo nome do Departamento, e depois pelo maior valor de compra (Total)
+        df_pivot = df_pivot.sort_values(by=['Departamento', 'Total'], ascending=[True, False])
+        
+        # Prepara a configuração visual das colunas para o Streamlit
+        col_config = {m: st.column_config.NumberColumn(m, format="R$ %.2f") for m in meses_colunas}
+        col_config["Total"] = st.column_config.NumberColumn("Total", format="R$ %.2f")
+        
+        # Exibe a tabela com os Departamentos colapsáveis
         st.dataframe(
-            df_exibir,
+            df_pivot,
             use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Ano": st.column_config.NumberColumn("Ano", format="%d"),
-                "Mes_Nome": st.column_config.TextColumn("Mês"),
-                "Loja": st.column_config.TextColumn("Loja"),
-                "Departamento": st.column_config.TextColumn("Departamento"),
-                "Fornecedor": st.column_config.TextColumn("Fornecedor"),
-                "Quantidade": st.column_config.NumberColumn("Qtd Comprada", format="%.2f"),
-                "Valor": st.column_config.NumberColumn("Valor Comprado (R$)", format="R$ %.2f")
-            }
+            column_config=col_config
         )
