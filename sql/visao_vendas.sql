@@ -3,9 +3,13 @@ SELECT
     DATEPART(hour, m.DataEntradaSaida) AS Hora,
     SUM(ISNULL(m.TotMov, 0) - ISNULL(m.TotCancel, 0)) AS ValorVenda,
     COUNT(DISTINCT m.IdMov) AS QtdVendas,
-    SUM(ISNULL((im.Qtd - ISNULL(im.QtdCancel, 0)) / NULLIF(im.FatorConvUnid, 0), 0)) AS QtdItens
+    SUM(ISNULL(itens.QtdItens, 0)) AS QtdItens
 FROM Movimento m
-LEFT JOIN ItensMov im ON m.IdMov = im.IdMov
+OUTER APPLY (
+    SELECT SUM(ISNULL((im.Qtd - ISNULL(im.QtdCancel, 0)) / NULLIF(im.FatorConvUnid, 0), 0)) AS QtdItens
+    FROM ItensMov im
+    WHERE im.IdMov = m.IdMov
+) itens
 WHERE m.TipoMov = '2.4'
     AND m.NfeStatus = 'U'
     AND m.DtFinalizacao IS NOT NULL
