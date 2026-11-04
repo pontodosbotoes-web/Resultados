@@ -52,7 +52,6 @@ def formatar_inteiro(v):
 def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     if df_hora.empty: return go.Figure()
     
-    # Formatação do Tooltip
     if is_moeda:
         custom_data = [f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") for v in df_hora[col_valor]]
         hover_tpl = "%{x}h<br>R$ %{customdata}<extra></extra>"
@@ -62,14 +61,13 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
 
     max_val = df_hora[col_valor].max()
     
-    # Converte a cor HEX para RGBA com transparência para as barras normais
     r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
     cor_transparente = f"rgba({r}, {g}, {b}, 0.4)"
     
     cores_barras = []
     for v in df_hora[col_valor]:
         if v == max_val and max_val > 0:
-            cores_barras.append("#FFFFFF") # Destaque em Branco Puro
+            cores_barras.append("#FFFFFF")
         else:
             cores_barras.append(cor_transparente)
 
@@ -306,29 +304,58 @@ with tab_visao:
                 dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
+# ==========================================
+# ABA COMPRAS
+# ==========================================
 with tab_compras:
     st.markdown("### 🛒 Compras")
-    c1, c2, c3 = st.columns([1, 1, 1])
-    data_ini_c = c1.date_input("De:", value=date(hoje.year, 1, 1), format="DD/MM/YYYY")
-    data_fim_c = c2.date_input("Até:", value=date(hoje.year, 12, 31), format="DD/MM/YYYY")
     
-    df_compras = buscar_compras(data_ini_c.strftime("%Y-%m-%d"), data_fim_c.strftime("%Y-%m-%d"), "")
+    with st.form(key="form_compras"):
+        c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1], vertical_alignment="bottom")
+        
+        data_ini_c = c1.date_input("De:", value=date(hoje.year, 1, 1), format="DD/MM/YYYY", key="dt_ini_compras")
+        data_fim_c = c2.date_input("Até:", value=date(hoje.year, 12, 31), format="DD/MM/YYYY", key="dt_fim_compras")
+        filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
+        
+        with c4:
+            btn_compras = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
+
+    filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
+    
+    with st.spinner("Carregando dados de compras..."):
+        df_compras = buscar_compras(data_ini_c.strftime("%Y-%m-%d"), data_fim_c.strftime("%Y-%m-%d"), filial_cod_c)
     
     if df_compras.empty:
-        st.info("Nenhuma compra encontrada.")
+        st.info("Nenhuma compra encontrada para o período.")
     else:
         tot_qtd = df_compras["Quantidade"].sum()
         tot_val = df_compras["Valor"].sum()
         
+        # Cards Totais
         c_t1, c_t2 = st.columns(2)
         c_t1.markdown(f'<div class="card-item" style="background-color: rgba(88,166,255,0.08); border: 1px solid #58a6ff; border-left: 4px solid #58a6ff;"><div class="card-label" style="color: #58a6ff;">📦 Total Comprado (Qtd)</div><div class="card-value" style="color: #58a6ff;">{formatar_decimal(tot_qtd)}</div></div>', unsafe_allow_html=True)
         c_t2.markdown(f'<div class="card-item" style="background-color: rgba(88,166,255,0.08); border: 1px solid #58a6ff; border-left: 4px solid #58a6ff;"><div class="card-label" style="color: #58a6ff;">💰 Valor Total Comprado</div><div class="card-value" style="color: #58a6ff;">{formatar_moeda(tot_val)}</div></div>', unsafe_allow_html=True)
         
         st.write("")
         
-        df_show = df_compras.copy()
-        df_show["Valor"] = df_show["Valor"].apply(formatar_moeda)
-        df_show["Quantidade"] = df_show["Quantidade"].apply(formatar_decimal)
-        df_show.columns = ["Ano", "Mês", "Loja", "Departamento", "Fornecedor", "Qtd Comprada", "Valor Comprado"]
+        # Traduz o mês numérico para texto (1 -> Jan, 2 -> Fev, etc)
+        meses_map = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
+        df_compras['Mes_Nome'] = df_compras['Mes'].map(meses_map)
         
-        st.dataframe(df_show, use_container_width=True, hide_index=True)
+        # Prepara os dados para a tabela exibir de forma correta
+        df_exibir = df_compras[['Ano', 'Mes_Nome', 'Loja', 'Departamento', 'Fornecedor', 'Quantidade', 'Valor']].copy()
+        
+        st.dataframe(
+            df_exibir,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Ano": st.column_config.NumberColumn("Ano", format="%d"),
+                "Mes_Nome": st.column_config.TextColumn("Mês"),
+                "Loja": st.column_config.TextColumn("Loja"),
+                "Departamento": st.column_config.TextColumn("Departamento"),
+                "Fornecedor": st.column_config.TextColumn("Fornecedor"),
+                "Quantidade": st.column_config.NumberColumn("Qtd Comprada", format="%.2f"),
+                "Valor": st.column_config.NumberColumn("Valor Comprado (R$)", format="R$ %.2f")
+            }
+        )
