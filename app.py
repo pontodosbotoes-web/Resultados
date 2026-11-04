@@ -10,7 +10,7 @@ from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, bus
 
 st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_icon="📊")
 
-# CSS Customizado (Idêntico ao original)
+# CSS Customizado
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;}
@@ -20,18 +20,15 @@ st.markdown("""
         
         .tema-titulo { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #30363d; padding-bottom: 6px; }
         
-        /* Estilo base do Card */
         .card-item { background: #1c2333; border-radius: 10px; padding: 12px 14px 6px 14px; border: 1px solid #30363d; height: 100%; display: flex; flex-direction: column; justify-content: space-between;}
         .card-item:hover { background: #222b3d; border-color: #58a6ff; }
         .card-label { font-size: 13px; font-weight: 600; color: #c9d1d9; margin-bottom: 4px; }
         .card-value { font-size: 20px; font-weight: 700; color: #f0f6fc; }
         
-        /* Card Consolidado */
         .card-consolidado { background: #1a2744; border-color: #58a6ff; border-left: 4px solid #58a6ff; }
         .card-consolidado .card-label { color: #58a6ff; }
         .card-consolidado .card-value { color: #58a6ff; }
         
-        /* Porcentagens */
         .pct-participacao { font-size: 13px; font-weight: 600; color: #f6ad55; margin-left: 5px; }
         .pct-positiva { font-size: 13px; font-weight: 600; color: #3fb950; margin-left: 5px; }
         .pct-negativa { font-size: 13px; font-weight: 600; color: #f85149; margin-left: 5px; }
@@ -58,12 +55,8 @@ def formatar_inteiro(v):
 def criar_mini_grafico(df_hora, col_valor, cor_hex):
     if df_hora.empty: return go.Figure()
     fig = px.area(df_hora, x="Hora", y=col_valor)
-    
-    r = int(cor_hex[1:3], 16)
-    g = int(cor_hex[3:5], 16)
-    b = int(cor_hex[5:7], 16)
+    r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
     fill_color = f"rgba({r}, {g}, {b}, 0.1)"
-    
     fig.update_traces(line_color=cor_hex, fillcolor=fill_color, line_width=1.5)
     fig.update_layout(
         margin=dict(l=0, r=0, t=0, b=0), height=45,
@@ -76,7 +69,6 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
     st.markdown(f'<div class="tema-titulo">{icone} {titulo}</div>', unsafe_allow_html=True)
     total = dados.get("total", 0)
     itens = dados.get(campo_itens, [])
-    
     cols = st.columns([1.1, 1, 1, 1, 1])
     
     def html_card(nome, valor, pct_html="", is_consolidado=False):
@@ -85,17 +77,14 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
         val_fmt = formatar_moeda(valor) if fmt == "moeda" else (formatar_inteiro(valor) if fmt == "inteiro" else formatar_decimal(valor))
         return f'<div class="{classe}"><div class="card-label">{label_nome}</div><div class="card-value">{val_fmt} {pct_html}</div></div>'
 
-    # Card Consolidado
     with cols[0]:
         st.markdown(html_card("", total, is_consolidado=True), unsafe_allow_html=True)
         df_cons = dados.get("horasConsolidado", [])
         labels = dados.get("labelsHoras", [])
         if df_cons and labels:
-            # KEY ÚNICA ADICIONADA AQUI
             key_cons = f"cons_{titulo.replace(' ', '_').replace('/', '')}_{col_valor}"
             st.plotly_chart(criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": df_cons}), "Val", cor_hex), use_container_width=True, config={'displayModeBar': False}, key=key_cons)
 
-    # Outros Cards
     for i, item in enumerate(itens):
         if i + 1 >= len(cols): break
         with cols[i + 1]:
@@ -112,7 +101,6 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
             
             st.markdown(html_card(item["nome"], item["valor"], pct_html), unsafe_allow_html=True)
             if "horas" in item and labels:
-                # KEY ÚNICA ADICIONADA AQUI
                 key_item = f"item_{titulo.replace(' ', '_').replace('/', '')}_{item['nome'].replace(' ', '_')}_{col_valor}"
                 st.plotly_chart(criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": item["horas"]}), "Val", cor_hex), use_container_width=True, config={'displayModeBar': False}, key=key_item)
 
@@ -137,12 +125,22 @@ with tab_visao:
     
     with st.spinner("Carregando dados..."):
         df_vendas = buscar_vendas(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
+        
+        # CORREÇÃO CRÍTICA: Garantir que CodFilial seja inteiro para o filtro funcionar
+        if not df_vendas.empty:
+            df_vendas["CodFilial"] = pd.to_numeric(df_vendas["CodFilial"], errors="coerce").fillna(0).astype(int)
+            
         df_depto = buscar_departamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
         df_pag = buscar_pagamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
 
     if df_vendas.empty:
         st.info("Nenhum dado encontrado para os filtros selecionados.")
     else:
+        # DEBUG: Mostra o que veio do banco para você conferir
+        with st.expander("🔍 Conferir dados recebidos do banco (Debug)"):
+            st.write(f"Total de linhas retornadas do banco: **{len(df_vendas)}**")
+            st.dataframe(df_vendas.head(10))
+
         labels_h = sorted(df_vendas["Hora"].unique().tolist())
         
         tot_vendas = df_vendas["ValorVenda"].sum()
@@ -218,7 +216,6 @@ with tab_visao:
                 horas = [df_d[df_d["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
                 itens_depto.append({"nome": depto_nome, "valor": val, "horas": horas})
             itens_depto = sorted(itens_depto, key=lambda x: x["valor"], reverse=True)
-            
             cons_horas_d = [df_depto[df_depto["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
             dados_d = {"total": tot_depto, "departamentos": itens_depto, "labelsHoras": labels_depto, "horasConsolidado": cons_horas_d}
             renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#38bdf8", "participacao", "moeda", "departamentos")
@@ -226,7 +223,6 @@ with tab_visao:
         # --- PAGAMENTOS E PORTADORES ---
         if not df_pag.empty:
             labels_pag = sorted(df_pag["Hora"].unique().tolist())
-            
             tot_pag = df_pag["Valor"].sum()
             itens_pag = []
             for form in df_pag["Denominacao"].unique():
