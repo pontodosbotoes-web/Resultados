@@ -183,7 +183,6 @@ with tab_visao:
         tz_br = None
     hoje = datetime.now(tz_br).date() if tz_br else date.today()
 
-    # Inicialização do Session State para os filtros (Padrão)
     if "dt_ini_visao" not in st.session_state: st.session_state["dt_ini_visao"] = hoje
     if "dt_fim_visao" not in st.session_state: st.session_state["dt_fim_visao"] = hoje
     if "h_ini_visao" not in st.session_state: st.session_state["h_ini_visao"] = datetime.strptime("00:00", "%H:%M").time()
@@ -204,11 +203,9 @@ with tab_visao:
             btn = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
             btn_limpar = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
 
-    # Ação do botão Limpar (Deleta as chaves para voltar ao padrão no próximo rerun)
     if btn_limpar:
         for k in ["dt_ini_visao", "dt_fim_visao", "h_ini_visao", "h_fim_visao", "filial_visao"]:
-            if k in st.session_state:
-                del st.session_state[k]
+            if k in st.session_state: del st.session_state[k]
         st.rerun()
 
     filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
@@ -329,12 +326,11 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (COM FILTRO DE FORNECEDOR E LIMPAR)
+# ABA COMPRAS (COM PORCENTAGEM NOS CARDS)
 # ==========================================
 with tab_compras:
     lista_fornecedores = carregar_fornecedores()
     
-    # Inicialização do Session State para os filtros (Padrão)
     if "dt_ini_compras" not in st.session_state: st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
     if "dt_fim_compras" not in st.session_state: st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
     if "filial_compras" not in st.session_state: st.session_state["filial_compras"] = "Todas"
@@ -353,11 +349,9 @@ with tab_compras:
             btn_compras = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
             btn_limpar_comp = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
 
-    # Ação do botão Limpar (Deleta as chaves para voltar ao padrão no próximo rerun)
     if btn_limpar_comp:
         for k in ["dt_ini_compras", "dt_fim_compras", "filial_compras", "fornecedor_compras"]:
-            if k in st.session_state:
-                del st.session_state[k]
+            if k in st.session_state: del st.session_state[k]
         st.rerun()
 
     filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
@@ -368,17 +362,14 @@ with tab_compras:
     if df_compras.empty:
         st.info("Nenhuma compra encontrada para o período.")
     else:
-        # Aplica o filtro de fornecedor se não for "Todos"
         if fornecedor_sel != "Todos":
             df_compras = df_compras[df_compras["Fornecedor"] == fornecedor_sel]
             
         if df_compras.empty:
             st.info(f"Nenhuma compra encontrada para o fornecedor {fornecedor_sel} neste período.")
         else:
-            # --- PREPARAÇÃO DOS TOTAIS E MESES ---
             tot_val_geral = df_compras["Valor"].sum()
             
-            # ORDENAÇÃO ALFABÉTICA DOS DEPARTAMENTOS NOS CARDS
             df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index()
             df_tot_depto = df_tot_depto.sort_values("Departamento", ascending=True)
             
@@ -387,24 +378,29 @@ with tab_compras:
             meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
             # --- CARDS NO TOPO (TOTAL E DEPARTAMENTOS) ---
-            cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff")]
+            # Agora armazenamos 4 elementos na tupla: (Nome, Valor, Cor, HTML_da_Porcentagem)
+            cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff", "")]
             cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
             
             for i, row in df_tot_depto.iterrows():
                 cor = cores_depto[i % len(cores_depto)]
-                cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor))
+                # Cálculo da porcentagem
+                pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
+                pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
+                
+                cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor, pct_html))
 
             for i in range(0, len(cards_data), 5):
                 chunk = cards_data[i:i+5]
                 cols = st.columns(5)
-                for j, (nome, valor, cor) in enumerate(chunk):
+                for j, (nome, valor, cor, pct_html) in enumerate(chunk):
                     with cols[j]:
                         r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
                         bg_color = f"rgba({r}, {g}, {b}, 0.08)"
                         st.markdown(f'''
                             <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
                                 <div class="card-label" style="color: {cor};" title="{nome}">{nome}</div>
-                                <div class="card-value" style="color: {cor};">{formatar_moeda(valor)}</div>
+                                <div class="card-value" style="color: {cor};">{formatar_moeda(valor)} {pct_html}</div>
                             </div>
                         ''', unsafe_allow_html=True)
             
@@ -438,7 +434,6 @@ with tab_compras:
                 df_pivot['Total'] = df_pivot.sum(axis=1)
                 df_pivot = df_pivot.fillna(0)
                 
-                # ORDENAÇÃO ALFABÉTICA DOS FORNECEDORES
                 df_pivot = df_pivot.sort_index(ascending=True)
                 
                 def fmt_br(x):
