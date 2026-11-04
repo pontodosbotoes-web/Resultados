@@ -308,7 +308,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (AGRUPADA POR DEPARTAMENTO)
+# ABA COMPRAS 
 # ==========================================
 with tab_compras:
     with st.form(key="form_compras"):
@@ -331,7 +331,10 @@ with tab_compras:
     else:
         # --- PREPARAÇÃO DOS TOTAIS E MESES ---
         tot_val_geral = df_compras["Valor"].sum()
-        df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
+        
+        # ORDENAÇÃO ALFABÉTICA DOS DEPARTAMENTOS NOS CARDS
+        df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index()
+        df_tot_depto = df_tot_depto.sort_values("Departamento", ascending=True)
         
         meses_map = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
         df_compras['Mes_Nome'] = df_compras['Mes'].map(meses_map)
@@ -363,7 +366,7 @@ with tab_compras:
         st.markdown("---")
 
         # --- TABELAS SEPARADAS POR DEPARTAMENTO ---
-        st.markdown("### 📋 Detalhamento por Departamento")
+        # Removido o título "Detalhamento por Departamento" para limpar a tela
         
         for _, row in df_tot_depto.iterrows():
             depto = row['Departamento']
@@ -391,11 +394,20 @@ with tab_compras:
                     
             df_pivot = df_pivot[meses_colunas]
             df_pivot['Total'] = df_pivot.sum(axis=1)
-            df_pivot = df_pivot.fillna(0).sort_values(by='Total', ascending=False)
+            df_pivot = df_pivot.fillna(0)
             
-            # Formatação das colunas para Moeda
-            col_config = {m: st.column_config.NumberColumn(m, format="R$ %.2f") for m in meses_colunas}
-            col_config["Total"] = st.column_config.NumberColumn("Total", format="R$ %.2f")
+            # ORDENAÇÃO ALFABÉTICA DOS FORNECEDORES
+            df_pivot = df_pivot.sort_index(ascending=True)
             
-            st.dataframe(df_pivot, use_container_width=True, column_config=col_config)
-            st.write("") # Espaçamento entre as tabelas
+            # Formatação customizada brasileira sem o R$
+            # Usamos Pandas Styler para manter a ordenação e exibir os pontos e vírgulas
+            def fmt_br(x):
+                if pd.isna(x) or x == 0:
+                    return "-"
+                return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            
+            st.dataframe(
+                df_pivot.style.format(fmt_br),
+                use_container_width=True
+            )
+            st.write("") 
