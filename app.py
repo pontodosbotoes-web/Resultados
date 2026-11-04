@@ -6,28 +6,35 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from src.db import carregar_filiais
-from src.base import buscar_visao_geral, buscar_compras
+from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras
 
 st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_icon="📊")
 
-# CSS customizado para deixar idêntico à imagem
+# CSS Customizado (Idêntico ao original)
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;}
-        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 100% !important; }
+        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 100% !important; background-color: #0d1117; }
         
-        .titulo-pagina { font-size: 1.8rem; font-weight: 700; text-align: center; color: #FAFAFA; margin-bottom: 20px; }
+        .titulo-pagina { font-size: 24px; font-weight: 700; text-align: center; color: #f0f6fc; padding-bottom: 15px; border-bottom: 2px solid #30363d; margin-bottom: 20px; }
         
-        /* Card KPI Customizado */
-        .kpi-title { font-size: 0.85rem; color: #94A3B8; margin-bottom: 5px; font-weight: 600; text-transform: uppercase;}
-        .kpi-value { font-size: 1.4rem; font-weight: bold; color: #F8FAFC; margin-bottom: 0px; }
-        .kpi-pct { font-size: 0.8rem; font-weight: bold; margin-left: 5px; }
-        .pct-green { color: #10B981; }
-        .pct-red { color: #EF4444; }
-        .pct-orange { color: #F59E0B; }
+        .tema-titulo { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #30363d; padding-bottom: 6px; }
         
-        .kpi-card { background-color: #1E293B; border-radius: 8px; padding: 12px; border: 1px solid #334155; height: 100%; }
-        .kpi-card-consolidado { border: 2px solid #3B82F6 !important; background-color: #172033; }
+        /* Estilo base do Card */
+        .card-item { background: #1c2333; border-radius: 10px; padding: 12px 14px 6px 14px; border: 1px solid #30363d; height: 100%; display: flex; flex-direction: column; justify-content: space-between;}
+        .card-item:hover { background: #222b3d; border-color: #58a6ff; }
+        .card-label { font-size: 13px; font-weight: 600; color: #c9d1d9; margin-bottom: 4px; }
+        .card-value { font-size: 20px; font-weight: 700; color: #f0f6fc; }
+        
+        /* Card Consolidado */
+        .card-consolidado { background: #1a2744; border-color: #58a6ff; border-left: 4px solid #58a6ff; }
+        .card-consolidado .card-label { color: #58a6ff; }
+        .card-consolidado .card-value { color: #58a6ff; }
+        
+        /* Porcentagens */
+        .pct-participacao { font-size: 13px; font-weight: 600; color: #f6ad55; margin-left: 5px; }
+        .pct-positiva { font-size: 13px; font-weight: 600; color: #3fb950; margin-left: 5px; }
+        .pct-negativa { font-size: 13px; font-weight: 600; color: #f85149; margin-left: 5px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -37,93 +44,255 @@ NOMES_FILIAIS = {1: "PB - ALECRIM", 2: "PB - VIA DIRETA", 3: "PB - ZONA SUL", 4:
 
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
 
-# Abas
 tab_visao, tab_compras = st.tabs(["📊 Visão Geral", "🛒 Compras"])
 
+def formatar_moeda(v):
+    return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def formatar_decimal(v):
+    return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def formatar_inteiro(v):
+    return f"{int(v):,}".replace(",", ".")
+
+def criar_mini_grafico(df_hora, col_valor, cor_hex):
+    if df_hora.empty: return go.Figure()
+    fig = px.area(df_hora, x="Hora", y=col_valor)
+    
+    # Converter hex para rgba para o preenchimento transparente
+    r = int(cor_hex[1:3], 16)
+    g = int(cor_hex[3:5], 16)
+    b = int(cor_hex[5:7], 16)
+    fill_color = f"rgba({r}, {g}, {b}, 0.1)"
+    
+    fig.update_traces(line_color=cor_hex, fillcolor=fill_color, line_width=1.5)
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=0), height=45,
+        xaxis=dict(visible=False), yaxis=dict(visible=False, rangemode='tozero'),
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False
+    )
+    return fig
+
+def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moeda", campo_itens="porFilial"):
+    st.markdown(f'<div class="tema-titulo">{icone} {titulo}</div>', unsafe_allow_html=True)
+    total = dados.get("total", 0)
+    itens = dados.get(campo_itens, [])
+    
+    cols = st.columns([1.1, 1, 1, 1, 1])
+    
+    # Função para gerar o HTML do Card
+    def html_card(nome, valor, pct_html="", is_consolidado=False):
+        classe = "card-item card-consolidado" if is_consolidado else "card-item"
+        label_nome = "🏆 Consolidado" if is_consolidado else nome
+        val_fmt = formatar_moeda(valor) if fmt == "moeda" else (formatar_inteiro(valor) if fmt == "inteiro" else formatar_decimal(valor))
+        return f'<div class="{classe}"><div class="card-label">{label_nome}</div><div class="card-value">{val_fmt} {pct_html}</div></div>'
+
+    # Card Consolidado
+    with cols[0]:
+        st.markdown(html_card("", total, is_consolidado=True), unsafe_allow_html=True)
+        df_cons = dados.get("horasConsolidado", [])
+        labels = dados.get("labelsHoras", [])
+        if df_cons and labels:
+            st.plotly_chart(criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": df_cons}), "Val", cor_hex), use_container_width=True, config={'displayModeBar': False})
+
+    # Outros Cards
+    for i, item in enumerate(itens):
+        if i + 1 >= len(cols): break
+        with cols[i + 1]:
+            pct_html = ""
+            if total > 0:
+                if tipo_pct == "participacao":
+                    pct = (item["valor"] / total) * 100
+                    pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
+                elif tipo_pct == "variacao":
+                    diff = ((item["valor"] - total) / total) * 100
+                    sinal = "+" if diff > 0 else ""
+                    classe = "pct-positiva" if diff >= 0 else "pct-negativa"
+                    pct_html = f'<span class="{classe}">({sinal}{diff:.1f}%)</span>'
+            
+            st.markdown(html_card(item["nome"], item["valor"], pct_html), unsafe_allow_html=True)
+            if "horas" in item and labels:
+                st.plotly_chart(criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": item["horas"]}), "Val", cor_hex), use_container_width=True, config={'displayModeBar': False})
+
 with tab_visao:
-    # Correção de Fuso Horário (Brasil)
     try:
         tz_br = ZoneInfo("America/Sao_Paulo")
     except:
         tz_br = None
     hoje = datetime.now(tz_br).date() if tz_br else date.today()
 
-    # Filtros
     c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1.5, 1])
-    
     data_ini = c1.date_input("De:", value=hoje, format="DD/MM/YYYY")
     data_fim = c2.date_input("Até:", value=hoje, format="DD/MM/YYYY")
     h_ini = c3.time_input("Hora:", value=datetime.strptime("00:00", "%H:%M").time())
     h_fim = c4.time_input("Até:", value=datetime.strptime("23:59", "%H:%M").time())
     filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()))
-    
-    # Coloca o botão no final
     with c6:
-        st.write("") # Pula uma linha para alinhar
-        btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary")
+        st.write("") 
+        btn = st.button("🔄 Atualizar", use_container_width=True, type="primary")
 
     filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
-    h_ini_int = h_ini.hour
-    h_fim_int = h_fim.hour
     
-    df = buscar_visao_geral(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini_int, h_fim_int, filial_cod)
-    
-    if df.empty:
-        st.info(f"Nenhuma venda encontrada no período de {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}.")
+    with st.spinner("Carregando dados..."):
+        df_vendas = buscar_vendas(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
+        df_depto = buscar_departamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
+        df_pag = buscar_pagamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
+
+    if df_vendas.empty:
+        st.info("Nenhum dado encontrado para os filtros selecionados.")
     else:
-        # Agregação global
-        tot_vendas = df["ValorVenda"].sum()
-        tot_trans = df["QtdVendas"].sum()
-        ticket_medio = tot_vendas / tot_trans if tot_trans > 0 else 0
+        # --- PREPARAÇÃO DOS DADOS (Lógica idêntica ao Apps Script) ---
+        labels_h = sorted(df_vendas["Hora"].unique().tolist())
+        
+        # Totais Globais
+        tot_vendas = df_vendas["ValorVenda"].sum()
+        tot_trans = df_vendas["QtdVendas"].sum()
+        tot_itens = df_vendas["QtdItens"].sum()
+        
+        # Dados por Filial (Formatados para o renderizador)
+        def prep_filial(coluna, tipo_valor="sum"):
+            res = []
+            for cod, nome in NOMES_FILIAIS.items():
+                df_f = df_vendas[df_vendas["CodFilial"] == cod]
+                if tipo_valor == "sum":
+                    val = df_f[coluna].sum()
+                    horas = [df_f[df_f["Hora"] == h][coluna].sum() for h in labels_h]
+                res.append({"nome": nome, "valor": val, "horas": horas})
+            return res
 
-        def render_linha_kpi(titulo, icone, col_valor, formato_moeda=True, is_pct_share=True, is_ticket=False):
-            st.markdown(f"### {icone} {titulo}")
-            cols = st.columns([1, 1, 1, 1, 1]) # 5 colunas iguais
-            
-            def mini_grafico(df_filtro, cor):
-                if df_filtro.empty: return go.Figure()
-                fig = px.area(df_filtro, x="Hora", y=col_valor)
-                fig.update_traces(line_color=cor, fillcolor=cor.replace('rgb','rgba').replace(')', ', 0.2)'), line_width=2)
-                fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=50, xaxis=dict(visible=False), yaxis=dict(visible=False), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                return fig
+        # Temas (Métricas)
+        temas = [
+            {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#58a6ff", "fmt": "moeda", "pct": "participacao"},
+            {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#3fb950", "fmt": "inteiro", "pct": "participacao"},
+            {"id": "ticket", "titulo": "Ticket Médio", "icone": "🎫", "total": (tot_vendas / tot_trans if tot_trans else 0), "col": "Ticket", "cor": "#d29922", "fmt": "moeda", "pct": "variacao"},
+            {"id": "itens", "titulo": "Itens", "icone": "📦", "total": tot_itens, "col": "QtdItens", "cor": "#9f7aea", "fmt": "decimal", "pct": "participacao"},
+            {"id": "itens_venda", "titulo": "Itens por Venda (R$/item)", "icone": "💰", "total": (tot_vendas / tot_itens if tot_itens else 0), "col": "ItensVenda", "cor": "#4fd1c5", "fmt": "moeda", "pct": "variacao"},
+            {"id": "itens_trans", "titulo": "Itens por Transação", "icone": "📊", "total": (tot_itens / tot_trans if tot_trans else 0), "col": "ItensTrans", "cor": "#f687b3", "fmt": "decimal", "pct": "variacao"},
+        ]
 
-            # Card Consolidado
-            with cols[0]:
-                val_total = df[col_valor].sum() if not is_ticket else ticket_medio
-                with st.container():
-                    st.markdown(f'<div class="kpi-card kpi-card-consolidado"><div class="kpi-title">🏆 Consolidado</div><div class="kpi-value">{"R$ " if formato_moeda else ""}{val_total:,.2f}</div></div>', unsafe_allow_html=True)
-                    df_h = df.groupby("Hora")[col_valor].sum().reset_index()
-                    fig = mini_grafico(df_h, "rgb(96, 165, 250)")
-                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"chart_cons_{titulo}")
-
-            # Cards por Filial
-            for i, (cod, nome) in enumerate(NOMES_FILIAIS.items()):
-                if i + 1 >= len(cols): break
-                df_f = df[df["CodFilial"] == cod]
-                val_f = df_f[col_valor].sum() if not is_ticket else (df_f["ValorVenda"].sum() / df_f["QtdVendas"].sum() if df_f["QtdVendas"].sum() else 0)
+        # Renderiza os 6 primeiros temas (por filial)
+        for t in temas:
+            itens_filial = []
+            for cod, nome in NOMES_FILIAIS.items():
+                df_f = df_vendas[df_vendas["CodFilial"] == cod]
+                v_vendas = df_f["ValorVenda"].sum()
+                v_trans = df_f["QtdVendas"].sum()
+                v_itens = df_f["QtdItens"].sum()
                 
-                with cols[i + 1]:
-                    with st.container():
-                        if is_ticket:
-                            var_pct = ((val_f - ticket_medio) / ticket_medio * 100) if ticket_medio else 0
-                            cor_pct = "pct-green" if var_pct >= 0 else "pct-red"
-                            sinal = "+" if var_pct >= 0 else ""
-                            pct_html = f'<span class="kpi-pct {cor_pct}">({sinal}{var_pct:.1f}%)</span>'
-                        else:
-                            share_pct = (val_f / val_total * 100) if val_total else 0
-                            pct_html = f'<span class="kpi-pct pct-orange">({share_pct:.1f}%)</span>'
+                if t["col"] == "ValorVenda": val = v_vendas
+                elif t["col"] == "QtdVendas": val = v_trans
+                elif t["col"] == "QtdItens": val = v_itens
+                elif t["col"] == "Ticket": val = (v_vendas / v_trans if v_trans else 0)
+                elif t["col"] == "ItensVenda": val = (v_vendas / v_itens if v_itens else 0)
+                elif t["col"] == "ItensTrans": val = (v_itens / v_trans if v_trans else 0)
+                
+                # Horas
+                h_list = []
+                for h in labels_h:
+                    df_fh = df_f[df_f["Hora"] == h]
+                    h_vendas = df_fh["ValorVenda"].sum()
+                    h_trans = df_fh["QtdVendas"].sum()
+                    h_itens = df_fh["QtdItens"].sum()
+                    
+                    if t["col"] == "ValorVenda": hv = h_vendas
+                    elif t["col"] == "QtdVendas": hv = h_trans
+                    elif t["col"] == "QtdItens": hv = h_itens
+                    elif t["col"] == "Ticket": hv = (h_vendas / h_trans if h_trans else 0)
+                    elif t["col"] == "ItensVenda": hv = (h_vendas / h_itens if h_itens else 0)
+                    elif t["col"] == "ItensTrans": hv = (h_itens / h_trans if h_trans else 0)
+                    h_list.append(hv)
+                    
+                itens_filial.append({"nome": nome, "valor": val, "horas": h_list})
 
-                        st.markdown(f'<div class="kpi-card"><div class="kpi-title">{nome}</div><div class="kpi-value">{"R$ " if formato_moeda else ""}{val_f:,.2f} {pct_html}</div></div>', unsafe_allow_html=True)
-                        
-                        df_fh = df_f.groupby("Hora")[col_valor].sum().reset_index()
-                        fig_f = mini_grafico(df_fh, "rgb(96, 165, 250)" if not is_ticket else "rgb(245, 158, 11)")
-                        st.plotly_chart(fig_f, use_container_width=True, config={'displayModeBar': False}, key=f"chart_{nome}_{titulo}")
-            st.write("") 
+            # Gráfico Consolidado
+            cons_horas = []
+            for h in labels_h:
+                df_h = df_vendas[df_vendas["Hora"] == h]
+                h_v = df_h["ValorVenda"].sum()
+                h_t = df_h["QtdVendas"].sum()
+                h_i = df_h["QtdItens"].sum()
+                if t["col"] == "ValorVenda": hv = h_v
+                elif t["col"] == "QtdVendas": hv = h_t
+                elif t["col"] == "QtdItens": hv = h_i
+                elif t["col"] == "Ticket": hv = (h_v / h_t if h_t else 0)
+                elif t["col"] == "ItensVenda": hv = (h_v / h_i if h_i else 0)
+                elif t["col"] == "ItensTrans": hv = (h_i / h_t if h_t else 0)
+                cons_horas.append(hv)
 
-        # Renderiza os Blocos
-        render_linha_kpi("Vendas", "🍞", "ValorVenda")
-        render_linha_kpi("Transações", "🛒", "QtdVendas", formato_moeda=False)
-        render_linha_kpi("Ticket Médio", "🎫", "ValorVenda", is_ticket=True)
+            dados_tema = {"total": t["total"], "porFilial": itens_filial, "labelsHoras": labels_h, "horasConsolidado": cons_horas}
+            renderizar_tema(t["titulo"], t["icone"], dados_tema, t["col"], t["cor"], t["pct"], t["fmt"])
+
+        # --- DEPARTAMENTOS ---
+        if not df_depto.empty:
+            labels_depto = sorted(df_depto["Hora"].unique().tolist())
+            tot_depto = df_depto["ValorVenda"].sum()
+            itens_depto = []
+            for depto_nome in df_depto["NomeDepto"].unique():
+                df_d = df_depto[df_depto["NomeDepto"] == depto_nome]
+                val = df_d["ValorVenda"].sum()
+                horas = [df_d[df_d["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
+                itens_depto.append({"nome": depto_nome, "valor": val, "horas": horas})
+            itens_depto = sorted(itens_depto, key=lambda x: x["valor"], reverse=True)
+            
+            cons_horas_d = [df_depto[df_depto["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
+            dados_d = {"total": tot_depto, "departamentos": itens_depto, "labelsHoras": labels_depto, "horasConsolidado": cons_horas_d}
+            renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#38bdf8", "participacao", "moeda", "departamentos")
+
+        # --- PAGAMENTOS E PORTADORES ---
+        if not df_pag.empty:
+            labels_pag = sorted(df_pag["Hora"].unique().tolist())
+            
+            # Forma de Pagamento
+            tot_pag = df_pag["Valor"].sum()
+            itens_pag = []
+            for form in df_pag["Denominacao"].unique():
+                df_p = df_pag[df_pag["Denominacao"] == form]
+                val = df_p["Valor"].sum()
+                horas = [df_p[df_p["Hora"] == h]["Valor"].sum() for h in labels_pag]
+                itens_pag.append({"nome": form, "valor": val, "horas": horas})
+            itens_pag = sorted(itens_pag, key=lambda x: x["valor"], reverse=True)
+            cons_horas_p = [df_pag[df_pag["Hora"] == h]["Valor"].sum() for h in labels_pag]
+            dados_p = {"total": tot_pag, "porForma": itens_pag, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_p}
+            renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#f0883e", "participacao", "moeda", "porForma")
+
+            # Portador
+            df_pag_port = df_pag.dropna(subset=["NomePortador"])
+            if not df_pag_port.empty:
+                itens_port = []
+                for port in df_pag_port["NomePortador"].unique():
+                    df_pt = df_pag_port[df_pag_port["NomePortador"] == port]
+                    val = df_pt["Valor"].sum()
+                    horas = [df_pt[df_pt["Hora"] == h]["Valor"].sum() for h in labels_pag]
+                    itens_port.append({"nome": port, "valor": val, "horas": horas})
+                itens_port = sorted(itens_port, key=lambda x: x["valor"], reverse=True)
+                cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
+                dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
+                renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador")
+
 
 with tab_compras:
-    st.write("Em breve: Detalhamento de compras")
+    st.markdown("### 🛒 Compras")
+    c1, c2, c3 = st.columns([1, 1, 1])
+    data_ini_c = c1.date_input("De:", value=date(hoje.year, 1, 1), format="DD/MM/YYYY")
+    data_fim_c = c2.date_input("Até:", value=date(hoje.year, 12, 31), format="DD/MM/YYYY")
+    
+    df_compras = buscar_compras(data_ini_c.strftime("%Y-%m-%d"), data_fim_c.strftime("%Y-%m-%d"), "")
+    
+    if df_compras.empty:
+        st.info("Nenhuma compra encontrada.")
+    else:
+        tot_qtd = df_compras["Quantidade"].sum()
+        tot_val = df_compras["Valor"].sum()
+        
+        c_t1, c_t2 = st.columns(2)
+        c_t1.markdown(f'<div class="card-item card-consolidado"><div class="card-label">📦 Total Comprado (Qtd)</div><div class="card-value">{formatar_decimal(tot_qtd)}</div></div>', unsafe_allow_html=True)
+        c_t2.markdown(f'<div class="card-item card-consolidado"><div class="card-label">💰 Valor Total Comprado</div><div class="card-value">{formatar_moeda(tot_val)}</div></div>', unsafe_allow_html=True)
+        
+        st.write("")
+        
+        df_show = df_compras.copy()
+        df_show["Valor"] = df_show["Valor"].apply(formatar_moeda)
+        df_show["Quantidade"] = df_show["Quantidade"].apply(formatar_decimal)
+        df_show.columns = ["Ano", "Mês", "Loja", "Departamento", "Fornecedor", "Qtd Comprada", "Valor Comprado"]
+        
+        st.dataframe(df_show, use_container_width=True, hide_index=True)
