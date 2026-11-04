@@ -33,7 +33,6 @@ st.markdown("""
         .depto-header { font-size: 18px; font-weight: 600; color: #f0f6fc; margin-top: 25px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;}
         .depto-valor { font-size: 16px; color: #58a6ff; font-weight: 700; background: rgba(88,166,255,0.1); padding: 2px 10px; border-radius: 15px;}
         
-        /* Estilo para os botões ficarem com uma largura agradável */
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -205,13 +204,11 @@ with tab_visao:
             btn = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
             btn_limpar = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
 
-    # Ação do botão Limpar
+    # Ação do botão Limpar (Deleta as chaves para voltar ao padrão no próximo rerun)
     if btn_limpar:
-        st.session_state["dt_ini_visao"] = hoje
-        st.session_state["dt_fim_visao"] = hoje
-        st.session_state["h_ini_visao"] = datetime.strptime("00:00", "%H:%M").time()
-        st.session_state["h_fim_visao"] = datetime.strptime("23:59", "%H:%M").time()
-        st.session_state["filial_visao"] = "Todas"
+        for k in ["dt_ini_visao", "dt_fim_visao", "h_ini_visao", "h_fim_visao", "filial_visao"]:
+            if k in st.session_state:
+                del st.session_state[k]
         st.rerun()
 
     filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
@@ -356,12 +353,11 @@ with tab_compras:
             btn_compras = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
             btn_limpar_comp = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
 
-    # Ação do botão Limpar
+    # Ação do botão Limpar (Deleta as chaves para voltar ao padrão no próximo rerun)
     if btn_limpar_comp:
-        st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
-        st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
-        st.session_state["filial_compras"] = "Todas"
-        st.session_state["fornecedor_compras"] = "Todos"
+        for k in ["dt_ini_compras", "dt_fim_compras", "filial_compras", "fornecedor_compras"]:
+            if k in st.session_state:
+                del st.session_state[k]
         st.rerun()
 
     filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
