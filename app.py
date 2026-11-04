@@ -20,7 +20,6 @@ st.markdown("""
         
         .tema-titulo { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #30363d; padding-bottom: 6px; }
         
-        /* O fundo e a borda agora são dinâmicos, definidos no Python */
         .card-item { border-radius: 10px; padding: 12px 14px 6px 14px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: 0.2s;}
         .card-item:hover { filter: brightness(1.2); }
         
@@ -53,6 +52,7 @@ def formatar_inteiro(v):
 def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     if df_hora.empty: return go.Figure()
     
+    # Formatação do Tooltip
     if is_moeda:
         custom_data = [f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") for v in df_hora[col_valor]]
         hover_tpl = "%{x}h<br>R$ %{customdata}<extra></extra>"
@@ -60,23 +60,34 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
         custom_data = [f"{int(v):,}".replace(",", ".") for v in df_hora[col_valor]]
         hover_tpl = "%{x}h<br>%{customdata}<extra></extra>"
 
-    # Alterado de Scatter (linha) para Bar (barra vertical)
+    # Identifica a melhor hora (maior valor)
+    max_val = df_hora[col_valor].max()
+    
+    # Se o valor máximo for maior que zero, pinta de dourado. Senão, usa a cor padrão.
+    cores_barras = [("#FBBF24" if (v == max_val and max_val > 0) else cor_hex) for v in df_hora[col_valor]]
+    
+    # Adiciona uma estrela apenas na melhor hora
+    textos_barras = ["⭐" if (v == max_val and max_val > 0) else "" for v in df_hora[col_valor]]
+
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=df_hora["Hora"], 
         y=df_hora[col_valor],
-        marker_color=cor_hex,
+        marker_color=cores_barras,
+        text=textos_barras,
+        textposition="auto", # Coloca a estrela dentro/em cima da barra
+        textfont=dict(color="#0d1117", size=12), # Cor escura para a estrela contrastar com o dourado
         customdata=custom_data,
         hovertemplate=hover_tpl
     ))
     
     fig.update_layout(
-        margin=dict(l=0, r=0, t=0, b=0), height=45,
+        margin=dict(l=0, r=0, t=5, b=0), height=50, # Altura levemente aumentada para caber a estrela
         xaxis=dict(visible=False, showspikes=False), 
         yaxis=dict(visible=False, rangemode='tozero', showspikes=False),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False,
         hovermode="x unified",
-        bargap=0.1 # Deixa um espacinho entre as barras
+        bargap=0.1
     )
     return fig
 
