@@ -37,6 +37,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Definições Globais (para não depender de nenhuma aba específica)
+try:
+    tz_br = ZoneInfo("America/Sao_Paulo")
+except:
+    tz_br = None
+hoje = datetime.now(tz_br).date() if tz_br else date.today()
+
 filiais_dict = carregar_filiais()
 filiais_inv = {v: k for k, v in filiais_dict.items()}
 NOMES_FILIAIS = {1: "PB - ALECRIM", 2: "PB - VIA DIRETA", 3: "PB - ZONA SUL", 4: "SRB - ZONA NORTE", 5: "PB - ATACADO"}
@@ -177,12 +184,6 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
 # ABA VISÃO GERAL
 # ==========================================
 with tab_visao:
-    try:
-        tz_br = ZoneInfo("America/Sao_Paulo")
-    except:
-        tz_br = None
-    hoje = datetime.now(tz_br).date() if tz_br else date.today()
-
     if "dt_ini_visao" not in st.session_state: st.session_state["dt_ini_visao"] = hoje
     if "dt_fim_visao" not in st.session_state: st.session_state["dt_fim_visao"] = hoje
     if "h_ini_visao" not in st.session_state: st.session_state["h_ini_visao"] = datetime.strptime("00:00", "%H:%M").time()
@@ -326,15 +327,23 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (COM PORCENTAGEM NOS CARDS)
+# ABA COMPRAS (COM PORCENTAGEM E PROTEÇÃO)
 # ==========================================
 with tab_compras:
-    lista_fornecedores = carregar_fornecedores()
+    # Garante que a lista foi carregada corretamente
+    try:
+        lista_fornecedores = carregar_fornecedores()
+    except Exception:
+        lista_fornecedores = []
     
     if "dt_ini_compras" not in st.session_state: st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
     if "dt_fim_compras" not in st.session_state: st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
     if "filial_compras" not in st.session_state: st.session_state["filial_compras"] = "Todas"
     if "fornecedor_compras" not in st.session_state: st.session_state["fornecedor_compras"] = "Todos"
+
+    # PROTEÇÃO: Se o fornecedor que estava salvo na memória não existe mais na lista nova, volta para "Todos"
+    if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
+        st.session_state["fornecedor_compras"] = "Todos"
 
     with st.form(key="form_compras"):
         c1, c2, c3, c4, c5 = st.columns([1, 1, 1.2, 1.5, 1.4], vertical_alignment="bottom")
@@ -378,16 +387,13 @@ with tab_compras:
             meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
             # --- CARDS NO TOPO (TOTAL E DEPARTAMENTOS) ---
-            # Agora armazenamos 4 elementos na tupla: (Nome, Valor, Cor, HTML_da_Porcentagem)
             cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff", "")]
             cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
             
             for i, row in df_tot_depto.iterrows():
                 cor = cores_depto[i % len(cores_depto)]
-                # Cálculo da porcentagem
                 pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
                 pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
-                
                 cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor, pct_html))
 
             for i in range(0, len(cards_data), 5):
