@@ -126,7 +126,6 @@ with tab_visao:
     with st.spinner("Carregando dados..."):
         df_vendas = buscar_vendas(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
         
-        # CORREÇÃO CRÍTICA: Garantir que CodFilial seja inteiro para o filtro funcionar
         if not df_vendas.empty:
             df_vendas["CodFilial"] = pd.to_numeric(df_vendas["CodFilial"], errors="coerce").fillna(0).astype(int)
             
@@ -136,11 +135,6 @@ with tab_visao:
     if df_vendas.empty:
         st.info("Nenhum dado encontrado para os filtros selecionados.")
     else:
-        # DEBUG: Mostra o que veio do banco para você conferir
-        with st.expander("🔍 Conferir dados recebidos do banco (Debug)"):
-            st.write(f"Total de linhas retornadas do banco: **{len(df_vendas)}**")
-            st.dataframe(df_vendas.head(10))
-
         labels_h = sorted(df_vendas["Hora"].unique().tolist())
         
         tot_vendas = df_vendas["ValorVenda"].sum()
