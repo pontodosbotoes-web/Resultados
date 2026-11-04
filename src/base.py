@@ -7,30 +7,28 @@ def _ler_sql(nome_arquivo: str) -> str:
     caminho = Path(__file__).parent.parent / "sql" / nome_arquivo
     return caminho.read_text(encoding="utf-8")
 
-def buscar_visao_geral(data_inicio, data_fim, hora_inicio, hora_fim, filial):
-    sql = _ler_sql("visao_vendas.sql")
-    params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
-    
+def _executar_query(arquivo_sql, params, filial):
+    sql = _ler_sql(arquivo_sql)
     if filial:
         sql = sql.replace("/* FILTRO_FILIAL */", "AND m.CodFilial = :filial")
         params["filial"] = int(filial)
     else:
         sql = sql.replace("/* FILTRO_FILIAL */", "")
-
     with get_engine().connect() as conn:
-        df = pd.read_sql(text(sql), conn, params=params)
-    return df
+        return pd.read_sql(text(sql), conn, params=params)
+
+def buscar_vendas(data_inicio, data_fim, hora_inicio, hora_fim, filial):
+    params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
+    return _executar_query("visao_vendas.sql", params, filial)
+
+def buscar_departamentos(data_inicio, data_fim, hora_inicio, hora_fim, filial):
+    params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
+    return _executar_query("visao_departamentos.sql", params, filial)
+
+def buscar_pagamentos(data_inicio, data_fim, hora_inicio, hora_fim, filial):
+    params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
+    return _executar_query("visao_pagamentos.sql", params, filial)
 
 def buscar_compras(data_inicio, data_fim, filial):
-    sql = _ler_sql("visao_compras.sql")
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
-    
-    if filial:
-        sql = sql.replace("/* FILTRO_FILIAL */", "AND m.CodFilial = :filial")
-        params["filial"] = int(filial)
-    else:
-        sql = sql.replace("/* FILTRO_FILIAL */", "")
-
-    with get_engine().connect() as conn:
-        df = pd.read_sql(text(sql), conn, params=params)
-    return df
+    return _executar_query("visao_compras.sql", params, filial)
