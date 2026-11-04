@@ -59,7 +59,6 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex):
     if df_hora.empty: return go.Figure()
     fig = px.area(df_hora, x="Hora", y=col_valor)
     
-    # Converter hex para rgba para o preenchimento transparente
     r = int(cor_hex[1:3], 16)
     g = int(cor_hex[3:5], 16)
     b = int(cor_hex[5:7], 16)
@@ -80,7 +79,6 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
     
     cols = st.columns([1.1, 1, 1, 1, 1])
     
-    # Função para gerar o HTML do Card
     def html_card(nome, valor, pct_html="", is_consolidado=False):
         classe = "card-item card-consolidado" if is_consolidado else "card-item"
         label_nome = "🏆 Consolidado" if is_consolidado else nome
@@ -93,7 +91,9 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
         df_cons = dados.get("horasConsolidado", [])
         labels = dados.get("labelsHoras", [])
         if df_cons and labels:
-            st.plotly_chart(criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": df_cons}), "Val", cor_hex), use_container_width=True, config={'displayModeBar': False})
+            # KEY ÚNICA ADICIONADA AQUI
+            key_cons = f"cons_{titulo.replace(' ', '_').replace('/', '')}_{col_valor}"
+            st.plotly_chart(criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": df_cons}), "Val", cor_hex), use_container_width=True, config={'displayModeBar': False}, key=key_cons)
 
     # Outros Cards
     for i, item in enumerate(itens):
@@ -112,7 +112,9 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
             
             st.markdown(html_card(item["nome"], item["valor"], pct_html), unsafe_allow_html=True)
             if "horas" in item and labels:
-                st.plotly_chart(criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": item["horas"]}), "Val", cor_hex), use_container_width=True, config={'displayModeBar': False})
+                # KEY ÚNICA ADICIONADA AQUI
+                key_item = f"item_{titulo.replace(' ', '_').replace('/', '')}_{item['nome'].replace(' ', '_')}_{col_valor}"
+                st.plotly_chart(criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": item["horas"]}), "Val", cor_hex), use_container_width=True, config={'displayModeBar': False}, key=key_item)
 
 with tab_visao:
     try:
@@ -141,26 +143,12 @@ with tab_visao:
     if df_vendas.empty:
         st.info("Nenhum dado encontrado para os filtros selecionados.")
     else:
-        # --- PREPARAÇÃO DOS DADOS (Lógica idêntica ao Apps Script) ---
         labels_h = sorted(df_vendas["Hora"].unique().tolist())
         
-        # Totais Globais
         tot_vendas = df_vendas["ValorVenda"].sum()
         tot_trans = df_vendas["QtdVendas"].sum()
         tot_itens = df_vendas["QtdItens"].sum()
-        
-        # Dados por Filial (Formatados para o renderizador)
-        def prep_filial(coluna, tipo_valor="sum"):
-            res = []
-            for cod, nome in NOMES_FILIAIS.items():
-                df_f = df_vendas[df_vendas["CodFilial"] == cod]
-                if tipo_valor == "sum":
-                    val = df_f[coluna].sum()
-                    horas = [df_f[df_f["Hora"] == h][coluna].sum() for h in labels_h]
-                res.append({"nome": nome, "valor": val, "horas": horas})
-            return res
 
-        # Temas (Métricas)
         temas = [
             {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#58a6ff", "fmt": "moeda", "pct": "participacao"},
             {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#3fb950", "fmt": "inteiro", "pct": "participacao"},
@@ -170,7 +158,6 @@ with tab_visao:
             {"id": "itens_trans", "titulo": "Itens por Transação", "icone": "📊", "total": (tot_itens / tot_trans if tot_trans else 0), "col": "ItensTrans", "cor": "#f687b3", "fmt": "decimal", "pct": "variacao"},
         ]
 
-        # Renderiza os 6 primeiros temas (por filial)
         for t in temas:
             itens_filial = []
             for cod, nome in NOMES_FILIAIS.items():
@@ -186,7 +173,6 @@ with tab_visao:
                 elif t["col"] == "ItensVenda": val = (v_vendas / v_itens if v_itens else 0)
                 elif t["col"] == "ItensTrans": val = (v_itens / v_trans if v_trans else 0)
                 
-                # Horas
                 h_list = []
                 for h in labels_h:
                     df_fh = df_f[df_f["Hora"] == h]
@@ -204,7 +190,6 @@ with tab_visao:
                     
                 itens_filial.append({"nome": nome, "valor": val, "horas": h_list})
 
-            # Gráfico Consolidado
             cons_horas = []
             for h in labels_h:
                 df_h = df_vendas[df_vendas["Hora"] == h]
@@ -242,7 +227,6 @@ with tab_visao:
         if not df_pag.empty:
             labels_pag = sorted(df_pag["Hora"].unique().tolist())
             
-            # Forma de Pagamento
             tot_pag = df_pag["Valor"].sum()
             itens_pag = []
             for form in df_pag["Denominacao"].unique():
@@ -255,7 +239,6 @@ with tab_visao:
             dados_p = {"total": tot_pag, "porForma": itens_pag, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_p}
             renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#f0883e", "participacao", "moeda", "porForma")
 
-            # Portador
             df_pag_port = df_pag.dropna(subset=["NomePortador"])
             if not df_pag_port.empty:
                 itens_port = []
@@ -268,7 +251,6 @@ with tab_visao:
                 cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
                 dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador")
-
 
 with tab_compras:
     st.markdown("### 🛒 Compras")
