@@ -60,29 +60,30 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
         custom_data = [f"{int(v):,}".replace(",", ".") for v in df_hora[col_valor]]
         hover_tpl = "%{x}h<br>%{customdata}<extra></extra>"
 
-    # Identifica a melhor hora (maior valor)
     max_val = df_hora[col_valor].max()
     
-    # Se o valor máximo for maior que zero, pinta de dourado. Senão, usa a cor padrão.
-    cores_barras = [("#FBBF24" if (v == max_val and max_val > 0) else cor_hex) for v in df_hora[col_valor]]
+    # Converte a cor HEX para RGBA com transparência para as barras normais
+    r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
+    cor_transparente = f"rgba({r}, {g}, {b}, 0.4)"
     
-    # Adiciona uma estrela apenas na melhor hora
-    textos_barras = ["⭐" if (v == max_val and max_val > 0) else "" for v in df_hora[col_valor]]
+    cores_barras = []
+    for v in df_hora[col_valor]:
+        if v == max_val and max_val > 0:
+            cores_barras.append("#FFFFFF") # Destaque em Branco Puro
+        else:
+            cores_barras.append(cor_transparente)
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=df_hora["Hora"], 
         y=df_hora[col_valor],
         marker_color=cores_barras,
-        text=textos_barras,
-        textposition="auto", # Coloca a estrela dentro/em cima da barra
-        textfont=dict(color="#0d1117", size=12), # Cor escura para a estrela contrastar com o dourado
         customdata=custom_data,
         hovertemplate=hover_tpl
     ))
     
     fig.update_layout(
-        margin=dict(l=0, r=0, t=5, b=0), height=50, # Altura levemente aumentada para caber a estrela
+        margin=dict(l=0, r=0, t=0, b=0), height=45,
         xaxis=dict(visible=False, showspikes=False), 
         yaxis=dict(visible=False, rangemode='tozero', showspikes=False),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False,
