@@ -20,14 +20,12 @@ st.markdown("""
         
         .tema-titulo { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #30363d; padding-bottom: 6px; }
         
-        .card-item { background: #1c2333; border-radius: 10px; padding: 12px 14px 6px 14px; border: 1px solid #30363d; height: 100%; display: flex; flex-direction: column; justify-content: space-between;}
-        .card-item:hover { background: #222b3d; border-color: #58a6ff; }
+        /* O fundo e a borda agora são dinâmicos, definidos no Python */
+        .card-item { border-radius: 10px; padding: 12px 14px 6px 14px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: 0.2s;}
+        .card-item:hover { filter: brightness(1.2); }
+        
         .card-label { font-size: 13px; font-weight: 600; color: #c9d1d9; margin-bottom: 4px; }
         .card-value { font-size: 20px; font-weight: 700; color: #f0f6fc; }
-        
-        .card-consolidado { background: #1a2744; border-color: #58a6ff; border-left: 4px solid #58a6ff; }
-        .card-consolidado .card-label { color: #58a6ff; }
-        .card-consolidado .card-value { color: #58a6ff; }
         
         .pct-participacao { font-size: 13px; font-weight: 600; color: #f6ad55; margin-left: 5px; }
         .pct-positiva { font-size: 13px; font-weight: 600; color: #3fb950; margin-left: 5px; }
@@ -55,7 +53,6 @@ def formatar_inteiro(v):
 def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     if df_hora.empty: return go.Figure()
     
-    # Formata o valor para o tooltip do gráfico
     if is_moeda:
         custom_data = [f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") for v in df_hora[col_valor]]
         hover_tpl = "%{x}h<br>R$ %{customdata}<extra></extra>"
@@ -80,8 +77,8 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     
     fig.update_layout(
         margin=dict(l=0, r=0, t=0, b=0), height=45,
-        xaxis=dict(visible=False, showspikes=False), # Desativa a linha vertical
-        yaxis=dict(visible=False, rangemode='tozero', showspikes=False), # Desativa a linha horizontal
+        xaxis=dict(visible=False, showspikes=False), 
+        yaxis=dict(visible=False, rangemode='tozero', showspikes=False),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False,
         hovermode="x unified"
     )
@@ -93,10 +90,20 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
     itens = dados.get(campo_itens, [])
     
     def html_card(nome, valor, pct_html="", is_consolidado=False):
-        classe = "card-item card-consolidado" if is_consolidado else "card-item"
+        # Converte a cor HEX para RGBA para o fundo do card
+        r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
+        bg_color = f"rgba({r}, {g}, {b}, 0.08)"
+        
+        border_color = cor_hex if is_consolidado else "#30363d"
+        border_left = f"4px solid {cor_hex}" if is_consolidado else "1px solid #30363d"
+        style_str = f"background-color: {bg_color}; border: 1px solid {border_color}; border-left: {border_left};"
+        
         label_nome = "🏆 Consolidado" if is_consolidado else nome
+        label_style = f"color: {cor_hex};" if is_consolidado else ""
+        value_style = f"color: {cor_hex};" if is_consolidado else ""
+        
         val_fmt = formatar_moeda(valor) if fmt == "moeda" else (formatar_inteiro(valor) if fmt == "inteiro" else formatar_decimal(valor))
-        return f'<div class="{classe}"><div class="card-label">{label_nome}</div><div class="card-value">{val_fmt} {pct_html}</div></div>'
+        return f'<div class="card-item" style="{style_str}"><div class="card-label" style="{label_style}">{label_nome}</div><div class="card-value" style="{value_style}">{val_fmt} {pct_html}</div></div>'
 
     def render_card_col(col, item):
         pct_html = ""
@@ -166,7 +173,6 @@ with tab_visao:
         tz_br = None
     hoje = datetime.now(tz_br).date() if tz_br else date.today()
 
-    # FORMULÁRIO: Alinhado corretamente
     with st.form(key="form_filtros"):
         c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1.5, 1], vertical_alignment="bottom")
         
@@ -313,8 +319,8 @@ with tab_compras:
         tot_val = df_compras["Valor"].sum()
         
         c_t1, c_t2 = st.columns(2)
-        c_t1.markdown(f'<div class="card-item card-consolidado"><div class="card-label">📦 Total Comprado (Qtd)</div><div class="card-value">{formatar_decimal(tot_qtd)}</div></div>', unsafe_allow_html=True)
-        c_t2.markdown(f'<div class="card-item card-consolidado"><div class="card-label">💰 Valor Total Comprado</div><div class="card-value">{formatar_moeda(tot_val)}</div></div>', unsafe_allow_html=True)
+        c_t1.markdown(f'<div class="card-item" style="background-color: rgba(88,166,255,0.08); border: 1px solid #58a6ff; border-left: 4px solid #58a6ff;"><div class="card-label" style="color: #58a6ff;">📦 Total Comprado (Qtd)</div><div class="card-value" style="color: #58a6ff;">{formatar_decimal(tot_qtd)}</div></div>', unsafe_allow_html=True)
+        c_t2.markdown(f'<div class="card-item" style="background-color: rgba(88,166,255,0.08); border: 1px solid #58a6ff; border-left: 4px solid #58a6ff;"><div class="card-label" style="color: #58a6ff;">💰 Valor Total Comprado</div><div class="card-value" style="color: #58a6ff;">{formatar_moeda(tot_val)}</div></div>', unsafe_allow_html=True)
         
         st.write("")
         
