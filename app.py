@@ -32,6 +32,9 @@ st.markdown("""
         
         .depto-header { font-size: 18px; font-weight: 600; color: #f0f6fc; margin-top: 25px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;}
         .depto-valor { font-size: 16px; color: #58a6ff; font-weight: 700; background: rgba(88,166,255,0.1); padding: 2px 10px; border-radius: 15px;}
+        
+        /* Estilo para os botões ficarem com uma largura agradável */
+        div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -171,6 +174,9 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
         st.write("") 
 
 
+# ==========================================
+# ABA VISÃO GERAL
+# ==========================================
 with tab_visao:
     try:
         tz_br = ZoneInfo("America/Sao_Paulo")
@@ -178,17 +184,35 @@ with tab_visao:
         tz_br = None
     hoje = datetime.now(tz_br).date() if tz_br else date.today()
 
+    # Inicialização do Session State para os filtros (Padrão)
+    if "dt_ini_visao" not in st.session_state: st.session_state["dt_ini_visao"] = hoje
+    if "dt_fim_visao" not in st.session_state: st.session_state["dt_fim_visao"] = hoje
+    if "h_ini_visao" not in st.session_state: st.session_state["h_ini_visao"] = datetime.strptime("00:00", "%H:%M").time()
+    if "h_fim_visao" not in st.session_state: st.session_state["h_fim_visao"] = datetime.strptime("23:59", "%H:%M").time()
+    if "filial_visao" not in st.session_state: st.session_state["filial_visao"] = "Todas"
+
     with st.form(key="form_filtros"):
-        c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1.5, 1], vertical_alignment="bottom")
+        c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1.2, 1.4], vertical_alignment="bottom")
         
-        data_ini = c1.date_input("De:", value=hoje, format="DD/MM/YYYY")
-        data_fim = c2.date_input("Até:", value=hoje, format="DD/MM/YYYY")
-        h_ini = c3.time_input("Hora:", value=datetime.strptime("00:00", "%H:%M").time())
-        h_fim = c4.time_input("Até:", value=datetime.strptime("23:59", "%H:%M").time())
-        filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()))
+        data_ini = c1.date_input("De:", key="dt_ini_visao", format="DD/MM/YYYY")
+        data_fim = c2.date_input("Até:", key="dt_fim_visao", format="DD/MM/YYYY")
+        h_ini = c3.time_input("Hora:", key="h_ini_visao")
+        h_fim = c4.time_input("Até:", key="h_fim_visao")
+        filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_visao")
         
         with c6:
-            btn = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
+            col_btn1, col_btn2 = st.columns(2)
+            btn = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
+            btn_limpar = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
+
+    # Ação do botão Limpar
+    if btn_limpar:
+        st.session_state["dt_ini_visao"] = hoje
+        st.session_state["dt_fim_visao"] = hoje
+        st.session_state["h_ini_visao"] = datetime.strptime("00:00", "%H:%M").time()
+        st.session_state["h_fim_visao"] = datetime.strptime("23:59", "%H:%M").time()
+        st.session_state["filial_visao"] = "Todas"
+        st.rerun()
 
     filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
     
@@ -308,25 +332,37 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (COM FILTRO DE FORNECEDOR)
+# ABA COMPRAS (COM FILTRO DE FORNECEDOR E LIMPAR)
 # ==========================================
 with tab_compras:
-    # Carrega a lista de fornecedores para o dropdown
     lista_fornecedores = carregar_fornecedores()
     
+    # Inicialização do Session State para os filtros (Padrão)
+    if "dt_ini_compras" not in st.session_state: st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
+    if "dt_fim_compras" not in st.session_state: st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
+    if "filial_compras" not in st.session_state: st.session_state["filial_compras"] = "Todas"
+    if "fornecedor_compras" not in st.session_state: st.session_state["fornecedor_compras"] = "Todos"
+
     with st.form(key="form_compras"):
-        # Ajustado para 5 colunas: De, Até, Filial, Fornecedor, Botão
-        c1, c2, c3, c4, c5 = st.columns([1, 1, 1.2, 1.5, 1], vertical_alignment="bottom")
+        c1, c2, c3, c4, c5 = st.columns([1, 1, 1.2, 1.5, 1.4], vertical_alignment="bottom")
         
-        data_ini_c = c1.date_input("De:", value=date(hoje.year, 1, 1), format="DD/MM/YYYY", key="dt_ini_compras")
-        data_fim_c = c2.date_input("Até:", value=date(hoje.year, 12, 31), format="DD/MM/YYYY", key="dt_fim_compras")
+        data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
+        data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
         filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
-        
-        # Novo filtro de fornecedor
         fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
         
         with c5:
-            btn_compras = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
+            col_btn1, col_btn2 = st.columns(2)
+            btn_compras = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
+            btn_limpar_comp = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
+
+    # Ação do botão Limpar
+    if btn_limpar_comp:
+        st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
+        st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
+        st.session_state["filial_compras"] = "Todas"
+        st.session_state["fornecedor_compras"] = "Todos"
+        st.rerun()
 
     filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
     
