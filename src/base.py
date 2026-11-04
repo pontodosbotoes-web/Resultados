@@ -1,0 +1,36 @@
+from pathlib import Path
+import pandas as pd
+from sqlalchemy import text
+from .db import get_engine
+
+def _ler_sql(nome_arquivo: str) -> str:
+    caminho = Path(__file__).parent.parent / "sql" / nome_arquivo
+    return caminho.read_text(encoding="utf-8")
+
+def buscar_visao_geral(data_inicio, data_fim, hora_inicio, hora_fim, filial):
+    sql = _ler_sql("visao_vendas.sql")
+    params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
+    
+    if filial:
+        sql = sql.replace("/* FILTRO_FILIAL */", "AND m.CodFilial = :filial")
+        params["filial"] = int(filial)
+    else:
+        sql = sql.replace("/* FILTRO_FILIAL */", "")
+
+    with get_engine().connect() as conn:
+        df = pd.read_sql(text(sql), conn, params=params)
+    return df
+
+def buscar_compras(data_inicio, data_fim, filial):
+    sql = _ler_sql("visao_compras.sql")
+    params = {"data_inicio": data_inicio, "data_fim": data_fim}
+    
+    if filial:
+        sql = sql.replace("/* FILTRO_FILIAL */", "AND m.CodFilial = :filial")
+        params["filial"] = int(filial)
+    else:
+        sql = sql.replace("/* FILTRO_FILIAL */", "")
+
+    with get_engine().connect() as conn:
+        df = pd.read_sql(text(sql), conn, params=params)
+    return df
