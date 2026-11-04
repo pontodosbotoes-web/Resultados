@@ -18,3 +18,12 @@ def carregar_filiais() -> dict:
         return dict(zip(df['CodFilial'].astype(str), df['NomeFilial']))
     except Exception:
         return {"1": "PB - ALECRIM", "2": "PB - VIA DIRETA", "3": "PB - ZONA SUL", "4": "SRB - ZONA NORTE", "5": "PB - ATACADO"}
+
+@st.cache_data(ttl=3600)
+def carregar_fornecedores() -> list:
+    try:
+        q = "SELECT DISTINCT NomeCliFor FROM Cli_For WHERE NomeCliFor IS NOT NULL AND NomeCliFor <> '' ORDER BY NomeCliFor"
+        df = pd.read_sql(q, get_engine())
+        return df["NomeCliFor"].tolist()
+    except Exception:
+        return []
