@@ -22,7 +22,14 @@ def carregar_filiais() -> dict:
 @st.cache_data(ttl=3600)
 def carregar_fornecedores() -> list:
     try:
-        q = "SELECT DISTINCT NomeCliFor FROM Cli_For WHERE NomeCliFor IS NOT NULL AND NomeCliFor <> '' ORDER BY NomeCliFor"
+        q = """
+            SELECT DISTINCT NomeCliFor 
+            FROM Cli_For WITH (NOLOCK) 
+            WHERE NomeCliFor IS NOT NULL 
+              AND NomeCliFor <> '' 
+              AND CodCliFor LIKE 'F%'
+            ORDER BY NomeCliFor
+        """
         df = pd.read_sql(q, get_engine())
         return df["NomeCliFor"].tolist()
     except Exception:
