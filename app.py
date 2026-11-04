@@ -20,15 +20,18 @@ st.markdown("""
         
         .tema-titulo { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #30363d; padding-bottom: 6px; }
         
-        .card-item { border-radius: 10px; padding: 12px 14px 6px 14px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: 0.2s;}
+        .card-item { border-radius: 10px; padding: 12px 14px 6px 14px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: 0.2s; margin-bottom: 10px;}
         .card-item:hover { filter: brightness(1.2); }
         
-        .card-label { font-size: 13px; font-weight: 600; color: #c9d1d9; margin-bottom: 4px; }
+        .card-label { font-size: 13px; font-weight: 600; color: #c9d1d9; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
         .card-value { font-size: 20px; font-weight: 700; color: #f0f6fc; }
         
         .pct-participacao { font-size: 13px; font-weight: 600; color: #f6ad55; margin-left: 5px; }
         .pct-positiva { font-size: 13px; font-weight: 600; color: #3fb950; margin-left: 5px; }
         .pct-negativa { font-size: 13px; font-weight: 600; color: #f85149; margin-left: 5px; }
+        
+        .depto-header { font-size: 18px; font-weight: 600; color: #f0f6fc; margin-top: 25px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;}
+        .depto-valor { font-size: 16px; color: #58a6ff; font-weight: 700; background: rgba(88,166,255,0.1); padding: 2px 10px; border-radius: 15px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -305,7 +308,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (AGORA AGRUPADA)
+# ABA COMPRAS (AGRUPADA POR DEPARTAMENTO)
 # ==========================================
 with tab_compras:
     with st.form(key="form_compras"):
@@ -326,46 +329,73 @@ with tab_compras:
     if df_compras.empty:
         st.info("Nenhuma compra encontrada para o período.")
     else:
-        tot_val = df_compras["Valor"].sum()
+        # --- PREPARAÇÃO DOS TOTAIS E MESES ---
+        tot_val_geral = df_compras["Valor"].sum()
+        df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
         
-        # Apenas o Card de Valor Total (Menor e Alinhado à Esquerda)
-        col_tot, _ = st.columns([1, 2])
-        col_tot.markdown(f'<div class="card-item" style="background-color: rgba(88,166,255,0.08); border: 1px solid #58a6ff; border-left: 4px solid #58a6ff;"><div class="card-label" style="color: #58a6ff;">💰 Valor Total Comprado</div><div class="card-value" style="color: #58a6ff;">{formatar_moeda(tot_val)}</div></div>', unsafe_allow_html=True)
-        
-        st.write("")
-        
-        # Traduz o mês numérico para texto (1 -> Jan, 2 -> Fev, etc)
         meses_map = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
         df_compras['Mes_Nome'] = df_compras['Mes'].map(meses_map)
-        
-        # Agrupar por Departamento e Fornecedor, pivotando os meses
-        df_pivot = df_compras.pivot_table(
-            index=['Departamento', 'Fornecedor'], 
-            columns='Mes_Nome', 
-            values='Valor', 
-            aggfunc='sum'
-        )
-        
-        # Garante que todos os meses apareçam na tabela, mesmo se zerados
         meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-        for m in meses_colunas:
-            if m not in df_pivot.columns:
-                df_pivot[m] = 0.0
-                
-        df_pivot = df_pivot[meses_colunas]
-        df_pivot['Total'] = df_pivot.sum(axis=1)
-        df_pivot = df_pivot.fillna(0)
+
+        # --- CARDS NO TOPO (TOTAL E DEPARTAMENTOS) ---
+        cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff")]
+        cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
         
-        # Ordena primeiro pelo nome do Departamento, e depois pelo maior valor de compra (Total)
-        df_pivot = df_pivot.sort_values(by=['Departamento', 'Total'], ascending=[True, False])
+        for i, row in df_tot_depto.iterrows():
+            cor = cores_depto[i % len(cores_depto)]
+            cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor))
+
+        for i in range(0, len(cards_data), 5):
+            chunk = cards_data[i:i+5]
+            cols = st.columns(5)
+            for j, (nome, valor, cor) in enumerate(chunk):
+                with cols[j]:
+                    r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
+                    bg_color = f"rgba({r}, {g}, {b}, 0.08)"
+                    st.markdown(f'''
+                        <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
+                            <div class="card-label" style="color: {cor};" title="{nome}">{nome}</div>
+                            <div class="card-value" style="color: {cor};">{formatar_moeda(valor)}</div>
+                        </div>
+                    ''', unsafe_allow_html=True)
         
-        # Prepara a configuração visual das colunas para o Streamlit
-        col_config = {m: st.column_config.NumberColumn(m, format="R$ %.2f") for m in meses_colunas}
-        col_config["Total"] = st.column_config.NumberColumn("Total", format="R$ %.2f")
+        st.write("")
+        st.markdown("---")
+
+        # --- TABELAS SEPARADAS POR DEPARTAMENTO ---
+        st.markdown("### 📋 Detalhamento por Departamento")
         
-        # Exibe a tabela com os Departamentos colapsáveis
-        st.dataframe(
-            df_pivot,
-            use_container_width=True,
-            column_config=col_config
-        )
+        for _, row in df_tot_depto.iterrows():
+            depto = row['Departamento']
+            val_depto = row['Valor']
+            
+            # Título do Departamento com Valor
+            st.markdown(f'''
+                <div class="depto-header">
+                    📂 {depto} <span class="depto-valor">{formatar_moeda(val_depto)}</span>
+                </div>
+            ''', unsafe_allow_html=True)
+            
+            df_d = df_compras[df_compras["Departamento"] == depto]
+            
+            # Pivot: Fornecedores nas linhas, Meses nas colunas, Valor total
+            df_pivot = df_d.pivot_table(
+                index=['Fornecedor'], 
+                columns='Mes_Nome', 
+                values='Valor', 
+                aggfunc='sum'
+            )
+            
+            for m in meses_colunas:
+                if m not in df_pivot.columns: df_pivot[m] = 0.0
+                    
+            df_pivot = df_pivot[meses_colunas]
+            df_pivot['Total'] = df_pivot.sum(axis=1)
+            df_pivot = df_pivot.fillna(0).sort_values(by='Total', ascending=False)
+            
+            # Formatação das colunas para Moeda
+            col_config = {m: st.column_config.NumberColumn(m, format="R$ %.2f") for m in meses_colunas}
+            col_config["Total"] = st.column_config.NumberColumn("Total", format="R$ %.2f")
+            
+            st.dataframe(df_pivot, use_container_width=True, column_config=col_config)
+            st.write("") # Espaçamento entre as tabelas
