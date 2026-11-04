@@ -52,24 +52,44 @@ def formatar_decimal(v):
 def formatar_inteiro(v):
     return f"{int(v):,}".replace(",", ".")
 
-def criar_mini_grafico(df_hora, col_valor, cor_hex):
+def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     if df_hora.empty: return go.Figure()
-    fig = px.area(df_hora, x="Hora", y=col_valor)
+    
+    # Formata o valor para o tooltip do gráfico
+    if is_moeda:
+        custom_data = [f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") for v in df_hora[col_valor]]
+        hover_tpl = "Hora %{x}<br>R$ %{customdata}<extra></extra>"
+    else:
+        custom_data = [f"{int(v):,}".replace(",", ".") for v in df_hora[col_valor]]
+        hover_tpl = "Hora %{x}<br>%{customdata}<extra></extra>"
+
     r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
     fill_color = f"rgba({r}, {g}, {b}, 0.1)"
-    fig.update_traces(line_color=cor_hex, fillcolor=fill_color, line_width=1.5)
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_hora["Hora"], 
+        y=df_hora[col_valor],
+        mode='lines',
+        fill='tozeroy',
+        line=dict(color=cor_hex, width=1.5),
+        fillcolor=fill_color,
+        customdata=custom_data,
+        hovertemplate=hover_tpl
+    ))
+    
     fig.update_layout(
         margin=dict(l=0, r=0, t=0, b=0), height=45,
         xaxis=dict(visible=False), yaxis=dict(visible=False, rangemode='tozero'),
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False,
+        hovermode="x unified"
     )
     return fig
 
-def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moeda", campo_itens="porFilial"):
+def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moeda", campo_itens="porFilial", is_filial=True):
     st.markdown(f'<div class="tema-titulo">{icone} {titulo}</div>', unsafe_allow_html=True)
     total = dados.get("total", 0)
     itens = dados.get(campo_itens, [])
-    cols = st.columns([1.1, 1, 1, 1, 1])
     
     def html_card(nome, valor, pct_html="", is_consolidado=False):
         classe = "card-item card-consolidado" if is_consolidado else "card-item"
@@ -77,32 +97,68 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
         val_fmt = formatar_moeda(valor) if fmt == "moeda" else (formatar_inteiro(valor) if fmt == "inteiro" else formatar_decimal(valor))
         return f'<div class="{classe}"><div class="card-label">{label_nome}</div><div class="card-value">{val_fmt} {pct_html}</div></div>'
 
-    with cols[0]:
-        st.markdown(html_card("", total, is_consolidado=True), unsafe_allow_html=True)
-        df_cons = dados.get("horasConsolidado", [])
-        labels = dados.get("labelsHoras", [])
-        if df_cons and labels:
-            key_cons = f"cons_{titulo.replace(' ', '_').replace('/', '')}_{col_valor}"
-            st.plotly_chart(criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": df_cons}), "Val", cor_hex), use_container_width=True, config={'displayModeBar': False}, key=key_cons)
-
-    for i, item in enumerate(itens):
-        if i + 1 >= len(cols): break
-        with cols[i + 1]:
-            pct_html = ""
-            if total > 0:
-                if tipo_pct == "participacao":
-                    pct = (item["valor"] / total) * 100
-                    pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
-                elif tipo_pct == "variacao":
-                    diff = ((item["valor"] - total) / total) * 100
-                    sinal = "+" if diff > 0 else ""
-                    classe = "pct-positiva" if diff >= 0 else "pct-negativa"
-                    pct_html = f'<span class="{classe}">({sinal}{diff:.1f}%)</span>'
-            
+    def render_card_col(col, item):
+        pct_html = ""
+        if total > 0:
+            if tipo_pct == "participacao":
+                pct = (item["valor"] / total) * 100
+                pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
+            elif tipo_pct == "variacao":
+                diff = ((item["valor"] - total) / total) * 100
+                sinal = "+" if diff > 0 else ""
+                classe = "pct-positiva" if diff >= 0 else "pct-negativa"
+                pct_html = f'<span class="{classe}">({sinal}{diff:.1f}%)</span>'
+        
+        with col:
             st.markdown(html_card(item["nome"], item["valor"], pct_html), unsafe_allow_html=True)
-            if "horas" in item and labels:
-                key_item = f"item_{titulo.replace(' ', '_').replace('/', '')}_{item['nome'].replace(' ', '_')}_{col_valor}"
-                st.plotly_chart(criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": item["horas"]}), "Val", cor_hex), use_container_width=True, config={'displayModeBar': False}, key=key_item)
+            if "horas" in item and dados.get("labelsHoras"):
+                key_item = f"item_{titulo.replace(' ', '_').replace('/', '')}_{item['nome'].replace(' ', '_').replace('.', '')}_{col_valor}"
+                fig = criar_mini_grafico(pd.DataFrame({"Hora": dados["labelsHoras"], "Val": item["horas"]}), "Val", cor_hex, fmt=="moeda")
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=key_item)
+
+    # --- Lógica de Renderização ---
+    if is_filial:
+        # Exatamente 5 colunas: Consolidado + 4 filiais
+        cols = st.columns([1.1, 1, 1, 1, 1])
+        with cols[0]:
+            st.markdown(html_card("", total, is_consolidado=True), unsafe_allow_html=True)
+            df_cons = dados.get("horasConsolidado", [])
+            labels = dados.get("labelsHoras", [])
+            if df_cons and labels:
+                key_cons = f"cons_{titulo.replace(' ', '_').replace('/', '')}_{col_valor}"
+                fig_cons = criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": df_cons}), "Val", cor_hex, fmt=="moeda")
+                st.plotly_chart(fig_cons, use_container_width=True, config={'displayModeBar': False}, key=key_cons)
+        
+        for i, item in enumerate(itens):
+            if i + 1 >= len(cols): break
+            render_card_col(cols[i + 1], item)
+            
+    else:
+        # Lógica Dinâmica: Primeira linha tem Consolidado + 4 itens. Depois, blocos de 5.
+        cols = st.columns([1.1, 1, 1, 1, 1])
+        with cols[0]:
+            st.markdown(html_card("", total, is_consolidado=True), unsafe_allow_html=True)
+            df_cons = dados.get("horasConsolidado", [])
+            labels = dados.get("labelsHoras", [])
+            if df_cons and labels:
+                key_cons = f"cons_{titulo.replace(' ', '_').replace('/', '')}_{col_valor}"
+                fig_cons = criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": df_cons}), "Val", cor_hex, fmt=="moeda")
+                st.plotly_chart(fig_cons, use_container_width=True, config={'displayModeBar': False}, key=key_cons)
+
+        # Renderiza os primeiros 4 itens na primeira linha
+        for i in range(4):
+            if i < len(itens):
+                render_card_col(cols[i+1], itens[i])
+        
+        # Renderiza o resto em blocos de 5
+        itens_restantes = itens[4:]
+        for i in range(0, len(itens_restantes), 5):
+            chunk = itens_restantes[i:i+5]
+            cols_chunk = st.columns(5)
+            for j, item in enumerate(chunk):
+                render_card_col(cols_chunk[j], item)
+        st.write("") # Espaçamento extra após blocos dinâmicos
+
 
 with tab_visao:
     try:
@@ -111,21 +167,22 @@ with tab_visao:
         tz_br = None
     hoje = datetime.now(tz_br).date() if tz_br else date.today()
 
-    c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1.5, 1])
-    data_ini = c1.date_input("De:", value=hoje, format="DD/MM/YYYY")
-    data_fim = c2.date_input("Até:", value=hoje, format="DD/MM/YYYY")
-    h_ini = c3.time_input("Hora:", value=datetime.strptime("00:00", "%H:%M").time())
-    h_fim = c4.time_input("Até:", value=datetime.strptime("23:59", "%H:%M").time())
-    filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()))
-    with c6:
-        st.write("") 
-        btn = st.button("🔄 Atualizar", use_container_width=True, type="primary")
+    # FORMULÁRIO: Só atualiza quando clica no botão
+    with st.form(key="form_filtros"):
+        c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1.5, 1], vertical_alignment="bottom")
+        
+        data_ini = c1.date_input("De:", value=hoje, format="DD/MM/YYYY")
+        data_fim = c2.date_input("Até:", value=hoje, format="DD/MM/YYYY")
+        h_ini = c3.time_input("Hora:", value=datetime.strptime("00:00", "%H:%M").time())
+        h_fim = c4.time_input("Até:", value=datetime.strptime("23:59", "%H:%M").time())
+        filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()))
+        
+        btn = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
 
     filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
     
     with st.spinner("Carregando dados..."):
         df_vendas = buscar_vendas(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
-        
         if not df_vendas.empty:
             df_vendas["CodFilial"] = pd.to_numeric(df_vendas["CodFilial"], errors="coerce").fillna(0).astype(int)
             
@@ -136,7 +193,6 @@ with tab_visao:
         st.info("Nenhum dado encontrado para os filtros selecionados.")
     else:
         labels_h = sorted(df_vendas["Hora"].unique().tolist())
-        
         tot_vendas = df_vendas["ValorVenda"].sum()
         tot_trans = df_vendas["QtdVendas"].sum()
         tot_itens = df_vendas["QtdItens"].sum()
@@ -197,7 +253,7 @@ with tab_visao:
                 cons_horas.append(hv)
 
             dados_tema = {"total": t["total"], "porFilial": itens_filial, "labelsHoras": labels_h, "horasConsolidado": cons_horas}
-            renderizar_tema(t["titulo"], t["icone"], dados_tema, t["col"], t["cor"], t["pct"], t["fmt"])
+            renderizar_tema(t["titulo"], t["icone"], dados_tema, t["col"], t["cor"], t["pct"], t["fmt"], "porFilial", is_filial=True)
 
         # --- DEPARTAMENTOS ---
         if not df_depto.empty:
@@ -212,7 +268,7 @@ with tab_visao:
             itens_depto = sorted(itens_depto, key=lambda x: x["valor"], reverse=True)
             cons_horas_d = [df_depto[df_depto["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
             dados_d = {"total": tot_depto, "departamentos": itens_depto, "labelsHoras": labels_depto, "horasConsolidado": cons_horas_d}
-            renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#38bdf8", "participacao", "moeda", "departamentos")
+            renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#38bdf8", "participacao", "moeda", "departamentos", is_filial=False)
 
         # --- PAGAMENTOS E PORTADORES ---
         if not df_pag.empty:
@@ -227,7 +283,7 @@ with tab_visao:
             itens_pag = sorted(itens_pag, key=lambda x: x["valor"], reverse=True)
             cons_horas_p = [df_pag[df_pag["Hora"] == h]["Valor"].sum() for h in labels_pag]
             dados_p = {"total": tot_pag, "porForma": itens_pag, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_p}
-            renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#f0883e", "participacao", "moeda", "porForma")
+            renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#f0883e", "participacao", "moeda", "porForma", is_filial=False)
 
             df_pag_port = df_pag.dropna(subset=["NomePortador"])
             if not df_pag_port.empty:
@@ -240,7 +296,7 @@ with tab_visao:
                 itens_port = sorted(itens_port, key=lambda x: x["valor"], reverse=True)
                 cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
                 dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
-                renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador")
+                renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 with tab_compras:
     st.markdown("### 🛒 Compras")
