@@ -16,6 +16,19 @@ WHERE m.TipoMov = '1.1'
     AND m.CodLocal = '01'
     AND m.DtFinalizacao >= CONVERT(date, :data_inicio, 23)
     AND m.DtFinalizacao < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
+    AND cf.CodCliFor LIKE 'F%'
     AND m.CodCliFor NOT IN ('C08327','F00074','C08328','F10077','C22206','F15703','C16205','F14688','C30965','F16834')
     /* FILTRO_FILIAL */
-GROUP BY YEAR(m.DtFinalizacao), MONTH(m.DtFinalizacao), m.CodFilial, depto.NOMEGRUPO, cf.NomeCliFor
+GROUP BY 
+    YEAR(m.DtFinalizacao), 
+    MONTH(m.DtFinalizacao), 
+    m.CodFilial, 
+    depto.NOMEGRUPO, 
+    cf.NomeCliFor
+ORDER BY 
+    [Ano] ASC,
+    [Mes] ASC,
+    [Loja] ASC,
+    [Departamento] ASC,
+    [Fornecedor] ASC,
+    [Valor] DESC;
