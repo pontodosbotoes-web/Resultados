@@ -60,17 +60,12 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
         custom_data = [f"{int(v):,}".replace(",", ".") for v in df_hora[col_valor]]
         hover_tpl = "%{x}h<br>%{customdata}<extra></extra>"
 
-    r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
-    fill_color = f"rgba({r}, {g}, {b}, 0.1)"
-
+    # Alterado de Scatter (linha) para Bar (barra vertical)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
+    fig.add_trace(go.Bar(
         x=df_hora["Hora"], 
         y=df_hora[col_valor],
-        mode='lines',
-        fill='tozeroy',
-        line=dict(color=cor_hex, width=1.5),
-        fillcolor=fill_color,
+        marker_color=cor_hex,
         customdata=custom_data,
         hovertemplate=hover_tpl
     ))
@@ -80,7 +75,8 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
         xaxis=dict(visible=False, showspikes=False), 
         yaxis=dict(visible=False, rangemode='tozero', showspikes=False),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False,
-        hovermode="x unified"
+        hovermode="x unified",
+        bargap=0.1 # Deixa um espacinho entre as barras
     )
     return fig
 
@@ -90,7 +86,6 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
     itens = dados.get(campo_itens, [])
     
     def html_card(nome, valor, pct_html="", is_consolidado=False):
-        # Converte a cor HEX para RGBA para o fundo do card
         r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
         bg_color = f"rgba({r}, {g}, {b}, 0.08)"
         
@@ -124,7 +119,6 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
                 fig = criar_mini_grafico(pd.DataFrame({"Hora": dados["labelsHoras"], "Val": item["horas"]}), "Val", cor_hex, fmt=="moeda")
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=key_item)
 
-    # --- Lógica de Renderização ---
     if is_filial:
         cols = st.columns([1.1, 1, 1, 1, 1])
         with cols[0]:
@@ -151,12 +145,10 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
                 fig_cons = criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": df_cons}), "Val", cor_hex, fmt=="moeda")
                 st.plotly_chart(fig_cons, use_container_width=True, config={'displayModeBar': False}, key=key_cons)
 
-        # Renderiza os primeiros 4 itens na primeira linha
         for i in range(4):
             if i < len(itens):
                 render_card_col(cols[i+1], itens[i])
         
-        # Renderiza o resto em blocos de 5
         itens_restantes = itens[4:]
         for i in range(0, len(itens_restantes), 5):
             chunk = itens_restantes[i:i+5]
@@ -261,7 +253,6 @@ with tab_visao:
             dados_tema = {"total": t["total"], "porFilial": itens_filial, "labelsHoras": labels_h, "horasConsolidado": cons_horas}
             renderizar_tema(t["titulo"], t["icone"], dados_tema, t["col"], t["cor"], t["pct"], t["fmt"], "porFilial", is_filial=True)
 
-        # --- DEPARTAMENTOS ---
         if not df_depto.empty:
             labels_depto = sorted(df_depto["Hora"].unique().tolist())
             tot_depto = df_depto["ValorVenda"].sum()
@@ -276,7 +267,6 @@ with tab_visao:
             dados_d = {"total": tot_depto, "departamentos": itens_depto, "labelsHoras": labels_depto, "horasConsolidado": cons_horas_d}
             renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#38bdf8", "participacao", "moeda", "departamentos", is_filial=False)
 
-        # --- PAGAMENTOS E PORTADORES ---
         if not df_pag.empty:
             labels_pag = sorted(df_pag["Hora"].unique().tolist())
             tot_pag = df_pag["Valor"].sum()
