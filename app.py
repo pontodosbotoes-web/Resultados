@@ -58,10 +58,10 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     # Formata o valor para o tooltip do gráfico
     if is_moeda:
         custom_data = [f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") for v in df_hora[col_valor]]
-        hover_tpl = "Hora %{x}<br>R$ %{customdata}<extra></extra>"
+        hover_tpl = "%{x}h<br>R$ %{customdata}<extra></extra>"
     else:
         custom_data = [f"{int(v):,}".replace(",", ".") for v in df_hora[col_valor]]
-        hover_tpl = "Hora %{x}<br>%{customdata}<extra></extra>"
+        hover_tpl = "%{x}h<br>%{customdata}<extra></extra>"
 
     r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
     fill_color = f"rgba({r}, {g}, {b}, 0.1)"
@@ -80,7 +80,8 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     
     fig.update_layout(
         margin=dict(l=0, r=0, t=0, b=0), height=45,
-        xaxis=dict(visible=False), yaxis=dict(visible=False, rangemode='tozero'),
+        xaxis=dict(visible=False, showspikes=False), # Desativa a linha vertical
+        yaxis=dict(visible=False, rangemode='tozero', showspikes=False), # Desativa a linha horizontal
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False,
         hovermode="x unified"
     )
@@ -118,7 +119,6 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
 
     # --- Lógica de Renderização ---
     if is_filial:
-        # Exatamente 5 colunas: Consolidado + 4 filiais
         cols = st.columns([1.1, 1, 1, 1, 1])
         with cols[0]:
             st.markdown(html_card("", total, is_consolidado=True), unsafe_allow_html=True)
@@ -134,7 +134,6 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
             render_card_col(cols[i + 1], item)
             
     else:
-        # Lógica Dinâmica: Primeira linha tem Consolidado + 4 itens. Depois, blocos de 5.
         cols = st.columns([1.1, 1, 1, 1, 1])
         with cols[0]:
             st.markdown(html_card("", total, is_consolidado=True), unsafe_allow_html=True)
@@ -157,7 +156,7 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
             cols_chunk = st.columns(5)
             for j, item in enumerate(chunk):
                 render_card_col(cols_chunk[j], item)
-        st.write("") # Espaçamento extra após blocos dinâmicos
+        st.write("") 
 
 
 with tab_visao:
@@ -167,7 +166,7 @@ with tab_visao:
         tz_br = None
     hoje = datetime.now(tz_br).date() if tz_br else date.today()
 
-    # FORMULÁRIO: Só atualiza quando clica no botão
+    # FORMULÁRIO: Alinhado corretamente
     with st.form(key="form_filtros"):
         c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1.5, 1], vertical_alignment="bottom")
         
@@ -177,7 +176,8 @@ with tab_visao:
         h_fim = c4.time_input("Até:", value=datetime.strptime("23:59", "%H:%M").time())
         filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()))
         
-        btn = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
+        with c6:
+            btn = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
 
     filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
     
