@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from src.db import carregar_filiais
+from src.db import carregar_filiais, carregar_fornecedores
 from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras
 
 st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_icon="📊")
@@ -308,17 +308,24 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS 
+# ABA COMPRAS (COM FILTRO DE FORNECEDOR)
 # ==========================================
 with tab_compras:
+    # Carrega a lista de fornecedores para o dropdown
+    lista_fornecedores = carregar_fornecedores()
+    
     with st.form(key="form_compras"):
-        c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1], vertical_alignment="bottom")
+        # Ajustado para 5 colunas: De, Até, Filial, Fornecedor, Botão
+        c1, c2, c3, c4, c5 = st.columns([1, 1, 1.2, 1.5, 1], vertical_alignment="bottom")
         
         data_ini_c = c1.date_input("De:", value=date(hoje.year, 1, 1), format="DD/MM/YYYY", key="dt_ini_compras")
         data_fim_c = c2.date_input("Até:", value=date(hoje.year, 12, 31), format="DD/MM/YYYY", key="dt_fim_compras")
         filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
         
-        with c4:
+        # Novo filtro de fornecedor
+        fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
+        
+        with c5:
             btn_compras = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
 
     filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
@@ -329,85 +336,86 @@ with tab_compras:
     if df_compras.empty:
         st.info("Nenhuma compra encontrada para o período.")
     else:
-        # --- PREPARAÇÃO DOS TOTAIS E MESES ---
-        tot_val_geral = df_compras["Valor"].sum()
-        
-        # ORDENAÇÃO ALFABÉTICA DOS DEPARTAMENTOS NOS CARDS
-        df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index()
-        df_tot_depto = df_tot_depto.sort_values("Departamento", ascending=True)
-        
-        meses_map = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
-        df_compras['Mes_Nome'] = df_compras['Mes'].map(meses_map)
-        meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+        # Aplica o filtro de fornecedor se não for "Todos"
+        if fornecedor_sel != "Todos":
+            df_compras = df_compras[df_compras["Fornecedor"] == fornecedor_sel]
+            
+        if df_compras.empty:
+            st.info(f"Nenhuma compra encontrada para o fornecedor {fornecedor_sel} neste período.")
+        else:
+            # --- PREPARAÇÃO DOS TOTAIS E MESES ---
+            tot_val_geral = df_compras["Valor"].sum()
+            
+            # ORDENAÇÃO ALFABÉTICA DOS DEPARTAMENTOS NOS CARDS
+            df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index()
+            df_tot_depto = df_tot_depto.sort_values("Departamento", ascending=True)
+            
+            meses_map = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
+            df_compras['Mes_Nome'] = df_compras['Mes'].map(meses_map)
+            meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-        # --- CARDS NO TOPO (TOTAL E DEPARTAMENTOS) ---
-        cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff")]
-        cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
-        
-        for i, row in df_tot_depto.iterrows():
-            cor = cores_depto[i % len(cores_depto)]
-            cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor))
+            # --- CARDS NO TOPO (TOTAL E DEPARTAMENTOS) ---
+            cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff")]
+            cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
+            
+            for i, row in df_tot_depto.iterrows():
+                cor = cores_depto[i % len(cores_depto)]
+                cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor))
 
-        for i in range(0, len(cards_data), 5):
-            chunk = cards_data[i:i+5]
-            cols = st.columns(5)
-            for j, (nome, valor, cor) in enumerate(chunk):
-                with cols[j]:
-                    r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
-                    bg_color = f"rgba({r}, {g}, {b}, 0.08)"
-                    st.markdown(f'''
-                        <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
-                            <div class="card-label" style="color: {cor};" title="{nome}">{nome}</div>
-                            <div class="card-value" style="color: {cor};">{formatar_moeda(valor)}</div>
-                        </div>
-                    ''', unsafe_allow_html=True)
-        
-        st.write("")
-        st.markdown("---")
+            for i in range(0, len(cards_data), 5):
+                chunk = cards_data[i:i+5]
+                cols = st.columns(5)
+                for j, (nome, valor, cor) in enumerate(chunk):
+                    with cols[j]:
+                        r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
+                        bg_color = f"rgba({r}, {g}, {b}, 0.08)"
+                        st.markdown(f'''
+                            <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
+                                <div class="card-label" style="color: {cor};" title="{nome}">{nome}</div>
+                                <div class="card-value" style="color: {cor};">{formatar_moeda(valor)}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+            
+            st.write("")
+            st.markdown("---")
 
-        # --- TABELAS SEPARADAS POR DEPARTAMENTO ---
-        # Removido o título "Detalhamento por Departamento" para limpar a tela
-        
-        for _, row in df_tot_depto.iterrows():
-            depto = row['Departamento']
-            val_depto = row['Valor']
-            
-            # Título do Departamento com Valor
-            st.markdown(f'''
-                <div class="depto-header">
-                    📂 {depto} <span class="depto-valor">{formatar_moeda(val_depto)}</span>
-                </div>
-            ''', unsafe_allow_html=True)
-            
-            df_d = df_compras[df_compras["Departamento"] == depto]
-            
-            # Pivot: Fornecedores nas linhas, Meses nas colunas, Valor total
-            df_pivot = df_d.pivot_table(
-                index=['Fornecedor'], 
-                columns='Mes_Nome', 
-                values='Valor', 
-                aggfunc='sum'
-            )
-            
-            for m in meses_colunas:
-                if m not in df_pivot.columns: df_pivot[m] = 0.0
-                    
-            df_pivot = df_pivot[meses_colunas]
-            df_pivot['Total'] = df_pivot.sum(axis=1)
-            df_pivot = df_pivot.fillna(0)
-            
-            # ORDENAÇÃO ALFABÉTICA DOS FORNECEDORES
-            df_pivot = df_pivot.sort_index(ascending=True)
-            
-            # Formatação customizada brasileira sem o R$
-            # Usamos Pandas Styler para manter a ordenação e exibir os pontos e vírgulas
-            def fmt_br(x):
-                if pd.isna(x) or x == 0:
-                    return "-"
-                return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            
-            st.dataframe(
-                df_pivot.style.format(fmt_br),
-                use_container_width=True
-            )
-            st.write("") 
+            # --- TABELAS SEPARADAS POR DEPARTAMENTO ---
+            for _, row in df_tot_depto.iterrows():
+                depto = row['Departamento']
+                val_depto = row['Valor']
+                
+                st.markdown(f'''
+                    <div class="depto-header">
+                        📂 {depto} <span class="depto-valor">{formatar_moeda(val_depto)}</span>
+                    </div>
+                ''', unsafe_allow_html=True)
+                
+                df_d = df_compras[df_compras["Departamento"] == depto]
+                
+                df_pivot = df_d.pivot_table(
+                    index=['Fornecedor'], 
+                    columns='Mes_Nome', 
+                    values='Valor', 
+                    aggfunc='sum'
+                )
+                
+                for m in meses_colunas:
+                    if m not in df_pivot.columns: df_pivot[m] = 0.0
+                        
+                df_pivot = df_pivot[meses_colunas]
+                df_pivot['Total'] = df_pivot.sum(axis=1)
+                df_pivot = df_pivot.fillna(0)
+                
+                # ORDENAÇÃO ALFABÉTICA DOS FORNECEDORES
+                df_pivot = df_pivot.sort_index(ascending=True)
+                
+                def fmt_br(x):
+                    if pd.isna(x) or x == 0:
+                        return "-"
+                    return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                
+                st.dataframe(
+                    df_pivot.style.format(fmt_br),
+                    use_container_width=True
+                )
+                st.write("") 
