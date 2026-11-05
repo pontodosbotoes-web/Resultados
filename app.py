@@ -35,7 +35,6 @@ st.markdown("""
         
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
 
-        /* ESTILO DO BOTÃO ATUALIZAR (VERDE) */
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"] {
             background-color: #238636 !important;
             color: #ffffff !important;
@@ -48,7 +47,6 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(46, 160, 67, 0.4) !important;
         }
 
-        /* ESTILO DO BOTÃO LIMPAR (VERMELHO) */
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"] {
             background-color: #da3633 !important;
             color: #ffffff !important;
@@ -61,7 +59,6 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(248, 81, 73, 0.4) !important;
         }
 
-        /* ===== TRIBUTOS ===== */
         .tabela-wrapper { overflow-x: auto; margin: 10px 0 30px 0; }
         .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 13px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; }
         .tributos-tabela th { background: #0d1117; color: #f0f6fc; padding: 10px 12px; border-bottom: 2px solid #30363d; font-weight: 600; white-space: nowrap; }
@@ -496,7 +493,7 @@ with tab_compras:
                 st.write("") 
 
 # ==========================================
-# ABA TRIBUTOS
+# ABA TRIBUTOS (OTIMIZADA)
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
@@ -543,77 +540,50 @@ with tab_tributos:
             st.info("Nenhuma filial com movimentação neste período.")
         else:
             df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
-            df_trib["tributoVendasIntegral"] = 0.0
-            df_trib["pctVendasEfetivo"] = 0.0
+            
+            # --- VETORIZAÇÃO (RÁPIDO) EM VEZ DE ITERROWS ---
+            df_trib["tributoVendasIntegral"] = df_trib["ICMS_Vendas"]
+            df_trib["pctVendasEfetivo"] = (df_trib["ICMS_Vendas"] / df_trib["VendasBruto"] * 100).fillna(0)
             df_trib["tributoVendasAdicional"] = 0.0
             df_trib["pctAdicional"] = 0.0
-            df_trib["icmsTransfEnv"] = 0.0
-            df_trib["pctTransfEnvEfetivo"] = 0.0
+            df_trib["icmsTransfEnv"] = df_trib["ICMS_TransfEnv"]
+            df_trib["pctTransfEnvEfetivo"] = (df_trib["ICMS_TransfEnv"] / df_trib["TransfEnvTotal"] * 100).fillna(0)
             
-            # REGRAS DE NEGÓCIO FIXAS (BASEADO NO ERP)
-            for idx, row in df_trib.iterrows():
-                fid = int(row["CodFilial"])
-                
-                tributo_vendas_integral = row["ICMS_Vendas"]
-                pct_efetivo = (row["ICMS_Vendas"] / row["VendasBruto"] * 100) if row["VendasBruto"] > 0 else 0
-                tributo_vendas_adicional = 0.0
-                pct_adicional = 0.0
-                icms_transf_env = row["ICMS_TransfEnv"]
-                pct_tr_env = (row["ICMS_TransfEnv"] / row["TransfEnvTotal"] * 100) if row["TransfEnvTotal"] > 0 else 0
-                
-                icms_compras = row["ICMS_Compras"]
-                icms_transf_rec = row["ICMS_TransfRec"]
-                
-                if fid == 5: # ATACADO
-                    aliq = 0.071
-                    tributo_vendas_integral = row["VendasBruto"] * aliq
-                    pct_efetivo = aliq * 100
-                    
-                    if row["vendasLiquido"] < 400000.0:
-                        aliq_adic = 0.049
-                        tributo_vendas_adicional = row["vendasLiquido"] * aliq_adic
-                        pct_adicional = aliq_adic * 100
-                    
-                    aliq_tr_env = 0.071
-                    icms_transf_env = row["TransfEnvTrib"] * aliq_tr_env
-                    pct_tr_env = aliq_tr_env * 100
-                    
-                    icms_compras = 0.0
-                    icms_transf_rec = 0.0
-                    
-                    df_trib.at[idx, "ComprasTrib"] = 0.0
-                    df_trib.at[idx, "TransfRecTrib"] = 0.0
-                    df_trib.at[idx, "ComprasNaoTrib"] = row["ComprasTotal"]
-                    df_trib.at[idx, "TransfRecNaoTrib"] = row["TransfRecTotal"]
-                    
-                elif fid == 4: # SRB
-                    aliq = 0.143
-                    tributo_vendas_integral = row["VendasBruto"] * aliq
-                    pct_efetivo = aliq * 100
-                    
-                    aliq_tr_env = 0.0
-                    icms_transf_env = 0.0
-                    pct_tr_env = 0.0
-                    
-                    # AQUI ESTAVA O ERRO: Zerando o crédito de entradas do SRB
-                    icms_compras = 0.0
-                    icms_transf_rec = 0.0
-                    
-                    df_trib.at[idx, "TransfEnvTrib"] = 0.0
-                    df_trib.at[idx, "TransfEnvNaoTrib"] = row["TransfEnvTotal"]
-                    df_trib.at[idx, "ComprasTrib"] = 0.0
-                    df_trib.at[idx, "TransfRecTrib"] = 0.0
-                    df_trib.at[idx, "ComprasNaoTrib"] = row["ComprasTotal"]
-                    df_trib.at[idx, "TransfRecNaoTrib"] = row["TransfRecTotal"]
-                    
-                df_trib.at[idx, "tributoVendasIntegral"] = tributo_vendas_integral
-                df_trib.at[idx, "pctVendasEfetivo"] = pct_efetivo
-                df_trib.at[idx, "tributoVendasAdicional"] = tributo_vendas_adicional
-                df_trib.at[idx, "pctAdicional"] = pct_adicional
-                df_trib.at[idx, "icmsTransfEnv"] = icms_transf_env
-                df_trib.at[idx, "pctTransfEnvEfetivo"] = pct_tr_env
-                df_trib.at[idx, "ICMS_Compras"] = icms_compras
-                df_trib.at[idx, "ICMS_TransfRec"] = icms_transf_rec
+            # Atacado (5)
+            mask_atacado = df_trib["CodFilial"] == 5
+            df_trib.loc[mask_atacado, "tributoVendasIntegral"] = df_trib.loc[mask_atacado, "VendasBruto"] * 0.071
+            df_trib.loc[mask_atacado, "pctVendasEfetivo"] = 7.10
+            
+            mask_adic = mask_atacado & (df_trib["vendasLiquido"] < 400000.0)
+            df_trib.loc[mask_adic, "tributoVendasAdicional"] = df_trib.loc[mask_adic, "vendasLiquido"] * 0.049
+            df_trib.loc[mask_adic, "pctAdicional"] = 4.90
+            
+            df_trib.loc[mask_atacado, "icmsTransfEnv"] = df_trib.loc[mask_atacado, "TransfEnvTrib"] * 0.071
+            df_trib.loc[mask_atacado, "pctTransfEnvEfetivo"] = 7.10
+            df_trib.loc[mask_atacado, "ICMS_Compras"] = 0.0
+            df_trib.loc[mask_atacado, "ICMS_TransfRec"] = 0.0
+            
+            df_trib.loc[mask_atacado, "ComprasTrib"] = 0.0
+            df_trib.loc[mask_atacado, "TransfRecTrib"] = 0.0
+            df_trib.loc[mask_atacado, "ComprasNaoTrib"] = df_trib.loc[mask_atacado, "ComprasTotal"]
+            df_trib.loc[mask_atacado, "TransfRecNaoTrib"] = df_trib.loc[mask_atacado, "TransfRecTotal"]
+            
+            # SRB (4)
+            mask_srb = df_trib["CodFilial"] == 4
+            df_trib.loc[mask_srb, "tributoVendasIntegral"] = df_trib.loc[mask_srb, "VendasBruto"] * 0.143
+            df_trib.loc[mask_srb, "pctVendasEfetivo"] = 14.30
+            
+            df_trib.loc[mask_srb, "icmsTransfEnv"] = 0.0
+            df_trib.loc[mask_srb, "pctTransfEnvEfetivo"] = 0.0
+            df_trib.loc[mask_srb, "ICMS_Compras"] = 0.0
+            df_trib.loc[mask_srb, "ICMS_TransfRec"] = 0.0
+            
+            df_trib.loc[mask_srb, "TransfEnvTrib"] = 0.0
+            df_trib.loc[mask_srb, "TransfEnvNaoTrib"] = df_trib.loc[mask_srb, "TransfEnvTotal"]
+            df_trib.loc[mask_srb, "ComprasTrib"] = 0.0
+            df_trib.loc[mask_srb, "TransfRecTrib"] = 0.0
+            df_trib.loc[mask_srb, "ComprasNaoTrib"] = df_trib.loc[mask_srb, "ComprasTotal"]
+            df_trib.loc[mask_srb, "TransfRecNaoTrib"] = df_trib.loc[mask_srb, "TransfRecTotal"]
                 
             df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
             df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
