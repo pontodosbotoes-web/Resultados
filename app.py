@@ -376,7 +376,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (COM SUB-ABAS POR DEPARTAMENTO E SEM CABEÇALHO INTERNO)
+# ABA COMPRAS (COM SUB-ABAS E LINHA DE TOTAL)
 # ==========================================
 with tab_compras:
     try:
@@ -433,7 +433,6 @@ with tab_compras:
             df_compras['Mes_Nome'] = df_compras['Mes'].map(meses_map)
             meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-            # --- CARDS NO TOPO ---
             cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff", "")]
             cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
             
@@ -459,7 +458,6 @@ with tab_compras:
             
             st.write("")
 
-            # --- CRIAÇÃO DAS SUB-ABAS POR DEPARTAMENTO (SEM CABEÇALHO INTERNO) ---
             if not df_tot_depto.empty:
                 deptos_nomes = df_tot_depto['Departamento'].tolist()
                 sub_tabs = st.tabs(deptos_nomes)
@@ -486,13 +484,23 @@ with tab_compras:
                         
                         df_pivot = df_pivot.sort_index(ascending=True)
                         
+                        # --- NOVO: Adiciona a linha de total no final ---
+                        df_pivot.loc['**TOTAL**'] = df_pivot.sum()
+                        
                         def fmt_br(x):
                             if pd.isna(x) or x == 0:
                                 return "-"
                             return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                         
+                        # --- NOVO: Função para destacar a linha de total ---
+                        def highlight_total(row):
+                            if row.name == '**TOTAL**':
+                                return ['font-weight: bold; background-color: #1e293b; color: #58a6ff;'] * len(row)
+                            return [''] * len(row)
+                        
+                        # --- NOVO: Aplica o formato e o destaque ---
                         st.dataframe(
-                            df_pivot.style.format(fmt_br),
+                            df_pivot.style.apply(highlight_total, axis=1).format(fmt_br),
                             use_container_width=True
                         )
 
