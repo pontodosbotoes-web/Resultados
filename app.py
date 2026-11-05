@@ -633,10 +633,21 @@ with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
-    # Filtros
-    c1, c2, c3, c4 = st.columns([1, 1, 2, 1.5], vertical_alignment="bottom")
+    # Filtros e Botões
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.5], vertical_alignment="bottom")
     data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
     data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
+
+    # Botões de Ação no topo
+    with c3:
+        btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary")
+    with c4:
+        btn_limpar = st.button("🧹 Limpar", use_container_width=True)
+
+    if btn_limpar:
+        for k in ["dt_ini_trib", "dt_fim_trib"]:
+            if k in st.session_state: del st.session_state[k]
+        st.rerun()
 
     # Carregar Dados
     with st.spinner("Carregando dados tributários..."):
@@ -770,8 +781,8 @@ with tab_tributos:
             timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
             nome_arquivo = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
 
-            # BOTÃO DE DOWNLOAD (GERAR PDF)
-            with c4:
+            # BOTÃO DE DOWNLOAD (GERAR PDF) na coluna c5
+            with c5:
                 st.download_button(
                     label="📄 Gerar PDF",
                     data=pdf_bytes,
