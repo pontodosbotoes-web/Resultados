@@ -20,6 +20,16 @@ MovContaAgregado AS (
         AND DataOperacao < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
     GROUP BY CodFilial
 ),
+MovimentoFiltrado AS (
+    SELECT *
+    FROM Movimento
+    WHERE ISNULL(IdNaturezaOperacao, 0) NOT IN (19, 32, 86, 38)
+      AND (
+          (TipoMov IN ('2.4', '2.8') AND DtFinalizacao >= CONVERT(date, :data_inicio, 23) AND DtFinalizacao < DATEADD(day, 1, CONVERT(date, :data_fim, 23)))
+          OR
+          (TipoMov IN ('2.9', '1.1', '1.0', '1.2') AND DataEntradaSaida >= CONVERT(date, :data_inicio, 23) AND DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23)))
+      )
+),
 Base AS (
     SELECT
         f.CodFilial,
@@ -36,8 +46,6 @@ Base AS (
         
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '2.4' AND m.NfeStatus = 'U'
-                AND m.DtFinalizacao >= CONVERT(date, :data_inicio, 23)
-                AND m.DtFinalizacao < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND (dest.CodCliFor IS NULL OR (m.CodFilial = 5 AND m.CodCliFor IN ('C16205','F14688')))
             THEN ISNULL(m.TotMov,0) - ISNULL(m.TotCancel,0)
             ELSE 0
@@ -45,8 +53,6 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '2.4' AND m.NfeStatus = 'U'
-                AND m.DtFinalizacao >= CONVERT(date, :data_inicio, 23)
-                AND m.DtFinalizacao < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND (dest.CodCliFor IS NULL OR (m.CodFilial = 5 AND m.CodCliFor IN ('C16205','F14688')))
             THEN ISNULL(m.TotMov,0) * (1 - ISNULL(m.PercDesconto,0)/100.0)
             ELSE 0
@@ -54,8 +60,6 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '2.4' AND m.NfeStatus = 'U'
-                AND m.DtFinalizacao >= CONVERT(date, :data_inicio, 23)
-                AND m.DtFinalizacao < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND (dest.CodCliFor IS NULL OR (m.CodFilial = 5 AND m.CodCliFor IN ('C16205','F14688')))
             THEN ISNULL(m.ValorICMS, 0)
             ELSE 0
@@ -63,16 +67,12 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '2.8'
-                AND m.DtFinalizacao >= CONVERT(date, :data_inicio, 23)
-                AND m.DtFinalizacao < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
             THEN ISNULL(m.TotMov,0) - ISNULL(m.TotCancel,0)
             ELSE 0
         END), 0) AS DevolucaoVendas,
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '2.9' AND m.NfeStatus = 'U'
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND dest.CodCliFor IS NOT NULL AND self.CodCliFor IS NULL
             THEN ISNULL(m.TotMov,0) - ISNULL(m.TotCancel,0)
             ELSE 0
@@ -80,8 +80,6 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '2.9' AND m.NfeStatus = 'U'
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND dest.CodCliFor IS NOT NULL AND self.CodCliFor IS NULL
                 AND ISNULL(af.TributarTransfEnviadas, 0) = 1
             THEN ISNULL(m.TotMov,0) - ISNULL(m.TotCancel,0)
@@ -90,8 +88,6 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '2.9' AND m.NfeStatus = 'U'
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND dest.CodCliFor IS NOT NULL AND self.CodCliFor IS NULL
                 AND ISNULL(af.TributarTransfEnviadas, 0) = 0
             THEN ISNULL(m.TotMov,0) - ISNULL(m.TotCancel,0)
@@ -100,8 +96,6 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '2.9' AND m.NfeStatus = 'U'
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND dest.CodCliFor IS NOT NULL AND self.CodCliFor IS NULL
                 AND ISNULL(af.TributarTransfEnviadas, 0) = 1
             THEN ISNULL(m.ValorICMS, 0)
@@ -110,8 +104,6 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov IN ('1.1','1.0')
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
             THEN ISNULL(m.TotMov,0) + ISNULL(m.ValorIPI,0) + ISNULL(m.ValorFrete,0)
                  + ISNULL(m.OutrasDespesas,0) + ISNULL(m.ValorSubICMS,0) - ISNULL(m.TotCancel,0)
             ELSE 0
@@ -119,8 +111,6 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov IN ('1.1','1.0')
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND ISNULL(af.TributarCompras, 0) = 1
             THEN ISNULL(m.TotMov,0) + ISNULL(m.ValorIPI,0) + ISNULL(m.ValorFrete,0)
                  + ISNULL(m.OutrasDespesas,0) + ISNULL(m.ValorSubICMS,0) - ISNULL(m.TotCancel,0)
@@ -129,8 +119,6 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov IN ('1.1','1.0')
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND ISNULL(af.TributarCompras, 0) = 0
             THEN ISNULL(m.TotMov,0) + ISNULL(m.ValorIPI,0) + ISNULL(m.ValorFrete,0)
                  + ISNULL(m.OutrasDespesas,0) + ISNULL(m.ValorSubICMS,0) - ISNULL(m.TotCancel,0)
@@ -139,8 +127,6 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov IN ('1.1','1.0')
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND ISNULL(af.TributarCompras, 0) = 1
             THEN ISNULL(m.ValorICMS, 0)
             ELSE 0
@@ -148,16 +134,12 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '1.2' AND m.StatusSeparacao = 'F' AND m.ChaveNFe IS NOT NULL
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
             THEN ISNULL(m.TotMov,0) - ISNULL(m.TotCancel,0)
             ELSE 0
         END), 0) AS TransfRecTotal,
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '1.2' AND m.StatusSeparacao = 'F' AND m.ChaveNFe IS NOT NULL
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND ISNULL(af.TributarTransfRecebidas, 0) = 1
             THEN ISNULL(m.TotMov,0) - ISNULL(m.TotCancel,0)
             ELSE 0
@@ -165,8 +147,6 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '1.2' AND m.StatusSeparacao = 'F' AND m.ChaveNFe IS NOT NULL
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND ISNULL(af.TributarTransfRecebidas, 0) = 0
             THEN ISNULL(m.TotMov,0) - ISNULL(m.TotCancel,0)
             ELSE 0
@@ -174,16 +154,13 @@ Base AS (
 
         ISNULL(SUM(CASE
             WHEN m.TipoMov = '1.2' AND m.StatusSeparacao = 'F' AND m.ChaveNFe IS NOT NULL
-                AND m.DataEntradaSaida >= CONVERT(date, :data_inicio, 23)
-                AND m.DataEntradaSaida < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
                 AND ISNULL(af.TributarTransfRecebidas, 0) = 1
             THEN ISNULL(m.ValorICMS, 0)
             ELSE 0
         END), 0) AS ICMS_TransfRec
     FROM Filiais f
     LEFT JOIN AliquotaFiliais af ON af.CodFilial = f.CodFilial
-    LEFT JOIN Movimento m ON f.CodFilial = m.CodFilial
-        AND ISNULL(m.IdNaturezaOperacao, 0) NOT IN (19, 32, 86, 38)
+    LEFT JOIN MovimentoFiltrado m ON f.CodFilial = m.CodFilial
     LEFT JOIN MapeamentoFiliais dest ON dest.CodCliFor = m.CodCliFor
     LEFT JOIN MapeamentoFiliais self ON self.CodFilial = m.CodFilial AND self.CodCliFor = m.CodCliFor
     LEFT JOIN MovContaAgregado mc ON mc.CodFilial = f.CodFilial
