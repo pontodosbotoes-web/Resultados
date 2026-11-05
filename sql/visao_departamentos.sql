@@ -2,7 +2,7 @@ SELECT
     LEFT(g.CodGrupo, 2) AS Depto,
     dg.NomeGrupo AS NomeDepto,
     DATEPART(hour, m.DataEntradaSaida) AS Hora,
-    SUM(((im.Qtd - ISNULL(im.QtdCancel, 0)) / NULLIF(im.FatorConvUnid, 1)) * p.PrecoVenda1) AS ValorVenda
+    SUM(((im.Qtd - ISNULL(im.QtdCancel, 0)) / NULLIF(im.FatorConvUnid, 0)) * p.PrecoVenda1) AS ValorVenda
 FROM Movimento m
 INNER JOIN ItensMov im ON m.IdMov = im.IdMov
 INNER JOIN Produtos p ON im.IdProduto = p.IdProduto
