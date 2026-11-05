@@ -584,6 +584,45 @@ with tab_tributos:
             srb = df_trib[df_trib["CodFilial"] == 4]
             colunas = pd.concat([atacado, pb, srb])
             
+            # --- CARDS DE RESUMO (MOVIDOS PARA CIMA) ---
+            tot_atacado_deb = atacado["debitoICMS"].sum() if not atacado.empty else 0
+            tot_atacado_cred = atacado["creditoICMS"].sum() if not atacado.empty else 0
+            saldo_atacado = tot_atacado_cred - tot_atacado_deb
+
+            tot_pb_deb = pb["debitoICMS"].sum() if not pb.empty else 0
+            tot_pb_cred = pb["creditoICMS"].sum() if not pb.empty else 0
+            saldo_pb = tot_pb_cred - tot_pb_deb
+
+            tot_srb_deb = srb["debitoICMS"].sum() if not srb.empty else 0
+            tot_srb_cred = srb["creditoICMS"].sum() if not srb.empty else 0
+            saldo_srb = tot_srb_cred - tot_srb_deb
+
+            saldo_cons = saldo_atacado + saldo_pb + saldo_srb
+            
+            st.markdown(f'<div class="tema-titulo">⚖️ Resumo Tributário</div>', unsafe_allow_html=True)
+            
+            c_cards = st.columns(4)
+            def render_card_trib(col, title, val):
+                cor = "#3fb950" if val >= 0 else "#f85149"
+                r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
+                bg_color = f"rgba({r}, {g}, {b}, 0.08)"
+                with col:
+                    st.markdown(f'''
+                        <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
+                            <div class="card-label" style="color: {cor}; font-size: 14px; white-space: normal;">{title}</div>
+                            <div class="card-value" style="color: {cor}; font-size: 22px;">{formatar_moeda(val)}</div>
+                        </div>
+                    ''', unsafe_allow_html=True)
+            
+            render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
+            render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
+            render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
+            render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
+            
+            st.write("")
+            st.markdown("---")
+            
+            # --- TABELA DE DETALHAMENTO ---
             html_table = '<div class="tabela-wrapper"><table class="tributos-tabela">'
             html_table += '<thead><tr><th style="text-align:left;">Operação</th>'
             for _, f in colunas.iterrows():
@@ -655,33 +694,4 @@ with tab_tributos:
             
             html_table += '</tbody></table></div>'
             
-            # CARDS
-            tot_atacado_deb = atacado["debitoICMS"].sum() if not atacado.empty else 0
-            tot_atacado_cred = atacado["creditoICMS"].sum() if not atacado.empty else 0
-            saldo_atacado = tot_atacado_cred - tot_atacado_deb
-
-            tot_pb_deb = pb["debitoICMS"].sum() if not pb.empty else 0
-            tot_pb_cred = pb["creditoICMS"].sum() if not pb.empty else 0
-            saldo_pb = tot_pb_cred - tot_pb_deb
-
-            tot_srb_deb = srb["debitoICMS"].sum() if not srb.empty else 0
-            tot_srb_cred = srb["creditoICMS"].sum() if not srb.empty else 0
-            saldo_srb = tot_srb_cred - tot_srb_deb
-
-            saldo_cons = saldo_atacado + saldo_pb + saldo_srb
-            
-            html_cards = '<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:20px;">'
-            def card(title, val):
-                cor = "#3fb950" if val >= 0 else "#f85149"
-                return f'''<div class="tributos-resultado" style="flex:1; min-width:150px; margin:0 8px; padding:12px; border: 2px solid {cor}; border-radius: 8px; text-align: center; background: #1c2333;">
-                    <div style="font-size:14px; color: #c9d1d9; font-weight: 600;">{title}</div>
-                    <div style="font-size:24px; font-weight: bold; color: {cor}; margin-top: 5px;">{formatar_moeda(val)}</div>
-                </div>'''
-            html_cards += card('📊 Resultado PB - ATACADO', saldo_atacado)
-            html_cards += card('📊 Resultado PB - FILIAIS', saldo_pb)
-            html_cards += card('📊 Resultado SRB', saldo_srb)
-            html_cards += card('📊 Consolidado', saldo_cons)
-            html_cards += '</div>'
-            
             st.markdown(html_table, unsafe_allow_html=True)
-            st.markdown(html_cards, unsafe_allow_html=True)
