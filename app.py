@@ -16,10 +16,8 @@ st.markdown("""
         #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;}
         .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 100% !important; background-color: #0d1117; }
         
-        /* Removida a borda inferior do título principal */
         .titulo-pagina { font-size: 24px; font-weight: 700; text-align: center; color: #f0f6fc; padding-bottom: 10px; margin-bottom: 10px; }
         
-        /* Mantida a borda apenas nos subtítulos de seção para organizar os gráficos */
         .tema-titulo { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-top: 20px; margin-bottom: 12px; padding-bottom: 6px; }
         
         .card-item { border-radius: 10px; padding: 12px 14px 6px 14px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: 0.2s; margin-bottom: 10px;}
@@ -32,7 +30,7 @@ st.markdown("""
         .pct-positiva { font-size: 13px; font-weight: 600; color: #3fb950; margin-left: 5px; }
         .pct-negativa { font-size: 13px; font-weight: 600; color: #f85149; margin-left: 5px; }
         
-        .depto-header { font-size: 18px; font-weight: 600; color: #f0f6fc; margin-top: 25px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;}
+        .depto-header { font-size: 18px; font-weight: 600; color: #f0f6fc; margin-top: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;}
         .depto-valor { font-size: 16px; color: #58a6ff; font-weight: 700; background: rgba(88,166,255,0.1); padding: 2px 10px; border-radius: 15px;}
         
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
@@ -378,7 +376,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS
+# ABA COMPRAS (COM SUB-ABAS POR DEPARTAMENTO)
 # ==========================================
 with tab_compras:
     try:
@@ -435,6 +433,7 @@ with tab_compras:
             df_compras['Mes_Nome'] = df_compras['Mes'].map(meses_map)
             meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
+            # --- CARDS NO TOPO ---
             cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff", "")]
             cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
             
@@ -460,44 +459,52 @@ with tab_compras:
             
             st.write("")
 
-            for _, row in df_tot_depto.iterrows():
-                depto = row['Departamento']
-                val_depto = row['Valor']
-                
-                st.markdown(f'''
-                    <div class="depto-header">
-                        📂 {depto} <span class="depto-valor">{formatar_moeda(val_depto)}</span>
-                    </div>
-                ''', unsafe_allow_html=True)
-                
-                df_d = df_compras[df_compras["Departamento"] == depto]
-                
-                df_pivot = df_d.pivot_table(
-                    index=['Fornecedor'], 
-                    columns='Mes_Nome', 
-                    values='Valor', 
-                    aggfunc='sum'
-                )
-                
-                for m in meses_colunas:
-                    if m not in df_pivot.columns: df_pivot[m] = 0.0
+            # --- CRIAÇÃO DAS SUB-ABAS POR DEPARTAMENTO ---
+            if not df_tot_depto.empty:
+                # Extrai os nomes dos departamentos para usar como títulos das abas
+                deptos_nomes = df_tot_depto['Departamento'].tolist()
+                sub_tabs = st.tabs(deptos_nomes)
+
+                # Itera sobre as abas e os dados
+                for sub_tab, (_, row) in zip(sub_tabs, df_tot_depto.iterrows()):
+                    with sub_tab:
+                        depto = row['Departamento']
+                        val_depto = row['Valor']
                         
-                df_pivot = df_pivot[meses_colunas]
-                df_pivot['Total'] = df_pivot.sum(axis=1)
-                df_pivot = df_pivot.fillna(0)
-                
-                df_pivot = df_pivot.sort_index(ascending=True)
-                
-                def fmt_br(x):
-                    if pd.isna(x) or x == 0:
-                        return "-"
-                    return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                
-                st.dataframe(
-                    df_pivot.style.format(fmt_br),
-                    use_container_width=True
-                )
-                st.write("") 
+                        # Título interno da aba
+                        st.markdown(f'''
+                            <div class="depto-header" style="margin-top: 0px;">
+                                📂 {depto} <span class="depto-valor">{formatar_moeda(val_depto)}</span>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                        
+                        df_d = df_compras[df_compras["Departamento"] == depto]
+                        
+                        df_pivot = df_d.pivot_table(
+                            index=['Fornecedor'], 
+                            columns='Mes_Nome', 
+                            values='Valor', 
+                            aggfunc='sum'
+                        )
+                        
+                        for m in meses_colunas:
+                            if m not in df_pivot.columns: df_pivot[m] = 0.0
+                                
+                        df_pivot = df_pivot[meses_colunas]
+                        df_pivot['Total'] = df_pivot.sum(axis=1)
+                        df_pivot = df_pivot.fillna(0)
+                        
+                        df_pivot = df_pivot.sort_index(ascending=True)
+                        
+                        def fmt_br(x):
+                            if pd.isna(x) or x == 0:
+                                return "-"
+                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        
+                        st.dataframe(
+                            df_pivot.style.format(fmt_br),
+                            use_container_width=True
+                        )
 
 # ==========================================
 # ABA TRIBUTOS
