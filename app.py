@@ -113,7 +113,6 @@ filiais_dict = carregar_filiais()
 filiais_inv = {v: k for k, v in filiais_dict.items()}
 NOMES_FILIAIS = {1: "PB - ALECRIM", 2: "PB - VIA DIRETA", 3: "PB - ZONA SUL", 4: "SRB - ZONA NORTE", 5: "PB - ATACADO"}
 
-# Callbacks de Limpeza
 def limpar_compras():
     st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
     st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
@@ -493,13 +492,15 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
             row_cells = [Paragraph(fornecedor, cell_bold_left if is_total else cell_left)]
             for m in meses_colunas + ['Total']:
                 val = r[m]
-                val_str = formatar_moeda(val) if val != 0 else "-"
+                # AQUI FOI TROCADO PARA formatar_numero (SEM R$)
+                val_str = formatar_numero(val) if val != 0 else "-"
                 row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
             table_data.append(row_cells)
 
-        elements.append(Paragraph(f"<b>📂 Departamento: {depto}</b>", styles['Heading3']))
+        elements.append(Paragraph(f"<b>■ Departamento: {depto}</b>", styles['Heading3']))
         
-        col_widths = [120] + [45] * len(meses_colunas) + [55]
+        # LARGURAS AJUSTADAS PARA OCUPAR TODA A FOLHA (800pt total)
+        col_widths = [180] + [45] * len(meses_colunas) + [80]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
@@ -564,7 +565,7 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
                 try:
                     val_str = opts['fmt'](val, f)
                 except:
-                    val_str = formatar_moeda(val)
+                    val_str = formatar_moeda(val) # Mantém R$ no PDF de Tributos conforme padrão anterior
             else:
                 val_str = formatar_moeda(val)
             
@@ -588,7 +589,8 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     for label, key, opts in all_rows:
         table_data.append(add_row_to_data(label, key, opts))
     
-    col_widths = [150] + [100] * len(colunas) + [100]
+    # LARGURAS AJUSTADAS PARA OCUPAR TODA A FOLHA (800pt total)
+    col_widths = [180] + [110] * len(colunas) + [80]
     t = Table(table_data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
@@ -634,7 +636,6 @@ with tab_compras:
     if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
         st.session_state["fornecedor_compras"] = "Todos"
 
-    # Layout em 7 colunas para caber tudo na mesma linha
     c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 1, 1.2, 1.5, 1, 1, 1.2], vertical_alignment="bottom")
     
     data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
@@ -684,7 +685,6 @@ with tab_compras:
         else:
             st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_compras_disabled")
 
-    # Exibe os dados
     df_compras = st.session_state.get("df_compras", pd.DataFrame())
     if df_compras.empty:
         st.info("Nenhuma compra encontrada para o período/filtros.")
@@ -772,7 +772,6 @@ with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
-    # Layout em 5 colunas para caber tudo na mesma linha
     c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.2], vertical_alignment="bottom")
     
     data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
