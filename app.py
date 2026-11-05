@@ -395,134 +395,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS
-# ==========================================
-with tab_compras:
-    try:
-        lista_fornecedores = carregar_fornecedores()
-    except Exception:
-        lista_fornecedores = []
-    
-    if "dt_ini_compras" not in st.session_state: st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
-    if "dt_fim_compras" not in st.session_state: st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
-    if "filial_compras" not in st.session_state: st.session_state["filial_compras"] = "Todas"
-    if "fornecedor_compras" not in st.session_state: st.session_state["fornecedor_compras"] = "Todos"
-
-    if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
-        st.session_state["fornecedor_compras"] = "Todos"
-
-    with st.form(key="form_compras"):
-        c1, c2, c3, c4, c5 = st.columns([1, 1, 1.2, 1.5, 1.4], vertical_alignment="bottom")
-        
-        data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
-        data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
-        filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
-        fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
-        
-        with c5:
-            col_btn1, col_btn2 = st.columns(2)
-            btn_compras = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
-            btn_limpar_comp = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
-
-    if btn_limpar_comp:
-        for k in ["dt_ini_compras", "dt_fim_compras", "filial_compras", "fornecedor_compras"]:
-            if k in st.session_state: del st.session_state[k]
-        st.rerun()
-
-    filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
-    
-    with st.spinner("Carregando dados de compras..."):
-        df_compras = buscar_compras(data_ini_c.strftime("%Y-%m-%d"), data_fim_c.strftime("%Y-%m-%d"), filial_cod_c)
-    
-    if df_compras.empty:
-        st.info("Nenhuma compra encontrada para o período.")
-    else:
-        if fornecedor_sel != "Todos":
-            df_compras = df_compras[df_compras["Fornecedor"] == fornecedor_sel]
-            
-        if df_compras.empty:
-            st.info(f"Nenhuma compra encontrada para o fornecedor {fornecedor_sel} neste período.")
-        else:
-            tot_val_geral = df_compras["Valor"].sum()
-            
-            df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index()
-            df_tot_depto = df_tot_depto.sort_values("Departamento", ascending=True)
-            
-            meses_map = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
-            df_compras['Mes_Nome'] = df_compras['Mes'].map(meses_map)
-            meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
-            cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff", "")]
-            cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
-            
-            for i, row in df_tot_depto.iterrows():
-                cor = cores_depto[i % len(cores_depto)]
-                pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
-                pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
-                cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor, pct_html))
-
-            for i in range(0, len(cards_data), 5):
-                chunk = cards_data[i:i+5]
-                cols = st.columns(5)
-                for j, (nome, valor, cor, pct_html) in enumerate(chunk):
-                    with cols[j]:
-                        r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
-                        bg_color = f"rgba({r}, {g}, {b}, 0.08)"
-                        st.markdown(f'''
-                            <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
-                                <div class="card-label" style="color: {cor};" title="{nome}">{nome}</div>
-                                <div class="card-value" style="color: {cor};">{formatar_moeda(valor)} {pct_html}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-            
-            st.write("")
-
-            if not df_tot_depto.empty:
-                deptos_nomes = df_tot_depto['Departamento'].tolist()
-                sub_tabs = st.tabs(deptos_nomes)
-
-                for sub_tab, (_, row) in zip(sub_tabs, df_tot_depto.iterrows()):
-                    with sub_tab:
-                        depto = row['Departamento']
-                        
-                        df_d = df_compras[df_compras["Departamento"] == depto]
-                        
-                        df_pivot = df_d.pivot_table(
-                            index=['Fornecedor'], 
-                            columns='Mes_Nome', 
-                            values='Valor', 
-                            aggfunc='sum'
-                        )
-                        
-                        for m in meses_colunas:
-                            if m not in df_pivot.columns: df_pivot[m] = 0.0
-                                
-                        df_pivot = df_pivot[meses_colunas]
-                        df_pivot['Total'] = df_pivot.sum(axis=1)
-                        df_pivot = df_pivot.fillna(0)
-                        df_pivot = df_pivot.sort_index(ascending=True)
-                        
-                        linha_total = df_pivot.sum().to_frame().T
-                        linha_total.index = ['TOTAL']
-                        df_final = pd.concat([df_pivot, linha_total])
-                        
-                        def fmt_br(x):
-                            if pd.isna(x) or x == 0:
-                                return "-"
-                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                        
-                        def highlight_total(row):
-                            if row.name == 'TOTAL':
-                                return ['font-weight: bold; color: #58a6ff;'] * len(row)
-                            return [''] * len(row)
-                        
-                        st.dataframe(
-                            df_final.style.format(fmt_br).apply(highlight_total, axis=1),
-                            use_container_width=True
-                        )
-
-# ==========================================
-# CLASSE PARA CONTAGEM DE PÁGINAS NO PDF
+# FUNÇÕES E CLASSES PARA PDF (COMUM A COMPRAS E TRIBUTOS)
 # ==========================================
 class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
@@ -547,9 +420,89 @@ class NumberedCanvas(canvas.Canvas):
         page_text = f"página {self._pageNumber} de {page_count}"
         self.drawRightString(landscape(A4)[0] - 20, 15, page_text)
 
-# ==========================================
-# FUNÇÃO GERADORA DE PDF DE TRIBUTOS
-# ==========================================
+def gerar_pdf_compras(df_compras, data_ini, data_fim):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
+    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
+    
+    header_data = [
+        [Paragraph("<b>Acompanhamento Gerencial - Compras</b>", left_style),
+         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
+    ]
+    header_table = Table(header_data, colWidths=[400, 400])
+    header_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_table)
+
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=7, alignment=1)
+    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=7, alignment=0)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=7, alignment=2)
+    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=7, alignment=0, fontName='Helvetica-Bold')
+    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=7, alignment=2, fontName='Helvetica-Bold')
+
+    meses_map = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
+    meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    
+    df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento")
+    
+    for _, row in df_tot_depto.iterrows():
+        depto = row['Departamento']
+        df_d = df_compras[df_compras["Departamento"] == depto]
+        
+        df_pivot = df_d.pivot_table(index=['Fornecedor'], columns='Mes_Nome', values='Valor', aggfunc='sum')
+        for m in meses_colunas:
+            if m not in df_pivot.columns: df_pivot[m] = 0.0
+        
+        df_pivot = df_pivot[meses_colunas]
+        df_pivot['Total'] = df_pivot.sum(axis=1)
+        df_pivot = df_pivot.fillna(0).sort_index()
+        
+        linha_total = df_pivot.sum().to_frame().T
+        linha_total.index = ['TOTAL']
+        df_final = pd.concat([df_pivot, linha_total])
+
+        headers = ['Fornecedor'] + meses_colunas + ['Total']
+        table_data = [[Paragraph(h, header_style) for h in headers]]
+        
+        for fornecedor, r in df_final.iterrows():
+            is_total = (fornecedor == 'TOTAL')
+            row_cells = [Paragraph(fornecedor, cell_bold_left if is_total else cell_left)]
+            for m in meses_colunas + ['Total']:
+                val = r[m]
+                val_str = formatar_moeda(val) if val != 0 else "-"
+                row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
+            table_data.append(row_cells)
+
+        elements.append(Paragraph(f"<b>📂 Departamento: {depto}</b>", styles['Heading3']))
+        
+        col_widths = [120] + [45] * len(meses_colunas) + [55]
+        t = Table(table_data, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 15))
+    
+    doc.build(elements, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer
+
 def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini, data_fim):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
@@ -651,7 +604,156 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     return buffer
 
 # ==========================================
-# ABA TRIBUTOS (LAYOUT CORRIGIDO E SEM PISCADAS)
+# ABA COMPRAS
+# ==========================================
+with tab_compras:
+    try:
+        lista_fornecedores = carregar_fornecedores()
+    except Exception:
+        lista_fornecedores = []
+    
+    if "dt_ini_compras" not in st.session_state: st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
+    if "dt_fim_compras" not in st.session_state: st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
+    if "filial_compras" not in st.session_state: st.session_state["filial_compras"] = "Todas"
+    if "fornecedor_compras" not in st.session_state: st.session_state["fornecedor_compras"] = "Todos"
+
+    if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
+        st.session_state["fornecedor_compras"] = "Todos"
+
+    c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1.2, 1.5, 1, 1.4], vertical_alignment="bottom")
+    
+    data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
+    data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
+    filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
+    fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
+    
+    with c5:
+        btn_compras = st.button("🔄 Atualizar", use_container_width=True, type="primary")
+    
+    with c6:
+        if "pdf_bytes_comp" in st.session_state and st.session_state["pdf_bytes_comp"] is not None:
+            timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+            nome_arquivo = f"Acompanhamento Gerencial - Compras {timestamp_str}.pdf"
+            st.download_button(
+                label="📄 Gerar PDF",
+                data=st.session_state["pdf_bytes_comp"],
+                file_name=nome_arquivo,
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            st.button("📄 Gerar PDF", disabled=True, use_container_width=True)
+
+    if "df_compras" not in st.session_state or btn_compras:
+        st.session_state["dt_ini_compras"] = data_ini_c
+        st.session_state["dt_fim_compras"] = data_fim_c
+        st.session_state["filial_compras"] = filial_c_sel
+        st.session_state["fornecedor_compras"] = fornecedor_sel
+        
+        filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
+        
+        with st.spinner("Carregando dados de compras..."):
+            df_compras = buscar_compras(data_ini_c.strftime("%Y-%m-%d"), data_fim_c.strftime("%Y-%m-%d"), filial_cod_c)
+            
+            if not df_compras.empty:
+                if fornecedor_sel != "Todos":
+                    df_compras = df_compras[df_compras["Fornecedor"] == fornecedor_sel]
+                
+                if not df_compras.empty:
+                    df_compras['Mes_Nome'] = df_compras['Mes'].map({1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'})
+                    st.session_state["df_compras"] = df_compras
+                    st.session_state["pdf_bytes_comp"] = gerar_pdf_compras(df_compras, data_ini_c, data_fim_c)
+                else:
+                    st.session_state["df_compras"] = df_compras
+                    st.session_state["pdf_bytes_comp"] = None
+            else:
+                st.session_state["df_compras"] = df_compras
+                st.session_state["pdf_bytes_comp"] = None
+
+    # Exibe os dados da session_state
+    df_compras = st.session_state.get("df_compras", pd.DataFrame())
+    
+    if df_compras.empty:
+        st.info("Nenhuma compra encontrada para o período/filtros.")
+    else:
+        tot_val_geral = df_compras["Valor"].sum()
+        
+        df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index()
+        df_tot_depto = df_tot_depto.sort_values("Departamento", ascending=True)
+        
+        meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+        cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff", "")]
+        cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
+        
+        for i, row in df_tot_depto.iterrows():
+            cor = cores_depto[i % len(cores_depto)]
+            pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
+            pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
+            cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor, pct_html))
+
+        for i in range(0, len(cards_data), 5):
+            chunk = cards_data[i:i+5]
+            cols = st.columns(5)
+            for j, (nome, valor, cor, pct_html) in enumerate(chunk):
+                with cols[j]:
+                    r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
+                    bg_color = f"rgba({r}, {g}, {b}, 0.08)"
+                    st.markdown(f'''
+                        <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
+                            <div class="card-label" style="color: {cor};" title="{nome}">{nome}</div>
+                            <div class="card-value" style="color: {cor};">{formatar_moeda(valor)} {pct_html}</div>
+                        </div>
+                    ''', unsafe_allow_html=True)
+        
+        st.write("")
+
+        if not df_tot_depto.empty:
+            deptos_nomes = df_tot_depto['Departamento'].tolist()
+            sub_tabs = st.tabs(deptos_nomes)
+
+            for sub_tab, (_, row) in zip(sub_tabs, df_tot_depto.iterrows()):
+                with sub_tab:
+                    depto = row['Departamento']
+                    
+                    df_d = df_compras[df_compras["Departamento"] == depto]
+                    
+                    df_pivot = df_d.pivot_table(
+                        index=['Fornecedor'], 
+                        columns='Mes_Nome', 
+                        values='Valor', 
+                        aggfunc='sum'
+                    )
+                    
+                    for m in meses_colunas:
+                        if m not in df_pivot.columns: df_pivot[m] = 0.0
+                            
+                    df_pivot = df_pivot[meses_colunas]
+                    df_pivot['Total'] = df_pivot.sum(axis=1)
+                    df_pivot = df_pivot.fillna(0)
+                    df_pivot = df_pivot.sort_index(ascending=True)
+                    
+                    linha_total = df_pivot.sum().to_frame().T
+                    linha_total.index = ['TOTAL']
+                    df_final = pd.concat([df_pivot, linha_total])
+                    
+                    def fmt_br(x):
+                        if pd.isna(x) or x == 0:
+                            return "-"
+                        return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    
+                    def highlight_total(row):
+                        if row.name == 'TOTAL':
+                            return ['font-weight: bold; color: #58a6ff;'] * len(row)
+                        return [''] * len(row)
+                    
+                    st.dataframe(
+                        df_final.style.format(fmt_br).apply(highlight_total, axis=1),
+                        use_container_width=True
+                    )
+
+# ==========================================
+# ABA TRIBUTOS
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
