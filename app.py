@@ -66,7 +66,7 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(248, 81, 73, 0.4) !important;
         }
         
-        /* BOTÃO DE DOWNLOAD (GERAR PDF) */
+        /* ESTILO DO BOTÃO DE DOWNLOAD (GERAR PDF) */
         div[data-testid="stDownloadButton"] button {
             background-color: #1f6feb !important;
             color: #ffffff !important;
@@ -634,7 +634,7 @@ with tab_tributos:
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
     # Filtros
-    c1, c2, c3 = st.columns([1, 1, 2], vertical_alignment="bottom")
+    c1, c2, c3, c4 = st.columns([1, 1, 2, 1.5], vertical_alignment="bottom")
     data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
     data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
 
@@ -765,6 +765,20 @@ with tab_tributos:
 
             # GERA O PDF
             pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
+            
+            # NOME DO ARQUIVO
+            timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+            nome_arquivo = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
+
+            # BOTÃO DE DOWNLOAD (GERAR PDF)
+            with c4:
+                st.download_button(
+                    label="📄 Gerar PDF",
+                    data=pdf_bytes,
+                    file_name=nome_arquivo,
+                    mime="application/pdf",
+                    use_container_width=True
+                )
 
             # RENDERIZA OS CARDS E TABELAS
             saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
@@ -808,4 +822,30 @@ with tab_tributos:
                     for _, f in colunas.iterrows():
                         val = f[key] if key else 0
                         total += val
-                        if "
+                        if "fmt" in opts:
+                            val_str = opts["fmt"](val, f)
+                        else:
+                            val_str = formatar_numero(val)
+                        if key == "resultado":
+                            val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
+                        html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
+                        
+                    if key == "resultado":
+                        total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
+                    else:
+                        total_str = formatar_numero(total)
+                    html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
+                
+                html += '</tbody></table></div>'
+                return html
+
+            tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
+            
+            with tab_saidas:
+                st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
+
+            with tab_entradas:
+                st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
+
+            with tab_resultado:
+                st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
