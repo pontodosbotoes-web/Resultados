@@ -524,6 +524,9 @@ with tab_tributos:
     if df_trib.empty:
         st.info("Nenhum dado encontrado para o período.")
     else:
+        # CORREÇÃO CRÍTICA: Converter CodFilial para número
+        df_trib["CodFilial"] = pd.to_numeric(df_trib["CodFilial"], errors="coerce").fillna(0).astype(int)
+        
         cols_numeric = ["VendasBruto", "VendasLiquidoDesconto", "ICMS_Vendas", "DevolucaoVendas", "TransfEnvTotal", "TransfEnvTrib", "TransfEnvNaoTrib", "ICMS_TransfEnv", "ComprasTotal", "ComprasTrib", "ComprasNaoTrib", "ICMS_Compras", "TransfRecTotal", "TransfRecTrib", "TransfRecNaoTrib", "ICMS_TransfRec", "TributosAntecipados"]
         for c in cols_numeric:
             df_trib[c] = pd.to_numeric(df_trib[c], errors="coerce").fillna(0)
@@ -583,7 +586,7 @@ with tab_tributos:
             srb = df_trib[df_trib["CodFilial"] == 4]
             colunas = pd.concat([atacado, pb, srb])
             
-            # --- CARDS DE RESUMO (SOMA DIRETA DA COLUNA RESULTADO) ---
+            # --- CARDS DE RESUMO ---
             saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
             saldo_pb = pb["resultado"].sum() if not pb.empty else 0
             saldo_srb = srb["resultado"].sum() if not srb.empty else 0
