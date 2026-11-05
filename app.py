@@ -75,7 +75,8 @@ NOMES_FILIAIS = {1: "PB - ALECRIM", 2: "PB - VIA DIRETA", 3: "PB - ZONA SUL", 4:
 
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
 
-tab_visao, tab_compras = st.tabs(["📊 Visão Geral", "🛒 Compras"])
+# ÚNICA LINHA ALTERADA AQUI
+tab_visao, tab_compras = st.tabs(["💰 Vendas", "🛒 Compras"])
 
 def formatar_moeda(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -206,7 +207,7 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
 
 
 # ==========================================
-# ABA VISÃO GERAL
+# ABA VENDAS (Antiga Visão Geral)
 # ==========================================
 with tab_visao:
     if "dt_ini_visao" not in st.session_state: st.session_state["dt_ini_visao"] = hoje
