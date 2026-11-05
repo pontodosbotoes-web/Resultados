@@ -547,28 +547,78 @@ with tab_tributos:
             df_trib["tributoVendasIntegral"] = 0.0
             df_trib["pctVendasEfetivo"] = 0.0
             df_trib["tributoVendasAdicional"] = 0.0
+            df_trib["pctAdicional"] = 0.0
             df_trib["icmsTransfEnv"] = 0.0
             df_trib["pctTransfEnvEfetivo"] = 0.0
             
+            # REGRAS DE NEGÓCIO FIXAS (BASEADO NO ERP)
             for idx, row in df_trib.iterrows():
                 fid = int(row["CodFilial"])
-                aliq = 0.143 if fid == 4 else 0.20
-                aliq_tr = 0.143 if fid == 4 else 0.20
                 
-                if fid in (4, 5):
-                    df_trib.at[idx, "tributoVendasIntegral"] = row["VendasBruto"] * aliq
-                    df_trib.at[idx, "pctVendasEfetivo"] = aliq * 100
-                else:
-                    df_trib.at[idx, "tributoVendasIntegral"] = row["ICMS_Vendas"]
-                    df_trib.at[idx, "pctVendasEfetivo"] = (row["ICMS_Vendas"] / row["VendasBruto"] * 100) if row["VendasBruto"] > 0 else 0
+                # Defaults para filiais 1, 2, 3 (Calculados via SQL)
+                tributo_vendas_integral = row["ICMS_Vendas"]
+                pct_efetivo = (row["ICMS_Vendas"] / row["VendasBruto"] * 100) if row["VendasBruto"] > 0 else 0
+                tributo_vendas_adicional = 0.0
+                pct_adicional = 0.0
+                icms_transf_env = row["ICMS_TransfEnv"]
+                pct_tr_env = (row["ICMS_TransfEnv"] / row["TransfEnvTotal"] * 100) if row["TransfEnvTotal"] > 0 else 0
+                
+                icms_compras = row["ICMS_Compras"]
+                icms_transf_rec = row["ICMS_TransfRec"]
+                
+                if fid == 5: # ATACADO
+                    aliq = 0.071
+                    tributo_vendas_integral = row["VendasBruto"] * aliq
+                    pct_efetivo = aliq * 100
                     
-                if fid in (4, 5):
-                    df_trib.at[idx, "icmsTransfEnv"] = row["TransfEnvTrib"] * aliq_tr
-                    df_trib.at[idx, "pctTransfEnvEfetivo"] = aliq_tr * 100
-                else:
-                    df_trib.at[idx, "icmsTransfEnv"] = row["ICMS_TransfEnv"]
-                    df_trib.at[idx, "pctTransfEnvEfetivo"] = (row["ICMS_TransfEnv"] / row["TransfEnvTotal"] * 100) if row["TransfEnvTotal"] > 0 else 0
+                    # Adicional só se Vendas Líquido < 400k
+                    if row["vendasLiquido"] < 400000.0:
+                        aliq_adic = 0.049
+                        tributo_vendas_adicional = row["vendasLiquido"] * aliq_adic
+                        pct_adicional = aliq_adic * 100
                     
+                    aliq_tr_env = 0.071
+                    icms_transf_env = row["TransfEnvTrib"] * aliq_tr_env
+                    pct_tr_env = aliq_tr_env * 100
+                    
+                    icms_compras = 0.0
+                    icms_transf_rec = 0.0
+                    
+                    # Ajuste das bases de totais para o Atacado
+                    df_trib.at[idx, "ComprasTrib"] = 0.0
+                    df_trib.at[idx, "TransfRecTrib"] = 0.0
+                    df_trib.at[idx, "ComprasNaoTrib"] = row["ComprasTotal"]
+                    df_trib.at[idx, "TransfRecNaoTrib"] = row["TransfRecTotal"]
+                    
+                elif fid == 4: # SRB
+                    aliq = 0.143
+                    tributo_vendas_integral = row["VendasBruto"] * aliq
+                    pct_efetivo = aliq * 100
+                    
+                    aliq_tr_env = 0.0
+                    icms_transf_env = 0.0
+                    pct_tr_env = 0.0
+                    
+                    icms_compras = row["ICMS_Compras"]
+                    icms_transf_rec = row["ICMS_TransfRec"]
+                    
+                    # Ajuste das bases de totais para o SRB
+                    df_trib.at[idx, "TransfEnvTrib"] = 0.0
+                    df_trib.at[idx, "TransfEnvNaoTrib"] = row["TransfEnvTotal"]
+                    df_trib.at[idx, "ComprasTrib"] = 0.0
+                    df_trib.at[idx, "TransfRecTrib"] = 0.0
+                    df_trib.at[idx, "ComprasNaoTrib"] = row["ComprasTotal"]
+                    df_trib.at[idx, "TransfRecNaoTrib"] = row["TransfRecTotal"]
+                    
+                df_trib.at[idx, "tributoVendasIntegral"] = tributo_vendas_integral
+                df_trib.at[idx, "pctVendasEfetivo"] = pct_efetivo
+                df_trib.at[idx, "tributoVendasAdicional"] = tributo_vendas_adicional
+                df_trib.at[idx, "pctAdicional"] = pct_adicional
+                df_trib.at[idx, "icmsTransfEnv"] = icms_transf_env
+                df_trib.at[idx, "pctTransfEnvEfetivo"] = pct_tr_env
+                df_trib.at[idx, "ICMS_Compras"] = icms_compras
+                df_trib.at[idx, "ICMS_TransfRec"] = icms_transf_rec
+                
             df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
             df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
             df_trib["totalSaidasNaoTrib"] = df_trib["TransfEnvNaoTrib"]
@@ -656,7 +706,7 @@ with tab_tributos:
                     "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctVendasEfetivo']:.2f}%)"
                 }),
                 ("Tributo Vendas Adicional", "tributoVendasAdicional", {
-                    "fmt": lambda v, f: f"{formatar_moeda(v)} (0.00%)"
+                    "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctAdicional']:.2f}%)"
                 }),
                 ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
                 ("Tributo Transferências Enviadas", "icmsTransfEnv", {
