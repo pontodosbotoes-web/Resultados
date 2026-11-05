@@ -632,8 +632,7 @@ with tab_tributos:
             render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
             render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
             
-            st.write("")
-            st.markdown("---")
+            st.write("") # Apenas um respiro, sem a linha do st.markdown("---")
             
             # --- 2. SUB-ABAS PARA AS TABELAS ---
             def build_trib_table(rows_list):
