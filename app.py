@@ -41,29 +41,42 @@ st.markdown("""
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
 
         /* ESTILO DO BOTÃO ATUALIZAR (VERDE) */
-        div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"] {
+        div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"], div[data-testid="stButton"] button[kind="primary"] {
             background-color: #238636 !important;
             color: #ffffff !important;
             border: 1px solid #238636 !important;
             transition: all 0.2s;
         }
-        div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]:hover {
+        div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]:hover, div[data-testid="stButton"] button[kind="primary"]:hover {
             background-color: #2ea043 !important;
             border-color: #2ea043 !important;
             box-shadow: 0 0 10px rgba(46, 160, 67, 0.4) !important;
         }
 
         /* ESTILO DO BOTÃO LIMPAR (VERMELHO) */
-        div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"] {
+        div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"], div[data-testid="stButton"] button {
             background-color: #da3633 !important;
             color: #ffffff !important;
             border: 1px solid #da3633 !important;
             transition: all 0.2s;
         }
-        div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"]:hover {
+        div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"]:hover, div[data-testid="stButton"] button:hover {
             background-color: #f85149 !important;
             border-color: #f85149 !important;
             box-shadow: 0 0 10px rgba(248, 81, 73, 0.4) !important;
+        }
+        
+        /* BOTÃO DE DOWNLOAD (GERAR PDF) */
+        div[data-testid="stDownloadButton"] button {
+            background-color: #1f6feb !important;
+            color: #ffffff !important;
+            border: 1px solid #1f6feb !important;
+            transition: all 0.2s;
+        }
+        div[data-testid="stDownloadButton"] button:hover {
+            background-color: #388bfd !important;
+            border-color: #388bfd !important;
+            box-shadow: 0 0 10px rgba(56, 139, 253, 0.4) !important;
         }
 
         /* ===== TRIBUTOS ===== */
@@ -516,14 +529,27 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     elements = []
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=1, fontSize=16, spaceAfter=5)
-    elements.append(Paragraph("Relatório Tributário", title_style))
+    # CABEÇALHO COM TÍTULO À ESQUERDA E PERÍODO À DIREITA
+    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
+    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
     
-    period_style = ParagraphStyle('Period', parent=styles['Normal'], alignment=1, fontSize=11, spaceAfter=15)
-    period_text = f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}"
-    elements.append(Paragraph(period_text, period_style))
+    header_data = [
+        [Paragraph("<b>Acompanhamento Gerencial - Tributos</b>", left_style),
+         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
+    ]
+    header_table = Table(header_data, colWidths=[400, 400])
+    header_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_table)
     
-    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=9, alignment=1)
+    # TABELA DE DADOS
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
     cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
     cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=8, alignment=2, fontName='Helvetica-Bold')
@@ -566,12 +592,12 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
         row.append(Paragraph(total_str, right_style))
         return row
     
-    # Concatenar todas as linhas (sem títulos de seção)
     all_rows = rows_saidas + rows_entradas + rows_resultado
     for label, key, opts in all_rows:
         table_data.append(add_row_to_data(label, key, opts))
     
-    col_widths = [120] + [75] * len(colunas) + [75]
+    # LARGURAS AJUSTADAS PARA NÃO QUEBRAR AS COLUNAS
+    col_widths = [150] + [100] * len(colunas) + [100]
     t = Table(table_data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
@@ -601,33 +627,22 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     return buffer
 
 # ==========================================
-# ABA TRIBUTOS (COM BOTÃO GERAR PDF)
+# ABA TRIBUTOS
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
-    with st.form(key="form_tributos"):
-        c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1.4], vertical_alignment="bottom")
-        
-        data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
-        data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
-        
-        with c4:
-            col_btn1, col_btn2, col_btn3 = st.columns(3)
-            btn_t = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
-            btn_limpar_t = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
-            btn_pdf_t = col_btn3.form_submit_button("📄 Gerar PDF", use_container_width=True)
-            
-    if btn_limpar_t:
-        for k in ["dt_ini_trib", "dt_fim_trib"]:
-            if k in st.session_state: del st.session_state[k]
-        if "pdf_trib" in st.session_state: del st.session_state["pdf_trib"]
-        st.rerun()
+    # Filtros
+    c1, c2, c3 = st.columns([1, 1, 2], vertical_alignment="bottom")
+    data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
+    data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
 
+    # Carregar Dados
     with st.spinner("Carregando dados tributários..."):
         df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
         
+    pdf_bytes = None
     if df_trib.empty:
         st.info("Nenhum dado encontrado para o período.")
     else:
@@ -717,14 +732,14 @@ with tab_tributos:
                 ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
                 ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
                 ("Tributo Vendas Integral", "tributoVendasIntegral", {
-                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"
+                    "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctVendasEfetivo']:.2f}%)"
                 }),
                 ("Tributo Vendas Adicional", "tributoVendasAdicional", {
-                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"
+                    "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctAdicional']:.2f}%)"
                 }),
                 ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
                 ("Tributo Transferências Enviadas", "icmsTransfEnv", {
-                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
+                    "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
                 }),
                 ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
                 ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
@@ -748,21 +763,10 @@ with tab_tributos:
                 ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
             ]
 
-            # --- GERAR PDF ---
-            if btn_pdf_t:
-                pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
-                st.session_state["pdf_trib"] = pdf_bytes
+            # GERA O PDF
+            pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
 
-            if "pdf_trib" in st.session_state:
-                st.download_button(
-                    label="⬇️ Baixar Relatório PDF",
-                    data=st.session_state["pdf_trib"],
-                    file_name=f"Relatorio_Tributario_{data_ini_t.strftime('%Y%m%d')}_{data_fim_t.strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf",
-                    key="btn_download_pdf_trib"
-                )
-
-            # --- CARDS DE RESUMO ---
+            # RENDERIZA OS CARDS E TABELAS
             saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
             saldo_pb = pb["resultado"].sum() if not pb.empty else 0
             saldo_srb = srb["resultado"].sum() if not srb.empty else 0
@@ -788,7 +792,6 @@ with tab_tributos:
             
             st.write("") 
             
-            # --- 2. SUB-ABAS PARA AS TABELAS ---
             def build_trib_table(rows_list):
                 html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
                 html += '<thead><tr><th style="text-align:left;">Operação</th>'
@@ -805,30 +808,4 @@ with tab_tributos:
                     for _, f in colunas.iterrows():
                         val = f[key] if key else 0
                         total += val
-                        if "fmt" in opts:
-                            val_str = opts["fmt"](val, f)
-                        else:
-                            val_str = formatar_numero(val)
-                        if key == "resultado":
-                            val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
-                        html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
-                        
-                    if key == "resultado":
-                        total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
-                    else:
-                        total_str = formatar_numero(total)
-                    html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
-                
-                html += '</tbody></table></div>'
-                return html
-
-            tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
-            
-            with tab_saidas:
-                st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
-
-            with tab_entradas:
-                st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
-
-            with tab_resultado:
-                st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
+                        if "
