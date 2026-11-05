@@ -376,7 +376,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (COM SUB-ABAS POR DEPARTAMENTO)
+# ABA COMPRAS (COM SUB-ABAS POR DEPARTAMENTO E SEM CABEÇALHO INTERNO)
 # ==========================================
 with tab_compras:
     try:
@@ -459,24 +459,14 @@ with tab_compras:
             
             st.write("")
 
-            # --- CRIAÇÃO DAS SUB-ABAS POR DEPARTAMENTO ---
+            # --- CRIAÇÃO DAS SUB-ABAS POR DEPARTAMENTO (SEM CABEÇALHO INTERNO) ---
             if not df_tot_depto.empty:
-                # Extrai os nomes dos departamentos para usar como títulos das abas
                 deptos_nomes = df_tot_depto['Departamento'].tolist()
                 sub_tabs = st.tabs(deptos_nomes)
 
-                # Itera sobre as abas e os dados
                 for sub_tab, (_, row) in zip(sub_tabs, df_tot_depto.iterrows()):
                     with sub_tab:
                         depto = row['Departamento']
-                        val_depto = row['Valor']
-                        
-                        # Título interno da aba
-                        st.markdown(f'''
-                            <div class="depto-header" style="margin-top: 0px;">
-                                📂 {depto} <span class="depto-valor">{formatar_moeda(val_depto)}</span>
-                            </div>
-                        ''', unsafe_allow_html=True)
                         
                         df_d = df_compras[df_compras["Departamento"] == depto]
                         
