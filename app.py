@@ -4,6 +4,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
+from io import BytesIO
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
 from src.db import carregar_filiais, carregar_fornecedores
 from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras, buscar_tributos
@@ -376,7 +381,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (COM SUB-ABAS E FORMATO BRASILEIRO)
+# ABA COMPRAS
 # ==========================================
 with tab_compras:
     try:
@@ -483,18 +488,15 @@ with tab_compras:
                         df_pivot = df_pivot.fillna(0)
                         df_pivot = df_pivot.sort_index(ascending=True)
                         
-                        # --- CRIAÇÃO DA LINHA DE TOTAL ---
                         linha_total = df_pivot.sum().to_frame().T
                         linha_total.index = ['TOTAL']
                         df_final = pd.concat([df_pivot, linha_total])
                         
-                        # --- FORMATAÇÃO BRASILEIRA (SEM R$) ---
                         def fmt_br(x):
                             if pd.isna(x) or x == 0:
                                 return "-"
                             return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                         
-                        # --- DESTAQUE DA LINHA DE TOTAL ---
                         def highlight_total(row):
                             if row.name == 'TOTAL':
                                 return ['font-weight: bold; color: #58a6ff;'] * len(row)
@@ -506,7 +508,100 @@ with tab_compras:
                         )
 
 # ==========================================
-# ABA TRIBUTOS
+# FUNÇÃO GERADORA DE PDF DE TRIBUTOS
+# ==========================================
+def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini, data_fim):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=1, fontSize=16, spaceAfter=5)
+    elements.append(Paragraph("Relatório Tributário", title_style))
+    
+    period_style = ParagraphStyle('Period', parent=styles['Normal'], alignment=1, fontSize=11, spaceAfter=15)
+    period_text = f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}"
+    elements.append(Paragraph(period_text, period_style))
+    
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=9, alignment=1)
+    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
+    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=8, alignment=2, fontName='Helvetica-Bold')
+    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=8, alignment=0, fontName='Helvetica-Bold')
+    
+    headers = ['Operação'] + [f['NomeFilial'] for _, f in colunas.iterrows()] + ['Total']
+    table_data = [[Paragraph(h, header_style) for h in headers]]
+    
+    def add_row_to_data(label, key, opts):
+        bold = opts.get('bold', False)
+        left_style = cell_bold_left if bold else cell_left
+        right_style = cell_bold_right if bold else cell_right
+        
+        row = [Paragraph(label, left_style)]
+        total = 0
+        for _, f in colunas.iterrows():
+            val = f[key] if key else 0
+            total += val
+            if 'fmt' in opts:
+                try:
+                    val_str = opts['fmt'](val, f)
+                except:
+                    val_str = formatar_moeda(val)
+            else:
+                val_str = formatar_moeda(val)
+            
+            if key == 'resultado':
+                if val < 0:
+                    val_str = f"-{formatar_moeda(abs(val))}"
+                else:
+                    val_str = formatar_moeda(val)
+            
+            row.append(Paragraph(val_str, right_style))
+        
+        if key == 'resultado':
+            total_str = formatar_moeda(total) if total >= 0 else f"-{formatar_moeda(abs(total))}"
+        else:
+            total_str = formatar_moeda(total)
+        
+        row.append(Paragraph(total_str, right_style))
+        return row
+    
+    # Concatenar todas as linhas (sem títulos de seção)
+    all_rows = rows_saidas + rows_entradas + rows_resultado
+    for label, key, opts in all_rows:
+        table_data.append(add_row_to_data(label, key, opts))
+    
+    col_widths = [120] + [75] * len(colunas) + [75]
+    t = Table(table_data, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(t)
+    
+    elements.append(Spacer(1, 15))
+    
+    saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
+    saldo_pb = pb["resultado"].sum() if not pb.empty else 0
+    saldo_srb = srb["resultado"].sum() if not srb.empty else 0
+    saldo_cons = saldo_atacado + saldo_pb + saldo_srb
+    
+    result_style = ParagraphStyle('Result', parent=styles['Normal'], alignment=1, fontSize=11, spaceAfter=10)
+    results_text = f"Resultado PB - ATACADO: {formatar_moeda(saldo_atacado)} &nbsp;&nbsp;&nbsp; Resultado PB - FILIAIS: {formatar_moeda(saldo_pb)} &nbsp;&nbsp;&nbsp; Resultado SRB: {formatar_moeda(saldo_srb)} &nbsp;&nbsp;&nbsp; Consolidado: {formatar_moeda(saldo_cons)}"
+    elements.append(Paragraph(results_text, result_style))
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+# ==========================================
+# ABA TRIBUTOS (COM BOTÃO GERAR PDF)
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
@@ -519,13 +614,15 @@ with tab_tributos:
         data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
         
         with c4:
-            col_btn1, col_btn2 = st.columns(2)
+            col_btn1, col_btn2, col_btn3 = st.columns(3)
             btn_t = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
             btn_limpar_t = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
+            btn_pdf_t = col_btn3.form_submit_button("📄 Gerar PDF", use_container_width=True)
             
     if btn_limpar_t:
         for k in ["dt_ini_trib", "dt_fim_trib"]:
             if k in st.session_state: del st.session_state[k]
+        if "pdf_trib" in st.session_state: del st.session_state["pdf_trib"]
         st.rerun()
 
     with st.spinner("Carregando dados tributários..."):
@@ -615,7 +712,57 @@ with tab_tributos:
             srb = df_trib[df_trib["CodFilial"] == 4]
             colunas = pd.concat([atacado, pb, srb])
             
-            # --- 1. CARDS DE RESUMO ---
+            rows_saidas = [
+                ("Valor Vendas Bruto", "VendasBruto", {}),
+                ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
+                ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
+                ("Tributo Vendas Integral", "tributoVendasIntegral", {
+                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"
+                }),
+                ("Tributo Vendas Adicional", "tributoVendasAdicional", {
+                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"
+                }),
+                ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
+                ("Tributo Transferências Enviadas", "icmsTransfEnv", {
+                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
+                }),
+                ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
+                ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
+                ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
+            ]
+            
+            rows_entradas = [
+                ("Valor Compras", "ComprasTotal", {}),
+                ("Tributo Compras", "ICMS_Compras", {}),
+                ("Valor Transferências Recebidas", "TransfRecTotal", {}),
+                ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
+                ("Tributos Antecipados", "TributosAntecipados", {}),
+                ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
+                ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
+                ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
+            ]
+            
+            rows_resultado = [
+                ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
+            ]
+
+            # --- GERAR PDF ---
+            if btn_pdf_t:
+                pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
+                st.session_state["pdf_trib"] = pdf_bytes
+
+            if "pdf_trib" in st.session_state:
+                st.download_button(
+                    label="⬇️ Baixar Relatório PDF",
+                    data=st.session_state["pdf_trib"],
+                    file_name=f"Relatorio_Tributario_{data_ini_t.strftime('%Y%m%d')}_{data_fim_t.strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    key="btn_download_pdf_trib"
+                )
+
+            # --- CARDS DE RESUMO ---
             saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
             saldo_pb = pb["resultado"].sum() if not pb.empty else 0
             saldo_srb = srb["resultado"].sum() if not srb.empty else 0
@@ -678,43 +825,10 @@ with tab_tributos:
             tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
             
             with tab_saidas:
-                rows_saidas = [
-                    ("Valor Vendas Bruto", "VendasBruto", {}),
-                    ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
-                    ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
-                    ("Tributo Vendas Integral", "tributoVendasIntegral", {
-                        "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"
-                    }),
-                    ("Tributo Vendas Adicional", "tributoVendasAdicional", {
-                        "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"
-                    }),
-                    ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
-                    ("Tributo Transferências Enviadas", "icmsTransfEnv", {
-                        "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
-                    }),
-                    ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
-                    ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
-                    ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                    ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
-                ]
                 st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
 
             with tab_entradas:
-                rows_entradas = [
-                    ("Valor Compras", "ComprasTotal", {}),
-                    ("Tributo Compras", "ICMS_Compras", {}),
-                    ("Valor Transferências Recebidas", "TransfRecTotal", {}),
-                    ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
-                    ("Tributos Antecipados", "TributosAntecipados", {}),
-                    ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
-                    ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
-                    ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                    ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
-                ]
                 st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
 
             with tab_resultado:
-                rows_resultado = [
-                    ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
-                ]
                 st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
