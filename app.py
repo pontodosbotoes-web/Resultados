@@ -653,15 +653,31 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     return buffer
 
 # ==========================================
-# ABA TRIBUTOS (FORMULÁRIO PARA EVITAR PISCADAS)
+# ABA TRIBUTOS
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
-    # Carrega dados baseado no estado atual
+    # Formulário de filtros e botões
+    with st.form(key="form_tributos"):
+        c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1.4], vertical_alignment="bottom")
+        data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
+        data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
+        
+        with c3:
+            col_btn1, col_btn2 = st.columns(2)
+            btn_atualizar = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
+            btn_limpar = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
+
+    if btn_limpar:
+        for k in ["dt_ini_trib", "dt_fim_trib"]:
+            if k in st.session_state: del st.session_state[k]
+        st.rerun()
+
+    # Carregar Dados
     with st.spinner("Carregando dados tributários..."):
-        df_trib = buscar_tributos(st.session_state["dt_ini_trib"].strftime("%Y-%m-%d"), st.session_state["dt_fim_trib"].strftime("%Y-%m-%d"))
+        df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
         
     pdf_bytes = None
     if df_trib.empty:
@@ -786,8 +802,22 @@ with tab_tributos:
             ]
 
             # GERA O PDF
-            pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, st.session_state["dt_ini_trib"], st.session_state["dt_fim_trib"])
+            pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
             
+            # BOTÃO DE DOWNLOAD (FORA DO FORMULÁRIO)
+            timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+            nome_arquivo = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
+            
+            col_pdf, _ = st.columns([1.5, 3.5])
+            with col_pdf:
+                st.download_button(
+                    label="📄 Gerar PDF",
+                    data=pdf_bytes,
+                    file_name=nome_arquivo,
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+
             # RENDERIZA OS CARDS E TABELAS
             saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
             saldo_pb = pb["resultado"].sum() if not pb.empty else 0
@@ -857,31 +887,3 @@ with tab_tributos:
 
             with tab_resultado:
                 st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
-
-    # Formulário de filtros e botões (renderizado por último para não piscar)
-    with st.form(key="form_tributos"):
-        c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.5], vertical_alignment="bottom")
-        data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
-        data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
-        
-        with c3:
-            btn_atualizar = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
-        with c4:
-            btn_limpar = st.form_submit_button("🧹 Limpar", use_container_width=True)
-        
-        with c5:
-            if pdf_bytes:
-                timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                nome_arquivo = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
-                st.download_button(
-                    label="📄 Gerar PDF",
-                    data=pdf_bytes,
-                    file_name=nome_arquivo,
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-
-    if btn_limpar:
-        for k in ["dt_ini_trib", "dt_fim_trib"]:
-            if k in st.session_state: del st.session_state[k]
-        st.rerun()
