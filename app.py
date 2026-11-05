@@ -81,21 +81,6 @@ st.markdown("""
         .tributos-tabela .devolucao td { color: #ffa198; font-style: italic; }
         .tributos-tabela .nao-tributada td { color: #8b949e; font-style: italic; background: rgba(139, 148, 158, 0.04); }
         .tributos-tabela .bloco-fim td { border-bottom: 3px solid #58a6ff !important; }
-
-        /* Deixa as abas internas de tributos com visual mais limpo */
-        .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-        .stTabs [data-baseweb="tab"] {
-            background-color: #1c2333;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 6px 16px;
-            color: #c9d1d9;
-        }
-        .stTabs [aria-selected="true"] {
-            background-color: #58a6ff;
-            color: #0d1117 !important;
-            font-weight: bold;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -511,7 +496,7 @@ with tab_compras:
                 st.write("") 
 
 # ==========================================
-# ABA TRIBUTOS (COM NOVO LAYOUT)
+# ABA TRIBUTOS
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
@@ -644,34 +629,10 @@ with tab_tributos:
             render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
             render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
             
-            # --- 2. GRÁFICO DE CASCATA ---
             st.write("")
-            fig_waterfall = go.Figure(go.Waterfall(
-                name="ICMS", orientation="v",
-                measure=["relative", "relative", "total"],
-                x=["Créditos (Entradas)", "Débitos (Saídas)", "Resultado"],
-                y=[df_trib["creditoICMS"].sum(), -df_trib["debitoICMS"].sum(), df_trib["resultado"].sum()],
-                text=[formatar_moeda(df_trib["creditoICMS"].sum()), formatar_moeda(-df_trib["debitoICMS"].sum()), formatar_moeda(df_trib["resultado"].sum())],
-                textposition="outside",
-                connector={"line": {"color": "#30363d"}},
-                decreasing={"marker": {"color": "#f85149"}},
-                increasing={"marker": {"color": "#3fb950"}},
-                totals={"marker": {"color": "#58a6ff"}}
-            ))
-            fig_waterfall.update_layout(
-                title="Cascata de ICMS do Período",
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color="#c9d1d9"),
-                margin=dict(l=0, r=0, t=40, b=0),
-                height=300,
-                showlegend=False
-            )
-            st.plotly_chart(fig_waterfall, use_container_width=True)
-            
             st.markdown("---")
             
-            # --- 3. SUB-ABAS PARA AS TABELAS ---
+            # --- 2. SUB-ABAS PARA AS TABELAS ---
             def build_trib_table(rows_list):
                 html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
                 html += '<thead><tr><th style="text-align:left;">Operação</th>'
