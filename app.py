@@ -376,7 +376,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (COM SUB-ABAS E LINHA DE TOTAL)
+# ABA COMPRAS (COM SUB-ABAS E LINHA DE TOTAL CORRIGIDA)
 # ==========================================
 with tab_compras:
     try:
@@ -481,27 +481,21 @@ with tab_compras:
                         df_pivot = df_pivot[meses_colunas]
                         df_pivot['Total'] = df_pivot.sum(axis=1)
                         df_pivot = df_pivot.fillna(0)
-                        
                         df_pivot = df_pivot.sort_index(ascending=True)
                         
-                        # --- NOVO: Adiciona a linha de total no final ---
-                        df_pivot.loc['**TOTAL**'] = df_pivot.sum()
+                        # --- CRIAÇÃO DA LINHA DE TOTAL (MANTENDO O ÍNDICE) ---
+                        linha_total = df_pivot.sum().to_frame().T
+                        linha_total.index = ['TOTAL']
+                        df_final = pd.concat([df_pivot, linha_total])
                         
-                        def fmt_br(x):
-                            if pd.isna(x) or x == 0:
-                                return "-"
-                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        # --- CONFIGURAÇÃO DAS COLUNAS PARA O STREAMLIT ---
+                        col_config = {m: st.column_config.NumberColumn(m, format="R$ %.2f") for m in meses_colunas}
+                        col_config["Total"] = st.column_config.NumberColumn("Total", format="R$ %.2f")
                         
-                        # --- NOVO: Função para destacar a linha de total ---
-                        def highlight_total(row):
-                            if row.name == '**TOTAL**':
-                                return ['font-weight: bold; background-color: #1e293b; color: #58a6ff;'] * len(row)
-                            return [''] * len(row)
-                        
-                        # --- NOVO: Aplica o formato e o destaque ---
                         st.dataframe(
-                            df_pivot.style.apply(highlight_total, axis=1).format(fmt_br),
-                            use_container_width=True
+                            df_final, 
+                            use_container_width=True, 
+                            column_config=col_config
                         )
 
 # ==========================================
