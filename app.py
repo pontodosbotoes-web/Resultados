@@ -376,7 +376,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (COM SUB-ABAS E LINHA DE TOTAL CORRIGIDA)
+# ABA COMPRAS (COM SUB-ABAS E FORMATO BRASILEIRO)
 # ==========================================
 with tab_compras:
     try:
@@ -483,19 +483,26 @@ with tab_compras:
                         df_pivot = df_pivot.fillna(0)
                         df_pivot = df_pivot.sort_index(ascending=True)
                         
-                        # --- CRIAÇÃO DA LINHA DE TOTAL (MANTENDO O ÍNDICE) ---
+                        # --- CRIAÇÃO DA LINHA DE TOTAL ---
                         linha_total = df_pivot.sum().to_frame().T
                         linha_total.index = ['TOTAL']
                         df_final = pd.concat([df_pivot, linha_total])
                         
-                        # --- CONFIGURAÇÃO DAS COLUNAS PARA O STREAMLIT ---
-                        col_config = {m: st.column_config.NumberColumn(m, format="R$ %.2f") for m in meses_colunas}
-                        col_config["Total"] = st.column_config.NumberColumn("Total", format="R$ %.2f")
+                        # --- FORMATAÇÃO BRASILEIRA (SEM R$) ---
+                        def fmt_br(x):
+                            if pd.isna(x) or x == 0:
+                                return "-"
+                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        
+                        # --- DESTAQUE DA LINHA DE TOTAL ---
+                        def highlight_total(row):
+                            if row.name == 'TOTAL':
+                                return ['font-weight: bold; color: #58a6ff;'] * len(row)
+                            return [''] * len(row)
                         
                         st.dataframe(
-                            df_final, 
-                            use_container_width=True, 
-                            column_config=col_config
+                            df_final.style.format(fmt_br).apply(highlight_total, axis=1),
+                            use_container_width=True
                         )
 
 # ==========================================
