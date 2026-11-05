@@ -492,15 +492,16 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
             row_cells = [Paragraph(fornecedor, cell_bold_left if is_total else cell_left)]
             for m in meses_colunas + ['Total']:
                 val = r[m]
-                # SEM R$ NO PDF DE COMPRAS
+                # AQUI FOI TROCADO PARA formatar_numero (SEM R$)
                 val_str = formatar_numero(val) if val != 0 else "-"
                 row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
             table_data.append(row_cells)
 
         elements.append(Paragraph(f"<b>■ Departamento: {depto}</b>", styles['Heading3']))
         
-        # LARGURAS OCUPANDO TODA A FOLHA
-        col_widths = [180] + [45] * len(meses_colunas) + [80]
+        # LARGURAS AJUSTADAS PARA CABER 999.999,00 E OCUPAR 100% DA FOLHA
+        # 130 (Fornecedor) + (12 * 50) (Meses) + 70 (Total) = 800
+        col_widths = [130] + [50] * len(meses_colunas) + [70]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
@@ -589,7 +590,9 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     for label, key, opts in all_rows:
         table_data.append(add_row_to_data(label, key, opts))
     
-    col_widths = [180] + [110] * len(colunas) + [80]
+    # LARGURAS PARA TRIBUTOS TAMBÉM OCUPAREM 100% DA FOLHA
+    # 150 (Operação) + (5 * 115) (Filiais) + 75 (Total) = 800
+    col_widths = [150] + [115] * len(colunas) + [75]
     t = Table(table_data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
