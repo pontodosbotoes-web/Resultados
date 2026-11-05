@@ -32,3 +32,9 @@ def buscar_pagamentos(data_inicio, data_fim, hora_inicio, hora_fim, filial):
 def buscar_compras(data_inicio, data_fim, filial):
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
     return _executar_query("visao_compras.sql", params, filial)
+    
+def buscar_tributos(data_inicio, data_fim):
+    sql = _ler_sql("visao_tributos.sql")
+    params = {"data_inicio": data_inicio, "data_fim": data_fim}
+    with get_engine().connect() as conn:
+        return pd.read_sql(text(sql), conn, params=params)
