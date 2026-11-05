@@ -579,23 +579,14 @@ with tab_tributos:
             df_trib["resultado"] = df_trib["creditoICMS"] - df_trib["debitoICMS"]
 
             atacado = df_trib[df_trib["CodFilial"] == 5]
-            pb = df_trib[(df_trib["CodFilial"] != 4) & (df_trib["CodFilial"] != 5)].sort_values("NomeFilial")
+            pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
             srb = df_trib[df_trib["CodFilial"] == 4]
             colunas = pd.concat([atacado, pb, srb])
             
-            # --- CARDS DE RESUMO ---
-            tot_atacado_deb = atacado["debitoICMS"].sum() if not atacado.empty else 0
-            tot_atacado_cred = atacado["creditoICMS"].sum() if not atacado.empty else 0
-            saldo_atacado = tot_atacado_cred - tot_atacado_deb
-
-            tot_pb_deb = pb["debitoICMS"].sum() if not pb.empty else 0
-            tot_pb_cred = pb["creditoICMS"].sum() if not pb.empty else 0
-            saldo_pb = tot_pb_cred - tot_pb_deb
-
-            tot_srb_deb = srb["debitoICMS"].sum() if not srb.empty else 0
-            tot_srb_cred = srb["creditoICMS"].sum() if not srb.empty else 0
-            saldo_srb = tot_srb_cred - tot_srb_deb
-
+            # --- CARDS DE RESUMO (SOMA DIRETA DA COLUNA RESULTADO) ---
+            saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
+            saldo_pb = pb["resultado"].sum() if not pb.empty else 0
+            saldo_srb = srb["resultado"].sum() if not srb.empty else 0
             saldo_cons = saldo_atacado + saldo_pb + saldo_srb
             
             c_cards = st.columns(4)
