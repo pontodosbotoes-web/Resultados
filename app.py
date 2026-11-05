@@ -9,6 +9,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.pdfgen import canvas
 
 from src.db import carregar_filiais, carregar_fornecedores
 from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras, buscar_tributos
@@ -521,11 +522,39 @@ with tab_compras:
                         )
 
 # ==========================================
+# CLASSE PARA CONTAGEM DE PÁGINAS NO PDF
+# ==========================================
+class NumberedCanvas(canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_page_number(num_pages)
+            canvas.Canvas.showPage(self)
+        canvas.Canvas.save(self)
+
+    def draw_page_number(self, page_count):
+        self.setFont("Helvetica", 8)
+        self.setFillColor(colors.HexColor('#64748B'))
+        page_text = f"página {self._pageNumber} de {page_count}"
+        # A4 Paisagem: largura = 841.89
+        # Desenha no canto inferior direito (margem de 20)
+        self.drawRightString(landscape(A4)[0] - 20, 15, page_text)
+
+# ==========================================
 # FUNÇÃO GERADORA DE PDF DE TRIBUTOS
 # ==========================================
 def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini, data_fim):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
     elements = []
     styles = getSampleStyleSheet()
     
@@ -622,7 +651,7 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     results_text = f"Resultado PB - ATACADO: {formatar_moeda(saldo_atacado)} &nbsp;&nbsp;&nbsp; Resultado PB - FILIAIS: {formatar_moeda(saldo_pb)} &nbsp;&nbsp;&nbsp; Resultado SRB: {formatar_moeda(saldo_srb)} &nbsp;&nbsp;&nbsp; Consolidado: {formatar_moeda(saldo_cons)}"
     elements.append(Paragraph(results_text, result_style))
     
-    doc.build(elements)
+    doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer
 
@@ -738,19 +767,20 @@ with tab_tributos:
             srb = df_trib[df_trib["CodFilial"] == 4]
             colunas = pd.concat([atacado, pb, srb])
             
+            # AQUI FOI TROCADO formatar_moeda POR formatar_numero
             rows_saidas = [
                 ("Valor Vendas Bruto", "VendasBruto", {}),
                 ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
                 ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
                 ("Tributo Vendas Integral", "tributoVendasIntegral", {
-                    "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctVendasEfetivo']:.2f}%)"
+                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"
                 }),
                 ("Tributo Vendas Adicional", "tributoVendasAdicional", {
-                    "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctAdicional']:.2f}%)"
+                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"
                 }),
                 ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
                 ("Tributo Transferências Enviadas", "icmsTransfEnv", {
-                    "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
+                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
                 }),
                 ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
                 ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
