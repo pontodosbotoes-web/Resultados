@@ -524,7 +524,6 @@ with tab_tributos:
     if df_trib.empty:
         st.info("Nenhum dado encontrado para o período.")
     else:
-        # CORREÇÃO CRÍTICA: Converter CodFilial para número
         df_trib["CodFilial"] = pd.to_numeric(df_trib["CodFilial"], errors="coerce").fillna(0).astype(int)
         
         cols_numeric = ["VendasBruto", "VendasLiquidoDesconto", "ICMS_Vendas", "DevolucaoVendas", "TransfEnvTotal", "TransfEnvTrib", "TransfEnvNaoTrib", "ICMS_TransfEnv", "ComprasTotal", "ComprasTrib", "ComprasNaoTrib", "ICMS_Compras", "TransfRecTotal", "TransfRecTrib", "TransfRecNaoTrib", "ICMS_TransfRec", "TributosAntecipados"]
@@ -555,7 +554,6 @@ with tab_tributos:
             for idx, row in df_trib.iterrows():
                 fid = int(row["CodFilial"])
                 
-                # Defaults para filiais 1, 2, 3 (Calculados via SQL)
                 tributo_vendas_integral = row["ICMS_Vendas"]
                 pct_efetivo = (row["ICMS_Vendas"] / row["VendasBruto"] * 100) if row["VendasBruto"] > 0 else 0
                 tributo_vendas_adicional = 0.0
@@ -571,7 +569,6 @@ with tab_tributos:
                     tributo_vendas_integral = row["VendasBruto"] * aliq
                     pct_efetivo = aliq * 100
                     
-                    # Adicional só se Vendas Líquido < 400k
                     if row["vendasLiquido"] < 400000.0:
                         aliq_adic = 0.049
                         tributo_vendas_adicional = row["vendasLiquido"] * aliq_adic
@@ -584,7 +581,6 @@ with tab_tributos:
                     icms_compras = 0.0
                     icms_transf_rec = 0.0
                     
-                    # Ajuste das bases de totais para o Atacado
                     df_trib.at[idx, "ComprasTrib"] = 0.0
                     df_trib.at[idx, "TransfRecTrib"] = 0.0
                     df_trib.at[idx, "ComprasNaoTrib"] = row["ComprasTotal"]
@@ -599,10 +595,10 @@ with tab_tributos:
                     icms_transf_env = 0.0
                     pct_tr_env = 0.0
                     
-                    icms_compras = row["ICMS_Compras"]
-                    icms_transf_rec = row["ICMS_TransfRec"]
+                    # AQUI ESTAVA O ERRO: Zerando o crédito de entradas do SRB
+                    icms_compras = 0.0
+                    icms_transf_rec = 0.0
                     
-                    # Ajuste das bases de totais para o SRB
                     df_trib.at[idx, "TransfEnvTrib"] = 0.0
                     df_trib.at[idx, "TransfEnvNaoTrib"] = row["TransfEnvTotal"]
                     df_trib.at[idx, "ComprasTrib"] = 0.0
