@@ -63,7 +63,6 @@ st.markdown("""
 
         /* ===== TRIBUTOS ===== */
         .tabela-wrapper { overflow-x: auto; margin: 10px 0 30px 0; }
-        /* Fonte alterada de 13px para 14px para igualar ao Streamlit */
         .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 14px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; }
         .tributos-tabela th { background: #0d1117; color: #f0f6fc; padding: 10px 12px; border-bottom: 2px solid #30363d; font-weight: 600; white-space: nowrap; }
         .tributos-tabela td { padding: 8px 12px; border-bottom: 1px solid #21262d; color: #c9d1d9; }
@@ -82,6 +81,21 @@ st.markdown("""
         .tributos-tabela .devolucao td { color: #ffa198; font-style: italic; }
         .tributos-tabela .nao-tributada td { color: #8b949e; font-style: italic; background: rgba(139, 148, 158, 0.04); }
         .tributos-tabela .bloco-fim td { border-bottom: 3px solid #58a6ff !important; }
+
+        /* Deixa as abas internas de tributos com visual mais limpo */
+        .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+        .stTabs [data-baseweb="tab"] {
+            background-color: #1c2333;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 6px 16px;
+            color: #c9d1d9;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #58a6ff;
+            color: #0d1117 !important;
+            font-weight: bold;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -497,7 +511,7 @@ with tab_compras:
                 st.write("") 
 
 # ==========================================
-# ABA TRIBUTOS
+# ABA TRIBUTOS (COM NOVO LAYOUT)
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
@@ -545,7 +559,7 @@ with tab_tributos:
         else:
             df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
             
-            # --- VETORIZAÇÃO (RÁPIDO) EM VEZ DE ITERROWS ---
+            # --- VETORIZAÇÃO (RÁPIDO) ---
             df_trib["tributoVendasIntegral"] = df_trib["ICMS_Vendas"]
             df_trib["pctVendasEfetivo"] = (df_trib["ICMS_Vendas"] / df_trib["VendasBruto"] * 100).fillna(0)
             df_trib["tributoVendasAdicional"] = 0.0
@@ -606,7 +620,7 @@ with tab_tributos:
             srb = df_trib[df_trib["CodFilial"] == 4]
             colunas = pd.concat([atacado, pb, srb])
             
-            # --- CARDS DE RESUMO (PADRONIZADOS) ---
+            # --- 1. CARDS DE RESUMO ---
             saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
             saldo_pb = pb["resultado"].sum() if not pb.empty else 0
             saldo_srb = srb["resultado"].sum() if not srb.empty else 0
@@ -630,10 +644,34 @@ with tab_tributos:
             render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
             render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
             
+            # --- 2. GRÁFICO DE CASCATA ---
             st.write("")
+            fig_waterfall = go.Figure(go.Waterfall(
+                name="ICMS", orientation="v",
+                measure=["relative", "relative", "total"],
+                x=["Créditos (Entradas)", "Débitos (Saídas)", "Resultado"],
+                y=[df_trib["creditoICMS"].sum(), -df_trib["debitoICMS"].sum(), df_trib["resultado"].sum()],
+                text=[formatar_moeda(df_trib["creditoICMS"].sum()), formatar_moeda(-df_trib["debitoICMS"].sum()), formatar_moeda(df_trib["resultado"].sum())],
+                textposition="outside",
+                connector={"line": {"color": "#30363d"}},
+                decreasing={"marker": {"color": "#f85149"}},
+                increasing={"marker": {"color": "#3fb950"}},
+                totals={"marker": {"color": "#58a6ff"}}
+            ))
+            fig_waterfall.update_layout(
+                title="Cascata de ICMS do Período",
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color="#c9d1d9"),
+                margin=dict(l=0, r=0, t=40, b=0),
+                height=300,
+                showlegend=False
+            )
+            st.plotly_chart(fig_waterfall, use_container_width=True)
+            
             st.markdown("---")
             
-            # --- FUNÇÃO CONSTRUTORA DE TABELA ---
+            # --- 3. SUB-ABAS PARA AS TABELAS ---
             def build_trib_table(rows_list):
                 html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
                 html += '<thead><tr><th style="text-align:left;">Operação</th>'
@@ -667,47 +705,46 @@ with tab_tributos:
                 html += '</tbody></table></div>'
                 return html
 
-            # --- TABELA DE SAÍDAS ---
-            rows_saidas = [
-                ("Valor Vendas Bruto", "VendasBruto", {}),
-                ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
-                ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
-                ("Tributo Vendas Integral", "tributoVendasIntegral", {
-                    "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctVendasEfetivo']:.2f}%)"
-                }),
-                ("Tributo Vendas Adicional", "tributoVendasAdicional", {
-                    "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctAdicional']:.2f}%)"
-                }),
-                ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
-                ("Tributo Transferências Enviadas", "icmsTransfEnv", {
-                    "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
-                }),
-                ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
-                ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
-                ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
-            ]
-            st.markdown('<div class="depto-header">📉 SAÍDAS</div>', unsafe_allow_html=True)
-            st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
+            tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Tabela de Saídas", "📈 Tabela de Entradas", "📊 Tabela de Resultado"])
+            
+            with tab_saidas:
+                rows_saidas = [
+                    ("Valor Vendas Bruto", "VendasBruto", {}),
+                    ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
+                    ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
+                    ("Tributo Vendas Integral", "tributoVendasIntegral", {
+                        "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctVendasEfetivo']:.2f}%)"
+                    }),
+                    ("Tributo Vendas Adicional", "tributoVendasAdicional", {
+                        "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctAdicional']:.2f}%)"
+                    }),
+                    ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
+                    ("Tributo Transferências Enviadas", "icmsTransfEnv", {
+                        "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
+                    }),
+                    ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
+                    ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
+                    ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                    ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
+                ]
+                st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
 
-            # --- TABELA DE ENTRADAS ---
-            rows_entradas = [
-                ("Valor Compras", "ComprasTotal", {}),
-                ("Tributo Compras", "ICMS_Compras", {}),
-                ("Valor Transferências Recebidas", "TransfRecTotal", {}),
-                ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
-                ("Tributos Antecipados", "TributosAntecipados", {}),
-                ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
-                ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
-                ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
-            ]
-            st.markdown('<div class="depto-header">📈 ENTRADAS</div>', unsafe_allow_html=True)
-            st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
+            with tab_entradas:
+                rows_entradas = [
+                    ("Valor Compras", "ComprasTotal", {}),
+                    ("Tributo Compras", "ICMS_Compras", {}),
+                    ("Valor Transferências Recebidas", "TransfRecTotal", {}),
+                    ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
+                    ("Tributos Antecipados", "TributosAntecipados", {}),
+                    ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
+                    ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
+                    ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                    ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
+                ]
+                st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
 
-            # --- TABELA DE RESULTADO ---
-            rows_resultado = [
-                ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
-            ]
-            st.markdown('<div class="depto-header">📊 RESULTADO</div>', unsafe_allow_html=True)
-            st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
+            with tab_resultado:
+                rows_resultado = [
+                    ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
+                ]
+                st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
