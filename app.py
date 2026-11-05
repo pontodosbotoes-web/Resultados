@@ -35,6 +35,7 @@ st.markdown("""
         
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
 
+        /* ESTILO DO BOTÃO ATUALIZAR (VERDE) */
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"] {
             background-color: #238636 !important;
             color: #ffffff !important;
@@ -47,6 +48,7 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(46, 160, 67, 0.4) !important;
         }
 
+        /* ESTILO DO BOTÃO LIMPAR (VERMELHO) */
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"] {
             background-color: #da3633 !important;
             color: #ffffff !important;
@@ -59,8 +61,10 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(248, 81, 73, 0.4) !important;
         }
 
+        /* ===== TRIBUTOS ===== */
         .tabela-wrapper { overflow-x: auto; margin: 10px 0 30px 0; }
-        .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 13px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; }
+        /* Fonte alterada de 13px para 14px para igualar ao Streamlit */
+        .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 14px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; }
         .tributos-tabela th { background: #0d1117; color: #f0f6fc; padding: 10px 12px; border-bottom: 2px solid #30363d; font-weight: 600; white-space: nowrap; }
         .tributos-tabela td { padding: 8px 12px; border-bottom: 1px solid #21262d; color: #c9d1d9; }
         .tributos-tabela td:first-child { text-align: left !important; font-weight: 500; }
@@ -493,7 +497,7 @@ with tab_compras:
                 st.write("") 
 
 # ==========================================
-# ABA TRIBUTOS (OTIMIZADA)
+# ABA TRIBUTOS
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
@@ -602,7 +606,7 @@ with tab_tributos:
             srb = df_trib[df_trib["CodFilial"] == 4]
             colunas = pd.concat([atacado, pb, srb])
             
-            # --- CARDS DE RESUMO ---
+            # --- CARDS DE RESUMO (PADRONIZADOS) ---
             saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
             saldo_pb = pb["resultado"].sum() if not pb.empty else 0
             saldo_srb = srb["resultado"].sum() if not srb.empty else 0
@@ -616,8 +620,8 @@ with tab_tributos:
                 with col:
                     st.markdown(f'''
                         <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
-                            <div class="card-label" style="color: {cor}; font-size: 14px; white-space: normal;">{title}</div>
-                            <div class="card-value" style="color: {cor}; font-size: 22px;">{formatar_moeda(val)}</div>
+                            <div class="card-label" style="color: {cor}; white-space: normal;">{title}</div>
+                            <div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div>
                         </div>
                     ''', unsafe_allow_html=True)
             
