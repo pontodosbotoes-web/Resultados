@@ -556,7 +556,6 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     elements = []
     styles = getSampleStyleSheet()
     
-    # CABEÇALHO COM TÍTULO À ESQUERDA E PERÍODO À DIREITA
     left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
     right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
     
@@ -575,7 +574,6 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     ]))
     elements.append(header_table)
     
-    # TABELA DE DADOS
     header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
     cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
@@ -599,9 +597,9 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
                 try:
                     val_str = opts['fmt'](val, f)
                 except:
-                    val_str = formatar_moeda(val) # PDF mantém R$ padrão ERP
+                    val_str = formatar_moeda(val)
             else:
-                val_str = formatar_moeda(val) # PDF mantém R$ padrão ERP
+                val_str = formatar_moeda(val)
             
             if key == 'resultado':
                 if val < 0:
@@ -653,237 +651,262 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     return buffer
 
 # ==========================================
-# ABA TRIBUTOS
+# ABA TRIBUTOS (LAYOUT CORRIGIDO E SEM PISCADAS)
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
-    # Formulário de filtros e botões
-    with st.form(key="form_tributos"):
-        c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1.4], vertical_alignment="bottom")
-        data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
-        data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
-        
-        with c3:
-            col_btn1, col_btn2 = st.columns(2)
-            btn_atualizar = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
-            btn_limpar = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.5], vertical_alignment="bottom")
+    
+    data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
+    data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
+
+    with c3:
+        btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary")
+    with c4:
+        btn_limpar = st.button("🧹 Limpar", use_container_width=True)
 
     if btn_limpar:
-        for k in ["dt_ini_trib", "dt_fim_trib"]:
-            if k in st.session_state: del st.session_state[k]
+        st.session_state["dt_ini_trib"] = hoje.replace(day=1)
+        st.session_state["dt_fim_trib"] = hoje
+        if "pdf_bytes_trib" in st.session_state: del st.session_state["pdf_bytes_trib"]
+        if "df_trib" in st.session_state: del st.session_state["df_trib"]
         st.rerun()
 
-    # Carregar Dados
-    with st.spinner("Carregando dados tributários..."):
-        df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
-        
-    pdf_bytes = None
+    if btn_atualizar:
+        st.session_state["dt_ini_trib"] = data_ini_t
+        st.session_state["dt_fim_trib"] = data_fim_t
+        if "pdf_bytes_trib" in st.session_state: del st.session_state["pdf_bytes_trib"]
+        if "df_trib" in st.session_state: del st.session_state["df_trib"]
+
+    # Carrega dados e gera PDF apenas se não estiverem em memória
+    if "df_trib" not in st.session_state:
+        with st.spinner("Carregando dados tributários..."):
+            df_trib = buscar_tributos(st.session_state["dt_ini_trib"].strftime("%Y-%m-%d"), st.session_state["dt_fim_trib"].strftime("%Y-%m-%d"))
+            
+            if not df_trib.empty:
+                df_trib["CodFilial"] = pd.to_numeric(df_trib["CodFilial"], errors="coerce").fillna(0).astype(int)
+                cols_numeric = ["VendasBruto", "VendasLiquidoDesconto", "ICMS_Vendas", "DevolucaoVendas", "TransfEnvTotal", "TransfEnvTrib", "TransfEnvNaoTrib", "ICMS_TransfEnv", "ComprasTotal", "ComprasTrib", "ComprasNaoTrib", "ICMS_Compras", "TransfRecTotal", "TransfRecTrib", "TransfRecNaoTrib", "ICMS_TransfRec", "TributosAntecipados"]
+                for c in cols_numeric:
+                    df_trib[c] = pd.to_numeric(df_trib[c], errors="coerce").fillna(0)
+                    
+                tem_movimento = ((df_trib["VendasBruto"] > 0) | (df_trib["ComprasTotal"] > 0) | (df_trib["TransfEnvTotal"] > 0) | (df_trib["TransfRecTotal"] > 0) | (df_trib["TributosAntecipados"] != 0))
+                df_trib = df_trib[tem_movimento].copy()
+                
+                if not df_trib.empty:
+                    df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
+                    
+                    df_trib["tributoVendasIntegral"] = df_trib["ICMS_Vendas"]
+                    df_trib["pctVendasEfetivo"] = (df_trib["ICMS_Vendas"] / df_trib["VendasBruto"] * 100).fillna(0)
+                    df_trib["tributoVendasAdicional"] = 0.0
+                    df_trib["pctAdicional"] = 0.0
+                    df_trib["icmsTransfEnv"] = df_trib["ICMS_TransfEnv"]
+                    df_trib["pctTransfEnvEfetivo"] = (df_trib["ICMS_TransfEnv"] / df_trib["TransfEnvTotal"] * 100).fillna(0)
+                    
+                    mask_atacado = df_trib["CodFilial"] == 5
+                    df_trib.loc[mask_atacado, "tributoVendasIntegral"] = df_trib.loc[mask_atacado, "VendasBruto"] * 0.071
+                    df_trib.loc[mask_atacado, "pctVendasEfetivo"] = 7.10
+                    mask_adic = mask_atacado & (df_trib["vendasLiquido"] < 400000.0)
+                    df_trib.loc[mask_adic, "tributoVendasAdicional"] = df_trib.loc[mask_adic, "vendasLiquido"] * 0.049
+                    df_trib.loc[mask_adic, "pctAdicional"] = 4.90
+                    df_trib.loc[mask_atacado, "icmsTransfEnv"] = df_trib.loc[mask_atacado, "TransfEnvTrib"] * 0.071
+                    df_trib.loc[mask_atacado, "pctTransfEnvEfetivo"] = 7.10
+                    df_trib.loc[mask_atacado, "ICMS_Compras"] = 0.0
+                    df_trib.loc[mask_atacado, "ICMS_TransfRec"] = 0.0
+                    df_trib.loc[mask_atacado, "ComprasTrib"] = 0.0
+                    df_trib.loc[mask_atacado, "TransfRecTrib"] = 0.0
+                    df_trib.loc[mask_atacado, "ComprasNaoTrib"] = df_trib.loc[mask_atacado, "ComprasTotal"]
+                    df_trib.loc[mask_atacado, "TransfRecNaoTrib"] = df_trib.loc[mask_atacado, "TransfRecTotal"]
+                    
+                    mask_srb = df_trib["CodFilial"] == 4
+                    df_trib.loc[mask_srb, "tributoVendasIntegral"] = df_trib.loc[mask_srb, "VendasBruto"] * 0.143
+                    df_trib.loc[mask_srb, "pctVendasEfetivo"] = 14.30
+                    df_trib.loc[mask_srb, "icmsTransfEnv"] = 0.0
+                    df_trib.loc[mask_srb, "pctTransfEnvEfetivo"] = 0.0
+                    df_trib.loc[mask_srb, "ICMS_Compras"] = 0.0
+                    df_trib.loc[mask_srb, "ICMS_TransfRec"] = 0.0
+                    df_trib.loc[mask_srb, "TransfEnvTrib"] = 0.0
+                    df_trib.loc[mask_srb, "TransfEnvNaoTrib"] = df_trib.loc[mask_srb, "TransfEnvTotal"]
+                    df_trib.loc[mask_srb, "ComprasTrib"] = 0.0
+                    df_trib.loc[mask_srb, "TransfRecTrib"] = 0.0
+                    df_trib.loc[mask_srb, "ComprasNaoTrib"] = df_trib.loc[mask_srb, "ComprasTotal"]
+                    df_trib.loc[mask_srb, "TransfRecNaoTrib"] = df_trib.loc[mask_srb, "TransfRecTotal"]
+                        
+                    df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
+                    df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
+                    df_trib["totalSaidasNaoTrib"] = df_trib["TransfEnvNaoTrib"]
+                    df_trib["totalEntradas"] = df_trib["ComprasTotal"] + df_trib["TransfRecTotal"] + df_trib["TributosAntecipados"]
+                    df_trib["totalEntradasTrib"] = df_trib["ComprasTrib"] + df_trib["TransfRecTrib"] + df_trib["TributosAntecipados"]
+                    df_trib["totalEntradasNaoTrib"] = df_trib["ComprasNaoTrib"] + df_trib["TransfRecNaoTrib"]
+                    df_trib["debitoICMS"] = df_trib["tributoVendasIntegral"] + df_trib["tributoVendasAdicional"] + df_trib["icmsTransfEnv"]
+                    df_trib["creditoICMS"] = df_trib["ICMS_Compras"] + df_trib["ICMS_TransfRec"] + df_trib["TributosAntecipados"]
+                    df_trib["resultado"] = df_trib["creditoICMS"] - df_trib["debitoICMS"]
+
+                    atacado = df_trib[df_trib["CodFilial"] == 5]
+                    pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
+                    srb = df_trib[df_trib["CodFilial"] == 4]
+                    colunas = pd.concat([atacado, pb, srb])
+                    
+                    rows_saidas = [
+                        ("Valor Vendas Bruto", "VendasBruto", {}),
+                        ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
+                        ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
+                        ("Tributo Vendas Integral", "tributoVendasIntegral", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"}),
+                        ("Tributo Vendas Adicional", "tributoVendasAdicional", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"}),
+                        ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
+                        ("Tributo Transferências Enviadas", "icmsTransfEnv", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"}),
+                        ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
+                        ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
+                        ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                        ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
+                    ]
+                    
+                    rows_entradas = [
+                        ("Valor Compras", "ComprasTotal", {}),
+                        ("Tributo Compras", "ICMS_Compras", {}),
+                        ("Valor Transferências Recebidas", "TransfRecTotal", {}),
+                        ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
+                        ("Tributos Antecipados", "TributosAntecipados", {}),
+                        ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
+                        ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
+                        ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                        ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
+                    ]
+                    
+                    rows_resultado = [
+                        ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
+                    ]
+
+                    pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, st.session_state["dt_ini_trib"], st.session_state["dt_fim_trib"])
+                    st.session_state["pdf_bytes_trib"] = pdf_bytes
+                    st.session_state["df_trib"] = df_trib
+                else:
+                    st.session_state["df_trib"] = df_trib
+                    st.session_state["pdf_bytes_trib"] = None
+            else:
+                st.session_state["df_trib"] = df_trib
+                st.session_state["pdf_bytes_trib"] = None
+
+    with c5:
+        pdf_bytes = st.session_state.get("pdf_bytes_trib")
+        if pdf_bytes:
+            timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+            nome_arquivo = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
+            st.download_button(
+                label="📄 Gerar PDF",
+                data=pdf_bytes,
+                file_name=nome_arquivo,
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            st.button("📄 Gerar PDF", disabled=True, use_container_width=True)
+
+    df_trib = st.session_state.get("df_trib", pd.DataFrame())
     if df_trib.empty:
         st.info("Nenhum dado encontrado para o período.")
     else:
-        df_trib["CodFilial"] = pd.to_numeric(df_trib["CodFilial"], errors="coerce").fillna(0).astype(int)
+        atacado = df_trib[df_trib["CodFilial"] == 5]
+        pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
+        srb = df_trib[df_trib["CodFilial"] == 4]
+        colunas = pd.concat([atacado, pb, srb])
         
-        cols_numeric = ["VendasBruto", "VendasLiquidoDesconto", "ICMS_Vendas", "DevolucaoVendas", "TransfEnvTotal", "TransfEnvTrib", "TransfEnvNaoTrib", "ICMS_TransfEnv", "ComprasTotal", "ComprasTrib", "ComprasNaoTrib", "ICMS_Compras", "TransfRecTotal", "TransfRecTrib", "TransfRecNaoTrib", "ICMS_TransfRec", "TributosAntecipados"]
-        for c in cols_numeric:
-            df_trib[c] = pd.to_numeric(df_trib[c], errors="coerce").fillna(0)
-            
-        tem_movimento = (
-            (df_trib["VendasBruto"] > 0) | 
-            (df_trib["ComprasTotal"] > 0) | 
-            (df_trib["TransfEnvTotal"] > 0) | 
-            (df_trib["TransfRecTotal"] > 0) | 
-            (df_trib["TributosAntecipados"] != 0)
-        )
-        df_trib = df_trib[tem_movimento].copy()
+        rows_saidas = [
+            ("Valor Vendas Bruto", "VendasBruto", {}),
+            ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
+            ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
+            ("Tributo Vendas Integral", "tributoVendasIntegral", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"}),
+            ("Tributo Vendas Adicional", "tributoVendasAdicional", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"}),
+            ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
+            ("Tributo Transferências Enviadas", "icmsTransfEnv", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"}),
+            ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
+            ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
+            ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+            ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
+        ]
         
-        if df_trib.empty:
-            st.info("Nenhuma filial com movimentação neste período.")
-        else:
-            df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
+        rows_entradas = [
+            ("Valor Compras", "ComprasTotal", {}),
+            ("Tributo Compras", "ICMS_Compras", {}),
+            ("Valor Transferências Recebidas", "TransfRecTotal", {}),
+            ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
+            ("Tributos Antecipados", "TributosAntecipados", {}),
+            ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
+            ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
+            ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+            ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
+        ]
+        
+        rows_resultado = [
+            ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
+        ]
+        
+        saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
+        saldo_pb = pb["resultado"].sum() if not pb.empty else 0
+        saldo_srb = srb["resultado"].sum() if not srb.empty else 0
+        saldo_cons = saldo_atacado + saldo_pb + saldo_srb
+        
+        c_cards = st.columns(4)
+        def render_card_trib(col, title, val):
+            cor = "#3fb950" if val >= 0 else "#f85149"
+            r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
+            bg_color = f"rgba({r}, {g}, {b}, 0.08)"
+            with col:
+                st.markdown(f'''
+                    <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
+                        <div class="card-label" style="color: {cor}; white-space: normal;">{title}</div>
+                        <div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div>
+                    </div>
+                ''', unsafe_allow_html=True)
+        
+        render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
+        render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
+        render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
+        render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
+        
+        st.write("") 
+        
+        def build_trib_table(rows_list):
+            html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
+            html += '<thead><tr><th style="text-align:left;">Operação</th>'
+            for _, f in colunas.iterrows():
+                html += f'<th style="text-align:right;">{f["NomeFilial"]}</th>'
+            html += '<th style="text-align:right;">📊 Total</th></tr></thead><tbody>'
             
-            # --- VETORIZAÇÃO ---
-            df_trib["tributoVendasIntegral"] = df_trib["ICMS_Vendas"]
-            df_trib["pctVendasEfetivo"] = (df_trib["ICMS_Vendas"] / df_trib["VendasBruto"] * 100).fillna(0)
-            df_trib["tributoVendasAdicional"] = 0.0
-            df_trib["pctAdicional"] = 0.0
-            df_trib["icmsTransfEnv"] = df_trib["ICMS_TransfEnv"]
-            df_trib["pctTransfEnvEfetivo"] = (df_trib["ICMS_TransfEnv"] / df_trib["TransfEnvTotal"] * 100).fillna(0)
-            
-            # Atacado (5)
-            mask_atacado = df_trib["CodFilial"] == 5
-            df_trib.loc[mask_atacado, "tributoVendasIntegral"] = df_trib.loc[mask_atacado, "VendasBruto"] * 0.071
-            df_trib.loc[mask_atacado, "pctVendasEfetivo"] = 7.10
-            
-            mask_adic = mask_atacado & (df_trib["vendasLiquido"] < 400000.0)
-            df_trib.loc[mask_adic, "tributoVendasAdicional"] = df_trib.loc[mask_adic, "vendasLiquido"] * 0.049
-            df_trib.loc[mask_adic, "pctAdicional"] = 4.90
-            
-            df_trib.loc[mask_atacado, "icmsTransfEnv"] = df_trib.loc[mask_atacado, "TransfEnvTrib"] * 0.071
-            df_trib.loc[mask_atacado, "pctTransfEnvEfetivo"] = 7.10
-            df_trib.loc[mask_atacado, "ICMS_Compras"] = 0.0
-            df_trib.loc[mask_atacado, "ICMS_TransfRec"] = 0.0
-            
-            df_trib.loc[mask_atacado, "ComprasTrib"] = 0.0
-            df_trib.loc[mask_atacado, "TransfRecTrib"] = 0.0
-            df_trib.loc[mask_atacado, "ComprasNaoTrib"] = df_trib.loc[mask_atacado, "ComprasTotal"]
-            df_trib.loc[mask_atacado, "TransfRecNaoTrib"] = df_trib.loc[mask_atacado, "TransfRecTotal"]
-            
-            # SRB (4)
-            mask_srb = df_trib["CodFilial"] == 4
-            df_trib.loc[mask_srb, "tributoVendasIntegral"] = df_trib.loc[mask_srb, "VendasBruto"] * 0.143
-            df_trib.loc[mask_srb, "pctVendasEfetivo"] = 14.30
-            
-            df_trib.loc[mask_srb, "icmsTransfEnv"] = 0.0
-            df_trib.loc[mask_srb, "pctTransfEnvEfetivo"] = 0.0
-            df_trib.loc[mask_srb, "ICMS_Compras"] = 0.0
-            df_trib.loc[mask_srb, "ICMS_TransfRec"] = 0.0
-            
-            df_trib.loc[mask_srb, "TransfEnvTrib"] = 0.0
-            df_trib.loc[mask_srb, "TransfEnvNaoTrib"] = df_trib.loc[mask_srb, "TransfEnvTotal"]
-            df_trib.loc[mask_srb, "ComprasTrib"] = 0.0
-            df_trib.loc[mask_srb, "TransfRecTrib"] = 0.0
-            df_trib.loc[mask_srb, "ComprasNaoTrib"] = df_trib.loc[mask_srb, "ComprasTotal"]
-            df_trib.loc[mask_srb, "TransfRecNaoTrib"] = df_trib.loc[mask_srb, "TransfRecTotal"]
-                
-            df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
-            df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
-            df_trib["totalSaidasNaoTrib"] = df_trib["TransfEnvNaoTrib"]
-            
-            df_trib["totalEntradas"] = df_trib["ComprasTotal"] + df_trib["TransfRecTotal"] + df_trib["TributosAntecipados"]
-            df_trib["totalEntradasTrib"] = df_trib["ComprasTrib"] + df_trib["TransfRecTrib"] + df_trib["TributosAntecipados"]
-            df_trib["totalEntradasNaoTrib"] = df_trib["ComprasNaoTrib"] + df_trib["TransfRecNaoTrib"]
-            
-            df_trib["debitoICMS"] = df_trib["tributoVendasIntegral"] + df_trib["tributoVendasAdicional"] + df_trib["icmsTransfEnv"]
-            df_trib["creditoICMS"] = df_trib["ICMS_Compras"] + df_trib["ICMS_TransfRec"] + df_trib["TributosAntecipados"]
-            df_trib["resultado"] = df_trib["creditoICMS"] - df_trib["debitoICMS"]
-
-            atacado = df_trib[df_trib["CodFilial"] == 5]
-            pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
-            srb = df_trib[df_trib["CodFilial"] == 4]
-            colunas = pd.concat([atacado, pb, srb])
-            
-            # Listas de linhas (usando formatar_numero para as tabelas web)
-            rows_saidas = [
-                ("Valor Vendas Bruto", "VendasBruto", {}),
-                ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
-                ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
-                ("Tributo Vendas Integral", "tributoVendasIntegral", {
-                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"
-                }),
-                ("Tributo Vendas Adicional", "tributoVendasAdicional", {
-                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"
-                }),
-                ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
-                ("Tributo Transferências Enviadas", "icmsTransfEnv", {
-                    "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
-                }),
-                ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
-                ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
-                ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
-            ]
-            
-            rows_entradas = [
-                ("Valor Compras", "ComprasTotal", {}),
-                ("Tributo Compras", "ICMS_Compras", {}),
-                ("Valor Transferências Recebidas", "TransfRecTotal", {}),
-                ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
-                ("Tributos Antecipados", "TributosAntecipados", {}),
-                ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
-                ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
-                ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
-            ]
-            
-            rows_resultado = [
-                ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
-            ]
-
-            # GERA O PDF
-            pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
-            
-            # BOTÃO DE DOWNLOAD (FORA DO FORMULÁRIO)
-            timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-            nome_arquivo = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
-            
-            col_pdf, _ = st.columns([1.5, 3.5])
-            with col_pdf:
-                st.download_button(
-                    label="📄 Gerar PDF",
-                    data=pdf_bytes,
-                    file_name=nome_arquivo,
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-
-            # RENDERIZA OS CARDS E TABELAS
-            saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
-            saldo_pb = pb["resultado"].sum() if not pb.empty else 0
-            saldo_srb = srb["resultado"].sum() if not srb.empty else 0
-            saldo_cons = saldo_atacado + saldo_pb + saldo_srb
-            
-            c_cards = st.columns(4)
-            def render_card_trib(col, title, val):
-                cor = "#3fb950" if val >= 0 else "#f85149"
-                r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
-                bg_color = f"rgba({r}, {g}, {b}, 0.08)"
-                with col:
-                    st.markdown(f'''
-                        <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
-                            <div class="card-label" style="color: {cor}; white-space: normal;">{title}</div>
-                            <div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div>
-                        </div>
-                    ''', unsafe_allow_html=True)
-            
-            render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
-            render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
-            render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
-            render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
-            
-            st.write("") 
-            
-            def build_trib_table(rows_list):
-                html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
-                html += '<thead><tr><th style="text-align:left;">Operação</th>'
+            for label, key, opts in rows_list:
+                cls = opts.get("cls", "")
+                bold = opts.get("bold", False)
+                label_fmt = f"<strong>{label}</strong>" if bold else label
+                html += f'<tr class="{cls}"><td style="text-align:left; padding-left:8px;">{label_fmt}</td>'
+                total = 0
                 for _, f in colunas.iterrows():
-                    html += f'<th style="text-align:right;">{f["NomeFilial"]}</th>'
-                html += '<th style="text-align:right;">📊 Total</th></tr></thead><tbody>'
-                
-                for label, key, opts in rows_list:
-                    cls = opts.get("cls", "")
-                    bold = opts.get("bold", False)
-                    label_fmt = f"<strong>{label}</strong>" if bold else label
-                    html += f'<tr class="{cls}"><td style="text-align:left; padding-left:8px;">{label_fmt}</td>'
-                    total = 0
-                    for _, f in colunas.iterrows():
-                        val = f[key] if key else 0
-                        total += val
-                        if "fmt" in opts:
-                            val_str = opts["fmt"](val, f)
-                        else:
-                            val_str = formatar_numero(val) # Sem R$ na tabela
-                        if key == "resultado":
-                            val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
-                        html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
-                        
-                    if key == "resultado":
-                        total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
+                    val = f[key] if key else 0
+                    total += val
+                    if "fmt" in opts:
+                        val_str = opts["fmt"](val, f)
                     else:
-                        total_str = formatar_numero(total) # Sem R$ na tabela
-                    html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
-                
-                html += '</tbody></table></div>'
-                return html
-
-            tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
+                        val_str = formatar_numero(val)
+                    if key == "resultado":
+                        val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
+                    html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
+                    
+                if key == "resultado":
+                    total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
+                else:
+                    total_str = formatar_numero(total)
+                html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
             
-            with tab_saidas:
-                st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
+            html += '</tbody></table></div>'
+            return html
 
-            with tab_entradas:
-                st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
+        tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
+        
+        with tab_saidas:
+            st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
 
-            with tab_resultado:
-                st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
+        with tab_entradas:
+            st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
+
+        with tab_resultado:
+            st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
