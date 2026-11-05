@@ -96,7 +96,6 @@ NOMES_FILIAIS = {1: "PB - ALECRIM", 2: "PB - VIA DIRETA", 3: "PB - ZONA SUL", 4:
 
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
 
-# Nova aba adicionada
 tab_visao, tab_compras, tab_tributos = st.tabs(["💰 Vendas", "🛒 Compras", "⚖️ Tributos"])
 
 def formatar_moeda(v):
@@ -500,18 +499,16 @@ with tab_compras:
 # ABA TRIBUTOS
 # ==========================================
 with tab_tributos:
-    st.markdown("### ⚖️ Acompanhamento Tributário")
-    
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
     with st.form(key="form_tributos"):
-        c1, c2, c3 = st.columns([1, 1, 1.5], vertical_alignment="bottom")
+        c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1.4], vertical_alignment="bottom")
         
         data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
         data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
         
-        with c3:
+        with c4:
             col_btn1, col_btn2 = st.columns(2)
             btn_t = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
             btn_limpar_t = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
@@ -531,147 +528,160 @@ with tab_tributos:
         for c in cols_numeric:
             df_trib[c] = pd.to_numeric(df_trib[c], errors="coerce").fillna(0)
             
-        df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
-        df_trib["tributoVendasIntegral"] = 0.0
-        df_trib["pctVendasEfetivo"] = 0.0
-        df_trib["tributoVendasAdicional"] = 0.0
-        df_trib["icmsTransfEnv"] = 0.0
-        df_trib["pctTransfEnvEfetivo"] = 0.0
+        # FILTRAR FILIAIS COM MOVIMENTO NO PERÍODO
+        tem_movimento = (
+            (df_trib["VendasBruto"] > 0) | 
+            (df_trib["ComprasTotal"] > 0) | 
+            (df_trib["TransfEnvTotal"] > 0) | 
+            (df_trib["TransfRecTotal"] > 0) | 
+            (df_trib["TributosAntecipados"] != 0)
+        )
+        df_trib = df_trib[tem_movimento].copy()
         
-        for idx, row in df_trib.iterrows():
-            fid = int(row["CodFilial"])
-            aliq = 0.143 if fid == 4 else 0.20
-            aliq_tr = 0.143 if fid == 4 else 0.20
+        if df_trib.empty:
+            st.info("Nenhuma filial com movimentação neste período.")
+        else:
+            df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
+            df_trib["tributoVendasIntegral"] = 0.0
+            df_trib["pctVendasEfetivo"] = 0.0
+            df_trib["tributoVendasAdicional"] = 0.0
+            df_trib["icmsTransfEnv"] = 0.0
+            df_trib["pctTransfEnvEfetivo"] = 0.0
             
-            if fid in (4, 5):
-                df_trib.at[idx, "tributoVendasIntegral"] = row["VendasBruto"] * aliq
-                df_trib.at[idx, "pctVendasEfetivo"] = aliq * 100
-            else:
-                df_trib.at[idx, "tributoVendasIntegral"] = row["ICMS_Vendas"]
-                df_trib.at[idx, "pctVendasEfetivo"] = (row["ICMS_Vendas"] / row["VendasBruto"] * 100) if row["VendasBruto"] > 0 else 0
+            for idx, row in df_trib.iterrows():
+                fid = int(row["CodFilial"])
+                aliq = 0.143 if fid == 4 else 0.20
+                aliq_tr = 0.143 if fid == 4 else 0.20
                 
-            if fid in (4, 5):
-                df_trib.at[idx, "icmsTransfEnv"] = row["TransfEnvTrib"] * aliq_tr
-                df_trib.at[idx, "pctTransfEnvEfetivo"] = aliq_tr * 100
-            else:
-                df_trib.at[idx, "icmsTransfEnv"] = row["ICMS_TransfEnv"]
-                df_trib.at[idx, "pctTransfEnvEfetivo"] = (row["ICMS_TransfEnv"] / row["TransfEnvTotal"] * 100) if row["TransfEnvTotal"] > 0 else 0
-                
-        df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
-        df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
-        df_trib["totalSaidasNaoTrib"] = df_trib["TransfEnvNaoTrib"]
-        
-        df_trib["totalEntradas"] = df_trib["ComprasTotal"] + df_trib["TransfRecTotal"] + df_trib["TributosAntecipados"]
-        df_trib["totalEntradasTrib"] = df_trib["ComprasTrib"] + df_trib["TransfRecTrib"] + df_trib["TributosAntecipados"]
-        df_trib["totalEntradasNaoTrib"] = df_trib["ComprasNaoTrib"] + df_trib["TransfRecNaoTrib"]
-        
-        df_trib["debitoICMS"] = df_trib["tributoVendasIntegral"] + df_trib["tributoVendasAdicional"] + df_trib["icmsTransfEnv"]
-        df_trib["creditoICMS"] = df_trib["ICMS_Compras"] + df_trib["ICMS_TransfRec"] + df_trib["TributosAntecipados"]
-        df_trib["resultado"] = df_trib["creditoICMS"] - df_trib["debitoICMS"]
+                if fid in (4, 5):
+                    df_trib.at[idx, "tributoVendasIntegral"] = row["VendasBruto"] * aliq
+                    df_trib.at[idx, "pctVendasEfetivo"] = aliq * 100
+                else:
+                    df_trib.at[idx, "tributoVendasIntegral"] = row["ICMS_Vendas"]
+                    df_trib.at[idx, "pctVendasEfetivo"] = (row["ICMS_Vendas"] / row["VendasBruto"] * 100) if row["VendasBruto"] > 0 else 0
+                    
+                if fid in (4, 5):
+                    df_trib.at[idx, "icmsTransfEnv"] = row["TransfEnvTrib"] * aliq_tr
+                    df_trib.at[idx, "pctTransfEnvEfetivo"] = aliq_tr * 100
+                else:
+                    df_trib.at[idx, "icmsTransfEnv"] = row["ICMS_TransfEnv"]
+                    df_trib.at[idx, "pctTransfEnvEfetivo"] = (row["ICMS_TransfEnv"] / row["TransfEnvTotal"] * 100) if row["TransfEnvTotal"] > 0 else 0
+                    
+            df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
+            df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
+            df_trib["totalSaidasNaoTrib"] = df_trib["TransfEnvNaoTrib"]
+            
+            df_trib["totalEntradas"] = df_trib["ComprasTotal"] + df_trib["TransfRecTotal"] + df_trib["TributosAntecipados"]
+            df_trib["totalEntradasTrib"] = df_trib["ComprasTrib"] + df_trib["TransfRecTrib"] + df_trib["TributosAntecipados"]
+            df_trib["totalEntradasNaoTrib"] = df_trib["ComprasNaoTrib"] + df_trib["TransfRecNaoTrib"]
+            
+            df_trib["debitoICMS"] = df_trib["tributoVendasIntegral"] + df_trib["tributoVendasAdicional"] + df_trib["icmsTransfEnv"]
+            df_trib["creditoICMS"] = df_trib["ICMS_Compras"] + df_trib["ICMS_TransfRec"] + df_trib["TributosAntecipados"]
+            df_trib["resultado"] = df_trib["creditoICMS"] - df_trib["debitoICMS"]
 
-        atacado = df_trib[df_trib["CodFilial"] == 5]
-        pb = df_trib[(df_trib["CodFilial"] != 4) & (df_trib["CodFilial"] != 5)].sort_values("NomeFilial")
-        srb = df_trib[df_trib["CodFilial"] == 4]
-        colunas = pd.concat([atacado, pb, srb])
-        
-        html_table = '<div class="tabela-wrapper"><table class="tributos-tabela">'
-        html_table += '<thead><tr><th style="text-align:left;">Operação</th>'
-        for _, f in colunas.iterrows():
-            html_table += f'<th style="text-align:right;">🏢 {f["NomeFilial"]}</th>'
-        html_table += '<th style="text-align:right;">📊 Total</th></tr></thead><tbody>'
-        
-        def add_row(label, key, opts={}):
-            cls = opts.get("cls", "")
-            bold = opts.get("bold", False)
-            label_fmt = f"<strong>{label}</strong>" if bold else label
-            html_row = f'<tr class="{cls}"><td style="text-align:left; padding-left:8px;">{label_fmt}</td>'
-            total = 0
+            atacado = df_trib[df_trib["CodFilial"] == 5]
+            pb = df_trib[(df_trib["CodFilial"] != 4) & (df_trib["CodFilial"] != 5)].sort_values("NomeFilial")
+            srb = df_trib[df_trib["CodFilial"] == 4]
+            colunas = pd.concat([atacado, pb, srb])
+            
+            html_table = '<div class="tabela-wrapper"><table class="tributos-tabela">'
+            html_table += '<thead><tr><th style="text-align:left;">Operação</th>'
             for _, f in colunas.iterrows():
-                val = f[key] if key else 0
-                total += val
-                if "fmt" in opts:
-                    val_str = opts["fmt"](val, f)
+                html_table += f'<th style="text-align:right;">🏢 {f["NomeFilial"]}</th>'
+            html_table += '<th style="text-align:right;">📊 Total</th></tr></thead><tbody>'
+            
+            def add_row(label, key, opts={}):
+                cls = opts.get("cls", "")
+                bold = opts.get("bold", False)
+                label_fmt = f"<strong>{label}</strong>" if bold else label
+                html_row = f'<tr class="{cls}"><td style="text-align:left; padding-left:8px;">{label_fmt}</td>'
+                total = 0
+                for _, f in colunas.iterrows():
+                    val = f[key] if key else 0
+                    total += val
+                    if "fmt" in opts:
+                        val_str = opts["fmt"](val, f)
+                    else:
+                        val_str = formatar_moeda(val)
+                    if key == "resultado":
+                        val_str = formatar_moeda(val) if val >= 0 else f"-{formatar_moeda(abs(val))}"
+                    html_row += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
+                    
+                if opts.get("hide_total"):
+                    total_str = ""
                 else:
-                    val_str = formatar_moeda(val)
-                if key == "resultado":
-                    val_str = formatar_moeda(val) if val >= 0 else f"-{formatar_moeda(abs(val))}"
-                html_row += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
-                
-            if opts.get("hide_total"):
-                total_str = ""
-            else:
-                if key == "resultado":
-                    total_str = formatar_moeda(total) if total >= 0 else f"-{formatar_moeda(abs(total))}"
-                else:
-                    total_str = formatar_moeda(total)
-            html_row += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
-            return html_row
-        
-        # SAÍDAS
-        html_table += '<tr class="grupo-titulo"><td colspan="' + str(len(colunas) + 2) + '">▼ SAÍDAS</td></tr>'
-        html_table += add_row("Valor Vendas Bruto", "VendasBruto")
-        html_table += add_row("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"})
-        html_table += add_row("Valor Vendas Líquido", "vendasLiquido", {"bold": True})
-        html_table += add_row("Tributo Vendas Integral", "tributoVendasIntegral", {
-            "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctVendasEfetivo']:.2f}%)"
-        })
-        html_table += add_row("Tributo Vendas Adicional", "tributoVendasAdicional", {
-            "fmt": lambda v, f: f"{formatar_moeda(v)} (0.00%)"
-        })
-        html_table += add_row("Valor Transferências Enviadas", "TransfEnvTotal")
-        html_table += add_row("Tributo Transferências Enviadas", "icmsTransfEnv", {
-            "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
-        })
-        html_table += add_row("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"})
-        html_table += add_row("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"})
-        html_table += add_row("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"})
-        html_table += add_row("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
-        
-        # ENTRADAS
-        html_table += '<tr class="grupo-titulo"><td colspan="' + str(len(colunas) + 2) + '">▼ ENTRADAS</td></tr>'
-        html_table += add_row("Valor Compras", "ComprasTotal")
-        html_table += add_row("Tributo Compras", "ICMS_Compras")
-        html_table += add_row("Valor Transferências Recebidas", "TransfRecTotal")
-        html_table += add_row("Tributo Transferências Recebidas", "ICMS_TransfRec")
-        html_table += add_row("Tributos Antecipados", "TributosAntecipados")
-        html_table += add_row("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"})
-        html_table += add_row("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"})
-        html_table += add_row("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"})
-        html_table += add_row("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
-        
-        # RESULTADO
-        html_table += '<tr class="grupo-titulo"><td colspan="' + str(len(colunas) + 2) + '">▼ RESULTADO</td></tr>'
-        html_table += add_row("Resultado", "resultado", {"bold": True, "cls": "resultado"})
-        
-        html_table += '</tbody></table></div>'
-        
-        # CARDS
-        tot_atacado_deb = atacado["debitoICMS"].sum() if not atacado.empty else 0
-        tot_atacado_cred = atacado["creditoICMS"].sum() if not atacado.empty else 0
-        saldo_atacado = tot_atacado_cred - tot_atacado_deb
+                    if key == "resultado":
+                        total_str = formatar_moeda(total) if total >= 0 else f"-{formatar_moeda(abs(total))}"
+                    else:
+                        total_str = formatar_moeda(total)
+                html_row += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
+                return html_row
+            
+            # SAÍDAS
+            html_table += '<tr class="grupo-titulo"><td colspan="' + str(len(colunas) + 2) + '">▼ SAÍDAS</td></tr>'
+            html_table += add_row("Valor Vendas Bruto", "VendasBruto")
+            html_table += add_row("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"})
+            html_table += add_row("Valor Vendas Líquido", "vendasLiquido", {"bold": True})
+            html_table += add_row("Tributo Vendas Integral", "tributoVendasIntegral", {
+                "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctVendasEfetivo']:.2f}%)"
+            })
+            html_table += add_row("Tributo Vendas Adicional", "tributoVendasAdicional", {
+                "fmt": lambda v, f: f"{formatar_moeda(v)} (0.00%)"
+            })
+            html_table += add_row("Valor Transferências Enviadas", "TransfEnvTotal")
+            html_table += add_row("Tributo Transferências Enviadas", "icmsTransfEnv", {
+                "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
+            })
+            html_table += add_row("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"})
+            html_table += add_row("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"})
+            html_table += add_row("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"})
+            html_table += add_row("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
+            
+            # ENTRADAS
+            html_table += '<tr class="grupo-titulo"><td colspan="' + str(len(colunas) + 2) + '">▼ ENTRADAS</td></tr>'
+            html_table += add_row("Valor Compras", "ComprasTotal")
+            html_table += add_row("Tributo Compras", "ICMS_Compras")
+            html_table += add_row("Valor Transferências Recebidas", "TransfRecTotal")
+            html_table += add_row("Tributo Transferências Recebidas", "ICMS_TransfRec")
+            html_table += add_row("Tributos Antecipados", "TributosAntecipados")
+            html_table += add_row("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"})
+            html_table += add_row("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"})
+            html_table += add_row("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"})
+            html_table += add_row("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
+            
+            # RESULTADO
+            html_table += '<tr class="grupo-titulo"><td colspan="' + str(len(colunas) + 2) + '">▼ RESULTADO</td></tr>'
+            html_table += add_row("Resultado", "resultado", {"bold": True, "cls": "resultado"})
+            
+            html_table += '</tbody></table></div>'
+            
+            # CARDS
+            tot_atacado_deb = atacado["debitoICMS"].sum() if not atacado.empty else 0
+            tot_atacado_cred = atacado["creditoICMS"].sum() if not atacado.empty else 0
+            saldo_atacado = tot_atacado_cred - tot_atacado_deb
 
-        tot_pb_deb = pb["debitoICMS"].sum() if not pb.empty else 0
-        tot_pb_cred = pb["creditoICMS"].sum() if not pb.empty else 0
-        saldo_pb = tot_pb_cred - tot_pb_deb
+            tot_pb_deb = pb["debitoICMS"].sum() if not pb.empty else 0
+            tot_pb_cred = pb["creditoICMS"].sum() if not pb.empty else 0
+            saldo_pb = tot_pb_cred - tot_pb_deb
 
-        tot_srb_deb = srb["debitoICMS"].sum() if not srb.empty else 0
-        tot_srb_cred = srb["creditoICMS"].sum() if not srb.empty else 0
-        saldo_srb = tot_srb_cred - tot_srb_deb
+            tot_srb_deb = srb["debitoICMS"].sum() if not srb.empty else 0
+            tot_srb_cred = srb["creditoICMS"].sum() if not srb.empty else 0
+            saldo_srb = tot_srb_cred - tot_srb_deb
 
-        saldo_cons = saldo_atacado + saldo_pb + saldo_srb
-        
-        html_cards = '<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:20px;">'
-        def card(title, val):
-            cor = "#3fb950" if val >= 0 else "#f85149"
-            return f'''<div class="tributos-resultado" style="flex:1; min-width:150px; margin:0 8px; padding:12px; border: 2px solid {cor}; border-radius: 8px; text-align: center; background: #1c2333;">
-                <div style="font-size:14px; color: #c9d1d9; font-weight: 600;">{title}</div>
-                <div style="font-size:24px; font-weight: bold; color: {cor}; margin-top: 5px;">{formatar_moeda(val)}</div>
-            </div>'''
-        html_cards += card('📊 Resultado PB - ATACADO', saldo_atacado)
-        html_cards += card('📊 Resultado PB - FILIAIS', saldo_pb)
-        html_cards += card('📊 Resultado SRB', saldo_srb)
-        html_cards += card('📊 Consolidado', saldo_cons)
-        html_cards += '</div>'
-        
-        st.markdown(html_table, unsafe_allow_html=True)
-        st.markdown(html_cards, unsafe_allow_html=True)
+            saldo_cons = saldo_atacado + saldo_pb + saldo_srb
+            
+            html_cards = '<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:20px;">'
+            def card(title, val):
+                cor = "#3fb950" if val >= 0 else "#f85149"
+                return f'''<div class="tributos-resultado" style="flex:1; min-width:150px; margin:0 8px; padding:12px; border: 2px solid {cor}; border-radius: 8px; text-align: center; background: #1c2333;">
+                    <div style="font-size:14px; color: #c9d1d9; font-weight: 600;">{title}</div>
+                    <div style="font-size:24px; font-weight: bold; color: {cor}; margin-top: 5px;">{formatar_moeda(val)}</div>
+                </div>'''
+            html_cards += card('📊 Resultado PB - ATACADO', saldo_atacado)
+            html_cards += card('📊 Resultado PB - FILIAIS', saldo_pb)
+            html_cards += card('📊 Resultado SRB', saldo_srb)
+            html_cards += card('📊 Consolidado', saldo_cons)
+            html_cards += '</div>'
+            
+            st.markdown(html_table, unsafe_allow_html=True)
+            st.markdown(html_cards, unsafe_allow_html=True)
