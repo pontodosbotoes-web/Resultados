@@ -34,10 +34,35 @@ st.markdown("""
         .depto-valor { font-size: 16px; color: #58a6ff; font-weight: 700; background: rgba(88,166,255,0.1); padding: 2px 10px; border-radius: 15px;}
         
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
+
+        /* ESTILO DO BOTÃO ATUALIZAR (VERDE) */
+        div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"] {
+            background-color: #238636 !important;
+            color: #ffffff !important;
+            border: 1px solid #238636 !important;
+            transition: all 0.2s;
+        }
+        div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]:hover {
+            background-color: #2ea043 !important;
+            border-color: #2ea043 !important;
+            box-shadow: 0 0 10px rgba(46, 160, 67, 0.4) !important;
+        }
+
+        /* ESTILO DO BOTÃO LIMPAR (VERMELHO) */
+        div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"] {
+            background-color: #da3633 !important;
+            color: #ffffff !important;
+            border: 1px solid #da3633 !important;
+            transition: all 0.2s;
+        }
+        div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"]:hover {
+            background-color: #f85149 !important;
+            border-color: #f85149 !important;
+            box-shadow: 0 0 10px rgba(248, 81, 73, 0.4) !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-# Definições Globais (para não depender de nenhuma aba específica)
 try:
     tz_br = ZoneInfo("America/Sao_Paulo")
 except:
@@ -327,10 +352,9 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (COM PORCENTAGEM E PROTEÇÃO)
+# ABA COMPRAS
 # ==========================================
 with tab_compras:
-    # Garante que a lista foi carregada corretamente
     try:
         lista_fornecedores = carregar_fornecedores()
     except Exception:
@@ -341,7 +365,6 @@ with tab_compras:
     if "filial_compras" not in st.session_state: st.session_state["filial_compras"] = "Todas"
     if "fornecedor_compras" not in st.session_state: st.session_state["fornecedor_compras"] = "Todos"
 
-    # PROTEÇÃO: Se o fornecedor que estava salvo na memória não existe mais na lista nova, volta para "Todos"
     if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
         st.session_state["fornecedor_compras"] = "Todos"
 
@@ -386,7 +409,6 @@ with tab_compras:
             df_compras['Mes_Nome'] = df_compras['Mes'].map(meses_map)
             meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-            # --- CARDS NO TOPO (TOTAL E DEPARTAMENTOS) ---
             cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff", "")]
             cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
             
@@ -413,7 +435,6 @@ with tab_compras:
             st.write("")
             st.markdown("---")
 
-            # --- TABELAS SEPARADAS POR DEPARTAMENTO ---
             for _, row in df_tot_depto.iterrows():
                 depto = row['Departamento']
                 val_depto = row['Valor']
