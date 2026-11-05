@@ -492,14 +492,14 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
             row_cells = [Paragraph(fornecedor, cell_bold_left if is_total else cell_left)]
             for m in meses_colunas + ['Total']:
                 val = r[m]
-                # AQUI FOI TROCADO PARA formatar_numero (SEM R$)
+                # SEM R$ NO PDF DE COMPRAS
                 val_str = formatar_numero(val) if val != 0 else "-"
                 row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
             table_data.append(row_cells)
 
         elements.append(Paragraph(f"<b>■ Departamento: {depto}</b>", styles['Heading3']))
         
-        # LARGURAS AJUSTADAS PARA OCUPAR TODA A FOLHA (800pt total)
+        # LARGURAS OCUPANDO TODA A FOLHA
         col_widths = [180] + [45] * len(meses_colunas) + [80]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
         t.setStyle(TableStyle([
@@ -565,7 +565,7 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
                 try:
                     val_str = opts['fmt'](val, f)
                 except:
-                    val_str = formatar_moeda(val) # Mantém R$ no PDF de Tributos conforme padrão anterior
+                    val_str = formatar_moeda(val)
             else:
                 val_str = formatar_moeda(val)
             
@@ -589,7 +589,6 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     for label, key, opts in all_rows:
         table_data.append(add_row_to_data(label, key, opts))
     
-    # LARGURAS AJUSTADAS PARA OCUPAR TODA A FOLHA (800pt total)
     col_widths = [180] + [110] * len(colunas) + [80]
     t = Table(table_data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
@@ -644,9 +643,9 @@ with tab_compras:
     fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
     
     with c5:
-        btn_compras = st.button("🔄 Atualizar", use_container_width=True, type="primary")
+        btn_compras = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_compras")
     with c6:
-        st.button("🧹 Limpar", use_container_width=True, on_click=limpar_compras)
+        st.button("🧹 Limpar", use_container_width=True, on_click=limpar_compras, key="btn_limpar_compras")
 
     if "df_compras" not in st.session_state or btn_compras:
         filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
@@ -778,9 +777,9 @@ with tab_tributos:
     data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
 
     with c3:
-        btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary")
+        btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_trib")
     with c4:
-        st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos)
+        st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos, key="btn_limpar_trib")
 
     if "df_trib" not in st.session_state or btn_atualizar:
         with st.spinner("Carregando dados tributários..."):
