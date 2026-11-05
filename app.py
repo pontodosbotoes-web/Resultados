@@ -16,9 +16,11 @@ st.markdown("""
         #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;}
         .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 100% !important; background-color: #0d1117; }
         
-        .titulo-pagina { font-size: 24px; font-weight: 700; text-align: center; color: #f0f6fc; padding-bottom: 15px; border-bottom: 2px solid #30363d; margin-bottom: 20px; }
+        /* Removida a borda inferior do título principal */
+        .titulo-pagina { font-size: 24px; font-weight: 700; text-align: center; color: #f0f6fc; padding-bottom: 10px; margin-bottom: 10px; }
         
-        .tema-titulo { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #30363d; padding-bottom: 6px; }
+        /* Mantida a borda apenas nos subtítulos de seção para organizar os gráficos */
+        .tema-titulo { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-top: 20px; margin-bottom: 12px; padding-bottom: 6px; }
         
         .card-item { border-radius: 10px; padding: 12px 14px 6px 14px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: 0.2s; margin-bottom: 10px;}
         .card-item:hover { filter: brightness(1.2); }
@@ -456,7 +458,7 @@ with tab_compras:
                             </div>
                         ''', unsafe_allow_html=True)
             
-            st.write("") # Apenas o respiro visual, sem a linha divisória
+            st.write("")
 
             for _, row in df_tot_depto.iterrows():
                 depto = row['Departamento']
@@ -631,7 +633,7 @@ with tab_tributos:
             render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
             render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
             
-            st.write("") # Respiro visual sem a linha divisória
+            st.write("") 
             
             # --- 2. SUB-ABAS PARA AS TABELAS ---
             def build_trib_table(rows_list):
