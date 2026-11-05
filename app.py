@@ -545,8 +545,6 @@ class NumberedCanvas(canvas.Canvas):
         self.setFont("Helvetica", 8)
         self.setFillColor(colors.HexColor('#64748B'))
         page_text = f"página {self._pageNumber} de {page_count}"
-        # A4 Paisagem: largura = 841.89
-        # Desenha no canto inferior direito (margem de 20)
         self.drawRightString(landscape(A4)[0] - 20, 15, page_text)
 
 # ==========================================
@@ -601,9 +599,9 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
                 try:
                     val_str = opts['fmt'](val, f)
                 except:
-                    val_str = formatar_moeda(val)
+                    val_str = formatar_moeda(val) # PDF mantém R$ padrão ERP
             else:
-                val_str = formatar_moeda(val)
+                val_str = formatar_moeda(val) # PDF mantém R$ padrão ERP
             
             if key == 'resultado':
                 if val < 0:
@@ -625,7 +623,6 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     for label, key, opts in all_rows:
         table_data.append(add_row_to_data(label, key, opts))
     
-    # LARGURAS AJUSTADAS PARA NÃO QUEBRAR AS COLUNAS
     col_widths = [150] + [100] * len(colunas) + [100]
     t = Table(table_data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
@@ -656,31 +653,15 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     return buffer
 
 # ==========================================
-# ABA TRIBUTOS
+# ABA TRIBUTOS (FORMULÁRIO PARA EVITAR PISCADAS)
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
-    # Filtros e Botões
-    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.5], vertical_alignment="bottom")
-    data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
-    data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
-
-    # Botões de Ação no topo
-    with c3:
-        btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary")
-    with c4:
-        btn_limpar = st.button("🧹 Limpar", use_container_width=True)
-
-    if btn_limpar:
-        for k in ["dt_ini_trib", "dt_fim_trib"]:
-            if k in st.session_state: del st.session_state[k]
-        st.rerun()
-
-    # Carregar Dados
+    # Carrega dados baseado no estado atual
     with st.spinner("Carregando dados tributários..."):
-        df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
+        df_trib = buscar_tributos(st.session_state["dt_ini_trib"].strftime("%Y-%m-%d"), st.session_state["dt_fim_trib"].strftime("%Y-%m-%d"))
         
     pdf_bytes = None
     if df_trib.empty:
@@ -706,7 +687,7 @@ with tab_tributos:
         else:
             df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
             
-            # --- VETORIZAÇÃO (RÁPIDO) ---
+            # --- VETORIZAÇÃO ---
             df_trib["tributoVendasIntegral"] = df_trib["ICMS_Vendas"]
             df_trib["pctVendasEfetivo"] = (df_trib["ICMS_Vendas"] / df_trib["VendasBruto"] * 100).fillna(0)
             df_trib["tributoVendasAdicional"] = 0.0
@@ -767,7 +748,7 @@ with tab_tributos:
             srb = df_trib[df_trib["CodFilial"] == 4]
             colunas = pd.concat([atacado, pb, srb])
             
-            # AQUI FOI TROCADO formatar_moeda POR formatar_numero
+            # Listas de linhas (usando formatar_numero para as tabelas web)
             rows_saidas = [
                 ("Valor Vendas Bruto", "VendasBruto", {}),
                 ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
@@ -805,22 +786,8 @@ with tab_tributos:
             ]
 
             # GERA O PDF
-            pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
+            pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, st.session_state["dt_ini_trib"], st.session_state["dt_fim_trib"])
             
-            # NOME DO ARQUIVO
-            timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-            nome_arquivo = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
-
-            # BOTÃO DE DOWNLOAD (GERAR PDF) na coluna c5
-            with c5:
-                st.download_button(
-                    label="📄 Gerar PDF",
-                    data=pdf_bytes,
-                    file_name=nome_arquivo,
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-
             # RENDERIZA OS CARDS E TABELAS
             saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
             saldo_pb = pb["resultado"].sum() if not pb.empty else 0
@@ -866,7 +833,7 @@ with tab_tributos:
                         if "fmt" in opts:
                             val_str = opts["fmt"](val, f)
                         else:
-                            val_str = formatar_numero(val)
+                            val_str = formatar_numero(val) # Sem R$ na tabela
                         if key == "resultado":
                             val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
                         html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
@@ -874,7 +841,7 @@ with tab_tributos:
                     if key == "resultado":
                         total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
                     else:
-                        total_str = formatar_numero(total)
+                        total_str = formatar_numero(total) # Sem R$ na tabela
                     html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
                 
                 html += '</tbody></table></div>'
@@ -890,3 +857,31 @@ with tab_tributos:
 
             with tab_resultado:
                 st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
+
+    # Formulário de filtros e botões (renderizado por último para não piscar)
+    with st.form(key="form_tributos"):
+        c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.5], vertical_alignment="bottom")
+        data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
+        data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
+        
+        with c3:
+            btn_atualizar = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
+        with c4:
+            btn_limpar = st.form_submit_button("🧹 Limpar", use_container_width=True)
+        
+        with c5:
+            if pdf_bytes:
+                timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                nome_arquivo = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
+                st.download_button(
+                    label="📄 Gerar PDF",
+                    data=pdf_bytes,
+                    file_name=nome_arquivo,
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+
+    if btn_limpar:
+        for k in ["dt_ini_trib", "dt_fim_trib"]:
+            if k in st.session_state: del st.session_state[k]
+        st.rerun()
