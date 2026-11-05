@@ -101,6 +101,9 @@ tab_visao, tab_compras, tab_tributos = st.tabs(["💰 Vendas", "🛒 Compras", "
 def formatar_moeda(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+def formatar_numero(v):
+    return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 def formatar_decimal(v):
     return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
@@ -637,7 +640,7 @@ with tab_tributos:
                 html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
                 html += '<thead><tr><th style="text-align:left;">Operação</th>'
                 for _, f in colunas.iterrows():
-                    html += f'<th style="text-align:right;">🏢 {f["NomeFilial"]}</th>'
+                    html += f'<th style="text-align:right;">{f["NomeFilial"]}</th>'
                 html += '<th style="text-align:right;">📊 Total</th></tr></thead><tbody>'
                 
                 for label, key, opts in rows_list:
@@ -652,21 +655,21 @@ with tab_tributos:
                         if "fmt" in opts:
                             val_str = opts["fmt"](val, f)
                         else:
-                            val_str = formatar_moeda(val)
+                            val_str = formatar_numero(val)
                         if key == "resultado":
-                            val_str = formatar_moeda(val) if val >= 0 else f"-{formatar_moeda(abs(val))}"
+                            val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
                         html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
                         
                     if key == "resultado":
-                        total_str = formatar_moeda(total) if total >= 0 else f"-{formatar_moeda(abs(total))}"
+                        total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
                     else:
-                        total_str = formatar_moeda(total)
+                        total_str = formatar_numero(total)
                     html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
                 
                 html += '</tbody></table></div>'
                 return html
 
-            tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Tabela de Saídas", "📈 Tabela de Entradas", "📊 Tabela de Resultado"])
+            tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
             
             with tab_saidas:
                 rows_saidas = [
@@ -674,14 +677,14 @@ with tab_tributos:
                     ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
                     ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
                     ("Tributo Vendas Integral", "tributoVendasIntegral", {
-                        "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctVendasEfetivo']:.2f}%)"
+                        "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"
                     }),
                     ("Tributo Vendas Adicional", "tributoVendasAdicional", {
-                        "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctAdicional']:.2f}%)"
+                        "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"
                     }),
                     ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
                     ("Tributo Transferências Enviadas", "icmsTransfEnv", {
-                        "fmt": lambda v, f: f"{formatar_moeda(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
+                        "fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"
                     }),
                     ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
                     ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
