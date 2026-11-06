@@ -73,6 +73,7 @@ st.markdown("""
             color: #ffffff !important;
             border: 1px solid #1f6feb !important;
             transition: all 0.2s;
+            height: 42px !important;
         }
         div[data-testid="stDownloadButton"] button:hover {
             background-color: #388bfd !important;
@@ -112,6 +113,20 @@ hoje = datetime.now(tz_br).date() if tz_br else date.today()
 filiais_dict = carregar_filiais()
 filiais_inv = {v: k for k, v in filiais_dict.items()}
 NOMES_FILIAIS = {1: "PB - ALECRIM", 2: "PB - VIA DIRETA", 3: "PB - ZONA SUL", 4: "SRB - ZONA NORTE", 5: "PB - ATACADO"}
+
+def limpar_compras():
+    st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
+    st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
+    st.session_state["filial_compras"] = "Todas"
+    st.session_state["fornecedor_compras"] = "Todos"
+    if "df_compras" in st.session_state: del st.session_state["df_compras"]
+    if "pdf_bytes_comp" in st.session_state: del st.session_state["pdf_bytes_comp"]
+
+def limpar_tributos():
+    st.session_state["dt_ini_trib"] = hoje.replace(day=1)
+    st.session_state["dt_fim_trib"] = hoje
+    if "df_trib" in st.session_state: del st.session_state["df_trib"]
+    if "pdf_bytes_trib" in st.session_state: del st.session_state["pdf_bytes_trib"]
 
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
 
@@ -484,7 +499,7 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
 
         elements.append(Paragraph(f"<b>■ Departamento: {depto}</b>", styles['Heading3']))
         
-        col_widths = [130] + [50] * len(meses_colunas) + [70]
+        col_widths = [120] + [52] * len(meses_colunas) + [57]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
@@ -603,7 +618,7 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     return buffer
 
 # ==========================================
-# ABA COMPRAS (COM FORM PARA EVITAR PISCADAS)
+# ABA COMPRAS (FORM + ALINHAMENTO DO PDF)
 # ==========================================
 with tab_compras:
     try:
@@ -619,9 +634,10 @@ with tab_compras:
     if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
         st.session_state["fornecedor_compras"] = "Todos"
 
-    c_filtros, c_pdf = st.columns([5, 1], vertical_alignment="bottom")
+    # Divide a tela em Form (coluna grande) e Botão PDF (coluna pequena)
+    col_form, col_pdf = st.columns([6.5, 1.5], vertical_alignment="bottom")
     
-    with c_filtros:
+    with col_form:
         with st.form(key="form_compras_filtros"):
             c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1.2, 1.5, 1, 1], vertical_alignment="bottom")
             
@@ -665,9 +681,9 @@ with tab_compras:
                 st.session_state["df_compras"] = df_compras
                 st.session_state["pdf_bytes_comp"] = None
 
-    with c_pdf:
-        st.write("") # Alinhamento com os botões do form
-        st.write("") # Alinhamento com os botões do form
+    with col_pdf:
+        # Empurra o botão para alinhar com os botões de dentro do form
+        st.markdown('<div style="margin-bottom: 27px;"></div>', unsafe_allow_html=True)
         pdf_bytes_comp = st.session_state.get("pdf_bytes_comp")
         if pdf_bytes_comp:
             timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
@@ -770,9 +786,9 @@ with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
-    c_filtros_t, c_pdf_t = st.columns([5, 1], vertical_alignment="bottom")
+    col_form_t, col_pdf_t = st.columns([6.5, 1.5], vertical_alignment="bottom")
     
-    with c_filtros_t:
+    with col_form_t:
         with st.form(key="form_tributos_filtros"):
             c1, c2, c3, c4 = st.columns([1, 1, 1, 1], vertical_alignment="bottom")
             data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
@@ -894,9 +910,8 @@ with tab_tributos:
                 st.session_state["df_trib"] = df_trib
                 st.session_state["pdf_bytes_trib"] = None
 
-    with c_pdf_t:
-        st.write("")
-        st.write("")
+    with col_pdf_t:
+        st.markdown('<div style="margin-bottom: 27px;"></div>', unsafe_allow_html=True)
         pdf_bytes_t = st.session_state.get("pdf_bytes_trib")
         if pdf_bytes_t:
             timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
