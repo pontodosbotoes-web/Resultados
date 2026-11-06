@@ -338,7 +338,6 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
     filiais_ordem = [5, 1, 2, 3, 4] # Atacado, Alecrim, Via Direta, Zona Sul, SRB
     headers = ['Operação'] + [NOMES_FILIAIS[f] for f in filiais_ordem] + ['Total']
     
-    # Calcula os totais
     tot_vendas = df_vendas["ValorVenda"].sum()
     tot_trans = df_vendas["QtdVendas"].sum()
     tot_itens = df_vendas["QtdItens"].sum()
@@ -639,7 +638,7 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     return buffer
 
 # ==========================================
-# ABA VENDAS (COM PDF E BOTOES ALINHADOS)
+# ABA VENDAS (COM BOTOES AGRUPADOS NA MESMA COLUNA)
 # ==========================================
 with tab_visao:
     if "dt_ini_visao" not in st.session_state: st.session_state["dt_ini_visao"] = hoje
@@ -648,7 +647,7 @@ with tab_visao:
     if "h_fim_visao" not in st.session_state: st.session_state["h_fim_visao"] = datetime.strptime("23:59", "%H:%M").time()
     if "filial_visao" not in st.session_state: st.session_state["filial_visao"] = "Todas"
 
-    c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 1, 1, 1, 1, 1, 1.2], vertical_alignment="bottom")
+    c1, c2, c3, c4, c5, c_acoes = st.columns([1, 1, 1, 1, 1.2, 2.5], vertical_alignment="bottom")
     
     data_ini = c1.date_input("De:", key="dt_ini_visao", format="DD/MM/YYYY")
     data_fim = c2.date_input("Até:", key="dt_fim_visao", format="DD/MM/YYYY")
@@ -656,11 +655,27 @@ with tab_visao:
     h_fim = c4.time_input("Até:", key="h_fim_visao")
     filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_visao")
     
-    with c6:
-        btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_visao")
-    
-    with c7:
-        st.button("🧹 Limpar", use_container_width=True, on_click=limpar_vendas, key="btn_limpar_visao")
+    with c_acoes:
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_visao")
+        with col_b2:
+            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_vendas, key="btn_limpar_visao")
+        with col_b3:
+            pdf_bytes_visao = st.session_state.get("pdf_bytes_vendas")
+            if pdf_bytes_visao:
+                timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                nome_arquivo_visao = f"Acompanhamento Gerencial - Vendas {timestamp_str}.pdf"
+                st.download_button(
+                    label="📄 Gerar PDF",
+                    data=pdf_bytes_visao,
+                    file_name=nome_arquivo_visao,
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="btn_pdf_vendas"
+                )
+            else:
+                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_vendas_disabled")
 
     if "df_vendas" not in st.session_state or btn_atualizar:
         filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
@@ -684,27 +699,6 @@ with tab_visao:
         except Exception as e:
             st.error(f"Erro ao carregar dados de vendas: {e}")
             st.stop()
-
-    # Botão de PDF na coluna 7 (ocupa o espaço ao lado do Limpar, mas fora dos botões principais)
-    # Para alinhar perfeitamente, colocamos o botão de download na mesma linha visual
-    with c7:
-        # Empurra o botão para alinhar com os outros (mesmo height)
-        st.markdown('<div style="margin-bottom: 0px;"></div>', unsafe_allow_html=True)
-        
-        pdf_bytes_vendas = st.session_state.get("pdf_bytes_vendas")
-        if pdf_bytes_vendas:
-            timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-            nome_arquivo = f"Acompanhamento Gerencial - Vendas {timestamp_str}.pdf"
-            st.download_button(
-                label="📄 Gerar PDF",
-                data=pdf_bytes_vendas,
-                file_name=nome_arquivo,
-                mime="application/pdf",
-                use_container_width=True,
-                key="btn_pdf_vendas"
-            )
-        else:
-            st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_vendas_disabled")
 
     df_vendas = st.session_state.get("df_vendas", pd.DataFrame())
     df_depto = st.session_state.get("df_depto_vendas", pd.DataFrame())
@@ -818,7 +812,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (SEM FORM, BOTOES ALINHADOS)
+# ABA COMPRAS (COM BOTOES AGRUPADOS NA MESMA COLUNA)
 # ==========================================
 with tab_compras:
     try:
@@ -834,17 +828,34 @@ with tab_compras:
     if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
         st.session_state["fornecedor_compras"] = "Todos"
 
-    c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 1, 1.2, 1.5, 1, 1, 1.2], vertical_alignment="bottom")
+    c1, c2, c3, c4, c_acoes = st.columns([1, 1, 1.2, 1.5, 2.5], vertical_alignment="bottom")
     
     data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
     data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
     filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
     fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
     
-    with c5:
-        btn_compras = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_compras")
-    with c6:
-        st.button("🧹 Limpar", use_container_width=True, on_click=limpar_compras, key="btn_limpar_compras")
+    with c_acoes:
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            btn_compras = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_compras")
+        with col_b2:
+            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_compras, key="btn_limpar_compras")
+        with col_b3:
+            pdf_bytes_comp = st.session_state.get("pdf_bytes_comp")
+            if pdf_bytes_comp:
+                timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                nome_arquivo_comp = f"Acompanhamento Gerencial - Compras {timestamp_str}.pdf"
+                st.download_button(
+                    label="📄 Gerar PDF",
+                    data=pdf_bytes_comp,
+                    file_name=nome_arquivo_comp,
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="btn_pdf_compras"
+                )
+            else:
+                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_compras_disabled")
 
     if "df_compras" not in st.session_state or btn_compras:
         filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
@@ -870,22 +881,6 @@ with tab_compras:
         except Exception as e:
             st.error(f"Erro ao carregar compras: {e}")
             st.stop()
-
-    with c7:
-        pdf_bytes_comp = st.session_state.get("pdf_bytes_comp")
-        if pdf_bytes_comp:
-            timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-            nome_arquivo = f"Acompanhamento Gerencial - Compras {timestamp_str}.pdf"
-            st.download_button(
-                label="📄 Gerar PDF",
-                data=pdf_bytes_comp,
-                file_name=nome_arquivo,
-                mime="application/pdf",
-                use_container_width=True,
-                key="btn_pdf_compras"
-            )
-        else:
-            st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_compras_disabled")
 
     df_compras = st.session_state.get("df_compras", pd.DataFrame())
     if df_compras.empty:
@@ -968,21 +963,38 @@ with tab_compras:
                     )
 
 # ==========================================
-# ABA TRIBUTOS (SEM FORM, BOTOES ALINHADOS)
+# ABA TRIBUTOS (COM BOTOES AGRUPADOS NA MESMA COLUNA)
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
-    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.2], vertical_alignment="bottom")
+    c1, c2, c_acoes = st.columns([1, 1, 2.5], vertical_alignment="bottom")
     
     data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
     data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
 
-    with c3:
-        btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_trib")
-    with c4:
-        st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos, key="btn_limpar_trib")
+    with c_acoes:
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_trib")
+        with col_b2:
+            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos, key="btn_limpar_trib")
+        with col_b3:
+            pdf_bytes_t = st.session_state.get("pdf_bytes_trib")
+            if pdf_bytes_t:
+                timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                nome_arquivo_t = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
+                st.download_button(
+                    label="📄 Gerar PDF",
+                    data=pdf_bytes_t,
+                    file_name=nome_arquivo_t,
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="btn_pdf_trib"
+                )
+            else:
+                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_trib_disabled")
 
     if "df_trib" not in st.session_state or btn_atualizar:
         try:
@@ -1094,22 +1106,6 @@ with tab_tributos:
         except Exception as e:
             st.error(f"Erro ao carregar tributos: {e}")
             st.stop()
-
-    with c5:
-        pdf_bytes_t = st.session_state.get("pdf_bytes_trib")
-        if pdf_bytes_t:
-            timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-            nome_arquivo_t = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
-            st.download_button(
-                label="📄 Gerar PDF",
-                data=pdf_bytes_t,
-                file_name=nome_arquivo_t,
-                mime="application/pdf",
-                use_container_width=True,
-                key="btn_pdf_trib"
-            )
-        else:
-            st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_trib_disabled")
 
     df_trib = st.session_state.get("df_trib", pd.DataFrame())
     if df_trib.empty:
