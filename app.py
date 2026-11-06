@@ -300,54 +300,72 @@ class NumberedCanvas(canvas.Canvas):
         self.setFont("Helvetica", 8)
         self.setFillColor(colors.HexColor('#64748B'))
         page_text = f"página {self._pageNumber} de {page_count}"
-        # Largura dinâmica: funciona em retrato e paisagem
         self.drawRightString(self._pagesize[0] - 20, 15, page_text)
 
+
 def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
+    """Gera PDF de vendas em A4 RETRATO, compacto para caber em 1 página."""
     buffer = BytesIO()
     page_size = portrait(A4)
     margin_lr = 20
-    usable_width = page_size[0] - (margin_lr * 2)  # ~555pt em A4 retrato
+    usable_width = page_size[0] - (margin_lr * 2)
 
     doc = SimpleDocTemplate(
         buffer,
         pagesize=page_size,
         rightMargin=margin_lr,
         leftMargin=margin_lr,
-        topMargin=20,
-        bottomMargin=30,
+        topMargin=15,
+        bottomMargin=22,
     )
     elements = []
     styles = getSampleStyleSheet()
 
-    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=13, spaceAfter=0)
-    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=9, spaceAfter=0)
+    # ---- Estilos compactos ----
+    title_style = ParagraphStyle('Title', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0, spaceBefore=0)
+    period_style = ParagraphStyle('Period', parent=styles['Normal'], alignment=2, fontSize=8, spaceAfter=0)
 
+    # Substitui styles['Heading3'] (que tem 12+12pt de espaço) por um compacto
+    section_heading = ParagraphStyle(
+        'SectionHeading',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        spaceBefore=4,
+        spaceAfter=3,
+        textColor=colors.HexColor('#1E293B'),
+    )
+
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
+    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
+    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=8, alignment=2, fontName='Helvetica-Bold')
+
+    # Padding vertical compacto (padrão das tabelas)
+    PAD_V = 2   # antes era 4
+    PAD_H = 4
+
+    # ---- Cabeçalho ----
     header_data = [[
-        Paragraph("<b>Acompanhamento Gerencial - Vendas</b>", left_style),
-        Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style),
+        Paragraph("<b>Acompanhamento Gerencial - Vendas</b>", title_style),
+        Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", period_style),
     ]]
     header_table = Table(header_data, colWidths=[usable_width * 0.60, usable_width * 0.40])
     header_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (0, 0), 'LEFT'),
         ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
         ('LEFTPADDING', (0, 0), (-1, -1), 0),
         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
     ]))
     elements.append(header_table)
 
-    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
-    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
-    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
-    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=8, alignment=0, fontName='Helvetica-Bold')
-    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=8, alignment=2, fontName='Helvetica-Bold')
+    # ---- 1. RESUMO GERAL ----
+    elements.append(Paragraph("<b>RESUMO GERAL (CONSOLIDADO E POR FILIAL)</b>", section_heading))
 
-    # --- 1. RESUMO GERAL (apenas filiais com movimento) ---
-    elements.append(Paragraph("<b>RESUMO GERAL (CONSOLIDADO E POR FILIAL)</b>", styles['Heading3']))
-
-    filiais_ordem = [5, 1, 2, 3, 4]  # Atacado, Alecrim, Via Direta, Zona Sul, SRB
+    filiais_ordem = [5, 1, 2, 3, 4]
     filiais_ativas = [
         f for f in filiais_ordem
         if df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum() > 0
@@ -384,7 +402,6 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
                 fmt_val = formatar_moeda(val) if "(R$)" in nome else formatar_decimal(val) if "(Qtd)" in nome else str(int(val))
                 row.append(Paragraph(fmt_val, cell_right))
 
-            # Total CORRETO para médias (não soma de médias)
             if nome == "Ticket Médio (R$)":
                 total_val = tot_vendas / tot_trans if tot_trans else 0
             elif nome == "Itens por Venda (R$)":
@@ -398,8 +415,7 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
             row.append(Paragraph(fmt_total, cell_bold_right))
             table_data.append(row)
 
-        # Largura dinâmica — preenche 100% da folha
-        n_numeric = len(filiais_ativas) + 1  # +1 para coluna Total
+        n_numeric = len(filiais_ativas) + 1
         col_operacao = 120
         col_numeric = (usable_width - col_operacao) / n_numeric
         col_widths = [col_operacao] + [col_numeric] * n_numeric
@@ -411,15 +427,17 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V),
+            ('TOPPADDING', (0, 0), (-1, -1), PAD_V),
+            ('LEFTPADDING', (0, 0), (-1, -1), PAD_H),
+            ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H),
         ]))
         elements.append(t)
-        elements.append(Spacer(1, 10))
+        elements.append(Spacer(1, 4))
 
-    # --- 2. DEPARTAMENTOS ---
+    # ---- 2. DEPARTAMENTOS ----
     if not df_depto.empty:
-        elements.append(Paragraph("<b>VENDAS POR DEPARTAMENTO</b>", styles['Heading3']))
+        elements.append(Paragraph("<b>VENDAS POR DEPARTAMENTO</b>", section_heading))
         df_depto_agg = df_depto.groupby("NomeDepto")["ValorVenda"].sum().reset_index().sort_values("ValorVenda", ascending=False)
 
         depto_data = [[Paragraph("Departamento", header_style), Paragraph("Vendas (R$)", header_style)]]
@@ -434,15 +452,17 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V),
+            ('TOPPADDING', (0, 0), (-1, -1), PAD_V),
+            ('LEFTPADDING', (0, 0), (-1, -1), PAD_H),
+            ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H),
         ]))
         elements.append(t_depto)
-        elements.append(Spacer(1, 10))
+        elements.append(Spacer(1, 4))
 
-    # --- 3. FORMAS DE PAGAMENTO ---
+    # ---- 3. FORMAS DE PAGAMENTO ----
     if not df_pag.empty:
-        elements.append(Paragraph("<b>VENDAS POR FORMA DE PAGAMENTO</b>", styles['Heading3']))
+        elements.append(Paragraph("<b>VENDAS POR FORMA DE PAGAMENTO</b>", section_heading))
         df_pag_agg = df_pag.groupby("Denominacao")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
 
         pag_data = [[Paragraph("Forma de Pagamento", header_style), Paragraph("Vendas (R$)", header_style)]]
@@ -457,16 +477,18 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V),
+            ('TOPPADDING', (0, 0), (-1, -1), PAD_V),
+            ('LEFTPADDING', (0, 0), (-1, -1), PAD_H),
+            ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H),
         ]))
         elements.append(t_pag)
-        elements.append(Spacer(1, 10))
+        elements.append(Spacer(1, 4))
 
-        # --- 4. PORTADORES ---
+        # ---- 4. PORTADORES ----
         df_pag_port = df_pag.dropna(subset=["NomePortador"])
         if not df_pag_port.empty:
-            elements.append(Paragraph("<b>VENDAS POR PORTADOR</b>", styles['Heading3']))
+            elements.append(Paragraph("<b>VENDAS POR PORTADOR</b>", section_heading))
             df_port_agg = df_pag_port.groupby("NomePortador")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
 
             port_data = [[Paragraph("Portador", header_style), Paragraph("Vendas (R$)", header_style)]]
@@ -481,14 +503,17 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V),
+                ('TOPPADDING', (0, 0), (-1, -1), PAD_V),
+                ('LEFTPADDING', (0, 0), (-1, -1), PAD_H),
+                ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H),
             ]))
             elements.append(t_port)
 
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer
+
 
 def gerar_pdf_compras(df_compras, data_ini, data_fim):
     buffer = BytesIO()
