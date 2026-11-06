@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from io import BytesIO
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4, landscape, portrait
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -300,154 +300,189 @@ class NumberedCanvas(canvas.Canvas):
         self.setFont("Helvetica", 8)
         self.setFillColor(colors.HexColor('#64748B'))
         page_text = f"página {self._pageNumber} de {page_count}"
-        self.drawRightString(landscape(A4)[0] - 20, 15, page_text)
+        # Usa a largura real da página atual (funciona para retrato e paisagem)
+        self.drawRightString(self._pagesize[0] - 20, 15, page_text)
 
 def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
+    page_size = portrait(A4)
+    margin_lr = 20
+    usable_width = page_size[0] - (margin_lr * 2)  # ~555pt em A4 retrato
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=page_size,
+        rightMargin=margin_lr,
+        leftMargin=margin_lr,
+        topMargin=20,
+        bottomMargin=30,
+    )
     elements = []
     styles = getSampleStyleSheet()
-    
-    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
-    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
-    
-    header_data = [
-        [Paragraph("<b>Acompanhamento Gerencial - Vendas</b>", left_style),
-         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
-    ]
-    header_table = Table(header_data, colWidths=[400, 400])
+
+    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=13, spaceAfter=0)
+    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=9, spaceAfter=0)
+
+    header_data = [[
+        Paragraph("<b>Acompanhamento Gerencial - Vendas</b>", left_style),
+        Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style),
+    ]]
+    header_table = Table(header_data, colWidths=[usable_width * 0.60, usable_width * 0.40])
     header_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (0, 0), 'LEFT'),
         ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
         ('LEFTPADDING', (0, 0), (-1, -1), 0),
         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
     ]))
     elements.append(header_table)
 
-    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=9, alignment=1)
-    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=9, alignment=0)
-    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=9, alignment=2)
-    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=9, alignment=0, fontName='Helvetica-Bold')
-    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=9, alignment=2, fontName='Helvetica-Bold')
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
+    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
+    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=8, alignment=0, fontName='Helvetica-Bold')
+    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=8, alignment=2, fontName='Helvetica-Bold')
 
-    # --- 1. RESUMO GERAL (MÉTRICAS) ---
+    # --- 1. RESUMO GERAL (apenas filiais com movimento) ---
     elements.append(Paragraph("<b>RESUMO GERAL (CONSOLIDADO E POR FILIAL)</b>", styles['Heading3']))
-    
-    filiais_ordem = [5, 1, 2, 3, 4] # Atacado, Alecrim, Via Direta, Zona Sul, SRB
-    headers = ['Operação'] + [NOMES_FILIAIS[f] for f in filiais_ordem] + ['Total']
-    
-    tot_vendas = df_vendas["ValorVenda"].sum()
-    tot_trans = df_vendas["QtdVendas"].sum()
-    tot_itens = df_vendas["QtdItens"].sum()
-    
-    dados_metricas = {
-        "Vendas (R$)": [df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum() for f in filiais_ordem],
-        "Transações (Qtd)": [df_vendas[df_vendas["CodFilial"] == f]["QtdVendas"].sum() for f in filiais_ordem],
-        "Ticket Médio (R$)": [],
-        "Itens (Qtd)": [df_vendas[df_vendas["CodFilial"] == f]["QtdItens"].sum() for f in filiais_ordem],
-        "Itens por Venda (R$)": [],
-        "Itens por Transação (Qtd)": []
-    }
-    
-    for f in filiais_ordem:
-        v = df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum()
-        t = df_vendas[df_vendas["CodFilial"] == f]["QtdVendas"].sum()
-        i = df_vendas[df_vendas["CodFilial"] == f]["QtdItens"].sum()
-        dados_metricas["Ticket Médio (R$)"].append(v / t if t > 0 else 0)
-        dados_metricas["Itens por Venda (R$)"].append(v / i if i > 0 else 0)
-        dados_metricas["Itens por Transação (Qtd)"].append(i / t if t > 0 else 0)
 
-    table_data = [[Paragraph(h, header_style) for h in headers]]
-    for nome, valores in dados_metricas.items():
-        row = [Paragraph(nome, cell_left)]
-        for val in valores:
-            fmt_val = formatar_moeda(val) if "(R$)" in nome else formatar_decimal(val) if "(Qtd)" in nome else str(int(val))
-            row.append(Paragraph(fmt_val, cell_right))
-        
-        total_val = sum(valores)
-        fmt_total = formatar_moeda(total_val) if "(R$)" in nome else formatar_decimal(total_val) if "(Qtd)" in nome else str(int(total_val))
-        row.append(Paragraph(fmt_total, cell_bold_right))
-        table_data.append(row)
+    filiais_ordem = [5, 1, 2, 3, 4]  # Atacado, Alecrim, Via Direta, Zona Sul, SRB
+    filiais_ativas = [
+        f for f in filiais_ordem
+        if df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum() > 0
+    ]
 
-    col_widths = [150] + [100] * len(filiais_ordem) + [100]
-    t = Table(table_data, colWidths=col_widths, repeatRows=1)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-    ]))
-    elements.append(t)
-    elements.append(Spacer(1, 15))
+    if filiais_ativas:
+        headers = ['Operação'] + [NOMES_FILIAIS[f] for f in filiais_ativas] + ['Total']
+
+        tot_vendas = df_vendas["ValorVenda"].sum()
+        tot_trans = df_vendas["QtdVendas"].sum()
+        tot_itens = df_vendas["QtdItens"].sum()
+
+        dados_metricas = {
+            "Vendas (R$)": [df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum() for f in filiais_ativas],
+            "Transações (Qtd)": [df_vendas[df_vendas["CodFilial"] == f]["QtdVendas"].sum() for f in filiais_ativas],
+            "Ticket Médio (R$)": [],
+            "Itens (Qtd)": [df_vendas[df_vendas["CodFilial"] == f]["QtdItens"].sum() for f in filiais_ativas],
+            "Itens por Venda (R$)": [],
+            "Itens por Transação (Qtd)": [],
+        }
+
+        for f in filiais_ativas:
+            v = df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum()
+            t = df_vendas[df_vendas["CodFilial"] == f]["QtdVendas"].sum()
+            i = df_vendas[df_vendas["CodFilial"] == f]["QtdItens"].sum()
+            dados_metricas["Ticket Médio (R$)"].append(v / t if t > 0 else 0)
+            dados_metricas["Itens por Venda (R$)"].append(v / i if i > 0 else 0)
+            dados_metricas["Itens por Transação (Qtd)"].append(i / t if t > 0 else 0)
+
+        table_data = [[Paragraph(h, header_style) for h in headers]]
+        for nome, valores in dados_metricas.items():
+            row = [Paragraph(nome, cell_left)]
+            for val in valores:
+                fmt_val = formatar_moeda(val) if "(R$)" in nome else formatar_decimal(val) if "(Qtd)" in nome else str(int(val))
+                row.append(Paragraph(fmt_val, cell_right))
+
+            # Total CORRETO (não soma médias)
+            if nome == "Ticket Médio (R$)":
+                total_val = tot_vendas / tot_trans if tot_trans else 0
+            elif nome == "Itens por Venda (R$)":
+                total_val = tot_vendas / tot_itens if tot_itens else 0
+            elif nome == "Itens por Transação (Qtd)":
+                total_val = tot_itens / tot_trans if tot_trans else 0
+            else:
+                total_val = sum(valores)
+
+            fmt_total = formatar_moeda(total_val) if "(R$)" in nome else formatar_decimal(total_val) if "(Qtd)" in nome else str(int(total_val))
+            row.append(Paragraph(fmt_total, cell_bold_right))
+            table_data.append(row)
+
+        # Largura dinâmica — preenche 100% da folha
+        n_numeric = len(filiais_ativas) + 1  # +1 para coluna Total
+        col_operacao = 120
+        col_numeric = (usable_width - col_operacao) / n_numeric
+        col_widths = [col_operacao] + [col_numeric] * n_numeric
+
+        t = Table(table_data, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 10))
 
     # --- 2. DEPARTAMENTOS ---
     if not df_depto.empty:
         elements.append(Paragraph("<b>VENDAS POR DEPARTAMENTO</b>", styles['Heading3']))
         df_depto_agg = df_depto.groupby("NomeDepto")["ValorVenda"].sum().reset_index().sort_values("ValorVenda", ascending=False)
-        
+
         depto_data = [[Paragraph("Departamento", header_style), Paragraph("Vendas (R$)", header_style)]]
         for _, row in df_depto_agg.iterrows():
             depto_data.append([Paragraph(row["NomeDepto"], cell_left), Paragraph(formatar_moeda(row["ValorVenda"]), cell_right)])
-            
-        t_depto = Table(depto_data, colWidths=[500, 300], repeatRows=1)
+
+        col2_widths = [usable_width * 0.65, usable_width * 0.35]
+        t_depto = Table(depto_data, colWidths=col2_widths, repeatRows=1)
         t_depto.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
         ]))
         elements.append(t_depto)
-        elements.append(Spacer(1, 15))
+        elements.append(Spacer(1, 10))
 
     # --- 3. FORMAS DE PAGAMENTO ---
     if not df_pag.empty:
         elements.append(Paragraph("<b>VENDAS POR FORMA DE PAGAMENTO</b>", styles['Heading3']))
         df_pag_agg = df_pag.groupby("Denominacao")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
-        
+
         pag_data = [[Paragraph("Forma de Pagamento", header_style), Paragraph("Vendas (R$)", header_style)]]
         for _, row in df_pag_agg.iterrows():
             pag_data.append([Paragraph(row["Denominacao"], cell_left), Paragraph(formatar_moeda(row["Valor"]), cell_right)])
-            
-        t_pag = Table(pag_data, colWidths=[500, 300], repeatRows=1)
+
+        col2_widths = [usable_width * 0.65, usable_width * 0.35]
+        t_pag = Table(pag_data, colWidths=col2_widths, repeatRows=1)
         t_pag.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
         ]))
         elements.append(t_pag)
-        elements.append(Spacer(1, 15))
-        
+        elements.append(Spacer(1, 10))
+
         # --- 4. PORTADORES ---
         df_pag_port = df_pag.dropna(subset=["NomePortador"])
         if not df_pag_port.empty:
             elements.append(Paragraph("<b>VENDAS POR PORTADOR</b>", styles['Heading3']))
             df_port_agg = df_pag_port.groupby("NomePortador")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
-            
+
             port_data = [[Paragraph("Portador", header_style), Paragraph("Vendas (R$)", header_style)]]
             for _, row in df_port_agg.iterrows():
                 port_data.append([Paragraph(row["NomePortador"], cell_left), Paragraph(formatar_moeda(row["Valor"]), cell_right)])
-                
-            t_port = Table(port_data, colWidths=[500, 300], repeatRows=1)
+
+            col2_widths = [usable_width * 0.65, usable_width * 0.35]
+            t_port = Table(port_data, colWidths=col2_widths, repeatRows=1)
             t_port.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
             ]))
             elements.append(t_port)
 
