@@ -296,13 +296,17 @@ with tab_visao:
 
     filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
     
-    with st.spinner("Carregando dados..."):
-        df_vendas = buscar_vendas(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
-        if not df_vendas.empty:
-            df_vendas["CodFilial"] = pd.to_numeric(df_vendas["CodFilial"], errors="coerce").fillna(0).astype(int)
-            
-        df_depto = buscar_departamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
-        df_pag = buscar_pagamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
+    try:
+        with st.spinner("Carregando dados..."):
+            df_vendas = buscar_vendas(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
+            if not df_vendas.empty:
+                df_vendas["CodFilial"] = pd.to_numeric(df_vendas["CodFilial"], errors="coerce").fillna(0).astype(int)
+                
+            df_depto = buscar_departamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
+            df_pag = buscar_pagamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
+    except Exception as e:
+        st.error(f"Erro ao carregar dados de vendas: {e}")
+        st.stop()
 
     if df_vendas.empty:
         st.info("Nenhum dado encontrado para os filtros selecionados.")
@@ -654,23 +658,27 @@ with tab_compras:
     if "df_compras" not in st.session_state or btn_compras:
         filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
         
-        with st.spinner("Carregando dados de compras..."):
-            df_compras = buscar_compras(data_ini_c.strftime("%Y-%m-%d"), data_fim_c.strftime("%Y-%m-%d"), filial_cod_c)
-            
-            if not df_compras.empty:
-                if fornecedor_sel != "Todos":
-                    df_compras = df_compras[df_compras["Fornecedor"] == fornecedor_sel]
+        try:
+            with st.spinner("Carregando dados de compras..."):
+                df_compras = buscar_compras(data_ini_c.strftime("%Y-%m-%d"), data_fim_c.strftime("%Y-%m-%d"), filial_cod_c)
                 
                 if not df_compras.empty:
-                    df_compras['Mes_Nome'] = df_compras['Mes'].map({1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'})
-                    st.session_state["df_compras"] = df_compras
-                    st.session_state["pdf_bytes_comp"] = gerar_pdf_compras(df_compras, data_ini_c, data_fim_c)
+                    if fornecedor_sel != "Todos":
+                        df_compras = df_compras[df_compras["Fornecedor"] == fornecedor_sel]
+                    
+                    if not df_compras.empty:
+                        df_compras['Mes_Nome'] = df_compras['Mes'].map({1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'})
+                        st.session_state["df_compras"] = df_compras
+                        st.session_state["pdf_bytes_comp"] = gerar_pdf_compras(df_compras, data_ini_c, data_fim_c)
+                    else:
+                        st.session_state["df_compras"] = df_compras
+                        st.session_state["pdf_bytes_comp"] = None
                 else:
                     st.session_state["df_compras"] = df_compras
                     st.session_state["pdf_bytes_comp"] = None
-            else:
-                st.session_state["df_compras"] = df_compras
-                st.session_state["pdf_bytes_comp"] = None
+        except Exception as e:
+            st.error(f"Erro ao carregar compras: {e}")
+            st.stop()
 
     with c7:
         pdf_bytes_comp = st.session_state.get("pdf_bytes_comp")
@@ -786,111 +794,115 @@ with tab_tributos:
         st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos, key="btn_limpar_trib")
 
     if "df_trib" not in st.session_state or btn_atualizar:
-        with st.spinner("Carregando dados tributários..."):
-            df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
-            
-            if not df_trib.empty:
-                df_trib["CodFilial"] = pd.to_numeric(df_trib["CodFilial"], errors="coerce").fillna(0).astype(int)
-                cols_numeric = ["VendasBruto", "VendasLiquidoDesconto", "ICMS_Vendas", "DevolucaoVendas", "TransfEnvTotal", "TransfEnvTrib", "TransfEnvNaoTrib", "ICMS_TransfEnv", "ComprasTotal", "ComprasTrib", "ComprasNaoTrib", "ICMS_Compras", "TransfRecTotal", "TransfRecTrib", "TransfRecNaoTrib", "ICMS_TransfRec", "TributosAntecipados"]
-                for c in cols_numeric:
-                    df_trib[c] = pd.to_numeric(df_trib[c], errors="coerce").fillna(0)
-                    
-                tem_movimento = ((df_trib["VendasBruto"] > 0) | (df_trib["ComprasTotal"] > 0) | (df_trib["TransfEnvTotal"] > 0) | (df_trib["TransfRecTotal"] > 0) | (df_trib["TributosAntecipados"] != 0))
-                df_trib = df_trib[tem_movimento].copy()
+        try:
+            with st.spinner("Carregando dados tributários..."):
+                df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
                 
                 if not df_trib.empty:
-                    df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
-                    
-                    df_trib["tributoVendasIntegral"] = df_trib["ICMS_Vendas"]
-                    df_trib["pctVendasEfetivo"] = (df_trib["ICMS_Vendas"] / df_trib["VendasBruto"] * 100).fillna(0)
-                    df_trib["tributoVendasAdicional"] = 0.0
-                    df_trib["pctAdicional"] = 0.0
-                    df_trib["icmsTransfEnv"] = df_trib["ICMS_TransfEnv"]
-                    df_trib["pctTransfEnvEfetivo"] = (df_trib["ICMS_TransfEnv"] / df_trib["TransfEnvTotal"] * 100).fillna(0)
-                    
-                    mask_atacado = df_trib["CodFilial"] == 5
-                    df_trib.loc[mask_atacado, "tributoVendasIntegral"] = df_trib.loc[mask_atacado, "VendasBruto"] * 0.071
-                    df_trib.loc[mask_atacado, "pctVendasEfetivo"] = 7.10
-                    mask_adic = mask_atacado & (df_trib["vendasLiquido"] < 400000.0)
-                    df_trib.loc[mask_adic, "tributoVendasAdicional"] = df_trib.loc[mask_adic, "vendasLiquido"] * 0.049
-                    df_trib.loc[mask_adic, "pctAdicional"] = 4.90
-                    df_trib.loc[mask_atacado, "icmsTransfEnv"] = df_trib.loc[mask_atacado, "TransfEnvTrib"] * 0.071
-                    df_trib.loc[mask_atacado, "pctTransfEnvEfetivo"] = 7.10
-                    df_trib.loc[mask_atacado, "ICMS_Compras"] = 0.0
-                    df_trib.loc[mask_atacado, "ICMS_TransfRec"] = 0.0
-                    df_trib.loc[mask_atacado, "ComprasTrib"] = 0.0
-                    df_trib.loc[mask_atacado, "TransfRecTrib"] = 0.0
-                    df_trib.loc[mask_atacado, "ComprasNaoTrib"] = df_trib.loc[mask_atacado, "ComprasTotal"]
-                    df_trib.loc[mask_atacado, "TransfRecNaoTrib"] = df_trib.loc[mask_atacado, "TransfRecTotal"]
-                    
-                    mask_srb = df_trib["CodFilial"] == 4
-                    df_trib.loc[mask_srb, "tributoVendasIntegral"] = df_trib.loc[mask_srb, "VendasBruto"] * 0.143
-                    df_trib.loc[mask_srb, "pctVendasEfetivo"] = 14.30
-                    df_trib.loc[mask_srb, "icmsTransfEnv"] = 0.0
-                    df_trib.loc[mask_srb, "pctTransfEnvEfetivo"] = 0.0
-                    df_trib.loc[mask_srb, "ICMS_Compras"] = 0.0
-                    df_trib.loc[mask_srb, "ICMS_TransfRec"] = 0.0
-                    df_trib.loc[mask_srb, "TransfEnvTrib"] = 0.0
-                    df_trib.loc[mask_srb, "TransfEnvNaoTrib"] = df_trib.loc[mask_srb, "TransfEnvTotal"]
-                    df_trib.loc[mask_srb, "ComprasTrib"] = 0.0
-                    df_trib.loc[mask_srb, "TransfRecTrib"] = 0.0
-                    df_trib.loc[mask_srb, "ComprasNaoTrib"] = df_trib.loc[mask_srb, "ComprasTotal"]
-                    df_trib.loc[mask_srb, "TransfRecNaoTrib"] = df_trib.loc[mask_srb, "TransfRecTotal"]
+                    df_trib["CodFilial"] = pd.to_numeric(df_trib["CodFilial"], errors="coerce").fillna(0).astype(int)
+                    cols_numeric = ["VendasBruto", "VendasLiquidoDesconto", "ICMS_Vendas", "DevolucaoVendas", "TransfEnvTotal", "TransfEnvTrib", "TransfEnvNaoTrib", "ICMS_TransfEnv", "ComprasTotal", "ComprasTrib", "ComprasNaoTrib", "ICMS_Compras", "TransfRecTotal", "TransfRecTrib", "TransfRecNaoTrib", "ICMS_TransfRec", "TributosAntecipados"]
+                    for c in cols_numeric:
+                        df_trib[c] = pd.to_numeric(df_trib[c], errors="coerce").fillna(0)
                         
-                    df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
-                    df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
-                    df_trib["totalSaidasNaoTrib"] = df_trib["TransfEnvNaoTrib"]
-                    df_trib["totalEntradas"] = df_trib["ComprasTotal"] + df_trib["TransfRecTotal"] + df_trib["TributosAntecipados"]
-                    df_trib["totalEntradasTrib"] = df_trib["ComprasTrib"] + df_trib["TransfRecTrib"] + df_trib["TributosAntecipados"]
-                    df_trib["totalEntradasNaoTrib"] = df_trib["ComprasNaoTrib"] + df_trib["TransfRecNaoTrib"]
-                    df_trib["debitoICMS"] = df_trib["tributoVendasIntegral"] + df_trib["tributoVendasAdicional"] + df_trib["icmsTransfEnv"]
-                    df_trib["creditoICMS"] = df_trib["ICMS_Compras"] + df_trib["ICMS_TransfRec"] + df_trib["TributosAntecipados"]
-                    df_trib["resultado"] = df_trib["creditoICMS"] - df_trib["debitoICMS"]
+                    tem_movimento = ((df_trib["VendasBruto"] > 0) | (df_trib["ComprasTotal"] > 0) | (df_trib["TransfEnvTotal"] > 0) | (df_trib["TransfRecTotal"] > 0) | (df_trib["TributosAntecipados"] != 0))
+                    df_trib = df_trib[tem_movimento].copy()
+                    
+                    if not df_trib.empty:
+                        df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
+                        
+                        df_trib["tributoVendasIntegral"] = df_trib["ICMS_Vendas"]
+                        df_trib["pctVendasEfetivo"] = (df_trib["ICMS_Vendas"] / df_trib["VendasBruto"] * 100).fillna(0)
+                        df_trib["tributoVendasAdicional"] = 0.0
+                        df_trib["pctAdicional"] = 0.0
+                        df_trib["icmsTransfEnv"] = df_trib["ICMS_TransfEnv"]
+                        df_trib["pctTransfEnvEfetivo"] = (df_trib["ICMS_TransfEnv"] / df_trib["TransfEnvTotal"] * 100).fillna(0)
+                        
+                        mask_atacado = df_trib["CodFilial"] == 5
+                        df_trib.loc[mask_atacado, "tributoVendasIntegral"] = df_trib.loc[mask_atacado, "VendasBruto"] * 0.071
+                        df_trib.loc[mask_atacado, "pctVendasEfetivo"] = 7.10
+                        mask_adic = mask_atacado & (df_trib["vendasLiquido"] < 400000.0)
+                        df_trib.loc[mask_adic, "tributoVendasAdicional"] = df_trib.loc[mask_adic, "vendasLiquido"] * 0.049
+                        df_trib.loc[mask_adic, "pctAdicional"] = 4.90
+                        df_trib.loc[mask_atacado, "icmsTransfEnv"] = df_trib.loc[mask_atacado, "TransfEnvTrib"] * 0.071
+                        df_trib.loc[mask_atacado, "pctTransfEnvEfetivo"] = 7.10
+                        df_trib.loc[mask_atacado, "ICMS_Compras"] = 0.0
+                        df_trib.loc[mask_atacado, "ICMS_TransfRec"] = 0.0
+                        df_trib.loc[mask_atacado, "ComprasTrib"] = 0.0
+                        df_trib.loc[mask_atacado, "TransfRecTrib"] = 0.0
+                        df_trib.loc[mask_atacado, "ComprasNaoTrib"] = df_trib.loc[mask_atacado, "ComprasTotal"]
+                        df_trib.loc[mask_atacado, "TransfRecNaoTrib"] = df_trib.loc[mask_atacado, "TransfRecTotal"]
+                        
+                        mask_srb = df_trib["CodFilial"] == 4
+                        df_trib.loc[mask_srb, "tributoVendasIntegral"] = df_trib.loc[mask_srb, "VendasBruto"] * 0.143
+                        df_trib.loc[mask_srb, "pctVendasEfetivo"] = 14.30
+                        df_trib.loc[mask_srb, "icmsTransfEnv"] = 0.0
+                        df_trib.loc[mask_srb, "pctTransfEnvEfetivo"] = 0.0
+                        df_trib.loc[mask_srb, "ICMS_Compras"] = 0.0
+                        df_trib.loc[mask_srb, "ICMS_TransfRec"] = 0.0
+                        df_trib.loc[mask_srb, "TransfEnvTrib"] = 0.0
+                        df_trib.loc[mask_srb, "TransfEnvNaoTrib"] = df_trib.loc[mask_srb, "TransfEnvTotal"]
+                        df_trib.loc[mask_srb, "ComprasTrib"] = 0.0
+                        df_trib.loc[mask_srb, "TransfRecTrib"] = 0.0
+                        df_trib.loc[mask_srb, "ComprasNaoTrib"] = df_trib.loc[mask_srb, "ComprasTotal"]
+                        df_trib.loc[mask_srb, "TransfRecNaoTrib"] = df_trib.loc[mask_srb, "TransfRecTotal"]
+                            
+                        df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
+                        df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
+                        df_trib["totalSaidasNaoTrib"] = df_trib["TransfEnvNaoTrib"]
+                        df_trib["totalEntradas"] = df_trib["ComprasTotal"] + df_trib["TransfRecTotal"] + df_trib["TributosAntecipados"]
+                        df_trib["totalEntradasTrib"] = df_trib["ComprasTrib"] + df_trib["TransfRecTrib"] + df_trib["TributosAntecipados"]
+                        df_trib["totalEntradasNaoTrib"] = df_trib["ComprasNaoTrib"] + df_trib["TransfRecNaoTrib"]
+                        df_trib["debitoICMS"] = df_trib["tributoVendasIntegral"] + df_trib["tributoVendasAdicional"] + df_trib["icmsTransfEnv"]
+                        df_trib["creditoICMS"] = df_trib["ICMS_Compras"] + df_trib["ICMS_TransfRec"] + df_trib["TributosAntecipados"]
+                        df_trib["resultado"] = df_trib["creditoICMS"] - df_trib["debitoICMS"]
 
-                    atacado = df_trib[df_trib["CodFilial"] == 5]
-                    pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
-                    srb = df_trib[df_trib["CodFilial"] == 4]
-                    colunas = pd.concat([atacado, pb, srb])
-                    
-                    rows_saidas = [
-                        ("Valor Vendas Bruto", "VendasBruto", {}),
-                        ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
-                        ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
-                        ("Tributo Vendas Integral", "tributoVendasIntegral", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"}),
-                        ("Tributo Vendas Adicional", "tributoVendasAdicional", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"}),
-                        ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
-                        ("Tributo Transferências Enviadas", "icmsTransfEnv", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"}),
-                        ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
-                        ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
-                        ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                        ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
-                    ]
-                    
-                    rows_entradas = [
-                        ("Valor Compras", "ComprasTotal", {}),
-                        ("Tributo Compras", "ICMS_Compras", {}),
-                        ("Valor Transferências Recebidas", "TransfRecTotal", {}),
-                        ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
-                        ("Tributos Antecipados", "TributosAntecipados", {}),
-                        ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
-                        ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
-                        ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                        ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
-                    ]
-                    
-                    rows_resultado = [
-                        ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
-                    ]
+                        atacado = df_trib[df_trib["CodFilial"] == 5]
+                        pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
+                        srb = df_trib[df_trib["CodFilial"] == 4]
+                        colunas = pd.concat([atacado, pb, srb])
+                        
+                        rows_saidas = [
+                            ("Valor Vendas Bruto", "VendasBruto", {}),
+                            ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
+                            ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
+                            ("Tributo Vendas Integral", "tributoVendasIntegral", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"}),
+                            ("Tributo Vendas Adicional", "tributoVendasAdicional", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"}),
+                            ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
+                            ("Tributo Transferências Enviadas", "icmsTransfEnv", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"}),
+                            ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
+                            ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
+                            ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                            ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
+                        ]
+                        
+                        rows_entradas = [
+                            ("Valor Compras", "ComprasTotal", {}),
+                            ("Tributo Compras", "ICMS_Compras", {}),
+                            ("Valor Transferências Recebidas", "TransfRecTotal", {}),
+                            ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
+                            ("Tributos Antecipados", "TributosAntecipados", {}),
+                            ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
+                            ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
+                            ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                            ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
+                        ]
+                        
+                        rows_resultado = [
+                            ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
+                        ]
 
-                    pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
-                    st.session_state["pdf_bytes_trib"] = pdf_bytes
-                    st.session_state["df_trib"] = df_trib
+                        pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
+                        st.session_state["pdf_bytes_trib"] = pdf_bytes
+                        st.session_state["df_trib"] = df_trib
+                    else:
+                        st.session_state["df_trib"] = df_trib
+                        st.session_state["pdf_bytes_trib"] = None
                 else:
                     st.session_state["df_trib"] = df_trib
                     st.session_state["pdf_bytes_trib"] = None
-            else:
-                st.session_state["df_trib"] = df_trib
-                st.session_state["pdf_bytes_trib"] = None
+        except Exception as e:
+            st.error(f"Erro ao carregar tributos: {e}")
+            st.stop()
 
     with c5:
         pdf_bytes_t = st.session_state.get("pdf_bytes_trib")
