@@ -300,7 +300,7 @@ class NumberedCanvas(canvas.Canvas):
         self.setFont("Helvetica", 8)
         self.setFillColor(colors.HexColor('#64748B'))
         page_text = f"página {self._pageNumber} de {page_count}"
-        # Usa a largura real da página atual (funciona para retrato e paisagem)
+        # Largura dinâmica: funciona em retrato e paisagem
         self.drawRightString(self._pagesize[0] - 20, 15, page_text)
 
 def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
@@ -384,7 +384,7 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
                 fmt_val = formatar_moeda(val) if "(R$)" in nome else formatar_decimal(val) if "(Qtd)" in nome else str(int(val))
                 row.append(Paragraph(fmt_val, cell_right))
 
-            # Total CORRETO (não soma médias)
+            # Total CORRETO para médias (não soma de médias)
             if nome == "Ticket Médio (R$)":
                 total_val = tot_vendas / tot_trans if tot_trans else 0
             elif nome == "Itens por Venda (R$)":
@@ -673,7 +673,7 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     return buffer
 
 # ==========================================
-# ABA VENDAS (COM BOTOES AGRUPADOS NA MESMA COLUNA)
+# ABA VENDAS
 # ==========================================
 with tab_visao:
     if "dt_ini_visao" not in st.session_state: st.session_state["dt_ini_visao"] = hoje
@@ -712,7 +712,9 @@ with tab_visao:
             else:
                 st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_vendas_disabled")
 
-    if "df_vendas" not in st.session_state or btn_atualizar:
+    _foi_primeira_carga_visao = "df_vendas" not in st.session_state
+
+    if _foi_primeira_carga_visao or btn_atualizar:
         filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
         try:
             with st.spinner("Carregando dados..."):
@@ -734,6 +736,9 @@ with tab_visao:
         except Exception as e:
             st.error(f"Erro ao carregar dados de vendas: {e}")
             st.stop()
+
+    if _foi_primeira_carga_visao:
+        st.rerun()
 
     df_vendas = st.session_state.get("df_vendas", pd.DataFrame())
     df_depto = st.session_state.get("df_depto_vendas", pd.DataFrame())
@@ -847,7 +852,7 @@ with tab_visao:
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
-# ABA COMPRAS (COM BOTOES AGRUPADOS NA MESMA COLUNA)
+# ABA COMPRAS
 # ==========================================
 with tab_compras:
     try:
@@ -892,7 +897,9 @@ with tab_compras:
             else:
                 st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_compras_disabled")
 
-    if "df_compras" not in st.session_state or btn_compras:
+    _foi_primeira_carga_compras = "df_compras" not in st.session_state
+
+    if _foi_primeira_carga_compras or btn_compras:
         filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
         
         try:
@@ -916,6 +923,9 @@ with tab_compras:
         except Exception as e:
             st.error(f"Erro ao carregar compras: {e}")
             st.stop()
+
+    if _foi_primeira_carga_compras:
+        st.rerun()
 
     df_compras = st.session_state.get("df_compras", pd.DataFrame())
     if df_compras.empty:
@@ -998,7 +1008,7 @@ with tab_compras:
                     )
 
 # ==========================================
-# ABA TRIBUTOS (COM BOTOES AGRUPADOS NA MESMA COLUNA)
+# ABA TRIBUTOS
 # ==========================================
 with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
@@ -1012,7 +1022,7 @@ with tab_tributos:
     with c_acoes:
         col_b1, col_b2, col_b3 = st.columns(3)
         with col_b1:
-            btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_trib")
+            btn_atualizar_trib = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_trib")
         with col_b2:
             st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos, key="btn_limpar_trib")
         with col_b3:
@@ -1031,7 +1041,9 @@ with tab_tributos:
             else:
                 st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_trib_disabled")
 
-    if "df_trib" not in st.session_state or btn_atualizar:
+    _foi_primeira_carga_trib = "df_trib" not in st.session_state
+
+    if _foi_primeira_carga_trib or btn_atualizar_trib:
         try:
             with st.spinner("Carregando dados tributários..."):
                 df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
@@ -1141,6 +1153,9 @@ with tab_tributos:
         except Exception as e:
             st.error(f"Erro ao carregar tributos: {e}")
             st.stop()
+
+    if _foi_primeira_carga_trib:
+        st.rerun()
 
     df_trib = st.session_state.get("df_trib", pd.DataFrame())
     if df_trib.empty:
