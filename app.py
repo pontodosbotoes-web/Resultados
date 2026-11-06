@@ -116,6 +116,17 @@ filiais_dict = carregar_filiais()
 filiais_inv = {v: k for k, v in filiais_dict.items()}
 NOMES_FILIAIS = {1: "PB - ALECRIM", 2: "PB - VIA DIRETA", 3: "PB - ZONA SUL", 4: "SRB - ZONA NORTE", 5: "PB - ATACADO"}
 
+def limpar_vendas():
+    st.session_state["dt_ini_visao"] = hoje
+    st.session_state["dt_fim_visao"] = hoje
+    st.session_state["h_ini_visao"] = datetime.strptime("00:00", "%H:%M").time()
+    st.session_state["h_fim_visao"] = datetime.strptime("23:59", "%H:%M").time()
+    st.session_state["filial_visao"] = "Todas"
+    if "df_vendas" in st.session_state: del st.session_state["df_vendas"]
+    if "df_depto_vendas" in st.session_state: del st.session_state["df_depto_vendas"]
+    if "df_pag_vendas" in st.session_state: del st.session_state["df_pag_vendas"]
+    if "pdf_bytes_vendas" in st.session_state: del st.session_state["pdf_bytes_vendas"]
+
 def limpar_compras():
     st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
     st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
@@ -266,7 +277,369 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
 
 
 # ==========================================
-# ABA VENDAS
+# FUNÇÕES E CLASSES PARA PDF
+# ==========================================
+class NumberedCanvas(canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_page_number(num_pages)
+            canvas.Canvas.showPage(self)
+        canvas.Canvas.save(self)
+
+    def draw_page_number(self, page_count):
+        self.setFont("Helvetica", 8)
+        self.setFillColor(colors.HexColor('#64748B'))
+        page_text = f"página {self._pageNumber} de {page_count}"
+        self.drawRightString(landscape(A4)[0] - 20, 15, page_text)
+
+def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
+    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
+    
+    header_data = [
+        [Paragraph("<b>Acompanhamento Gerencial - Vendas</b>", left_style),
+         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
+    ]
+    header_table = Table(header_data, colWidths=[400, 400])
+    header_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_table)
+
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=9, alignment=1)
+    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=9, alignment=0)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=9, alignment=2)
+    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=9, alignment=0, fontName='Helvetica-Bold')
+    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=9, alignment=2, fontName='Helvetica-Bold')
+
+    # --- 1. RESUMO GERAL (MÉTRICAS) ---
+    elements.append(Paragraph("<b>RESUMO GERAL (CONSOLIDADO E POR FILIAL)</b>", styles['Heading3']))
+    
+    filiais_ordem = [5, 1, 2, 3, 4] # Atacado, Alecrim, Via Direta, Zona Sul, SRB
+    headers = ['Operação'] + [NOMES_FILIAIS[f] for f in filiais_ordem] + ['Total']
+    
+    # Calcula os totais
+    tot_vendas = df_vendas["ValorVenda"].sum()
+    tot_trans = df_vendas["QtdVendas"].sum()
+    tot_itens = df_vendas["QtdItens"].sum()
+    
+    dados_metricas = {
+        "Vendas (R$)": [df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum() for f in filiais_ordem],
+        "Transações (Qtd)": [df_vendas[df_vendas["CodFilial"] == f]["QtdVendas"].sum() for f in filiais_ordem],
+        "Ticket Médio (R$)": [],
+        "Itens (Qtd)": [df_vendas[df_vendas["CodFilial"] == f]["QtdItens"].sum() for f in filiais_ordem],
+        "Itens por Venda (R$)": [],
+        "Itens por Transação (Qtd)": []
+    }
+    
+    for f in filiais_ordem:
+        v = df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum()
+        t = df_vendas[df_vendas["CodFilial"] == f]["QtdVendas"].sum()
+        i = df_vendas[df_vendas["CodFilial"] == f]["QtdItens"].sum()
+        dados_metricas["Ticket Médio (R$)"].append(v / t if t > 0 else 0)
+        dados_metricas["Itens por Venda (R$)"].append(v / i if i > 0 else 0)
+        dados_metricas["Itens por Transação (Qtd)"].append(i / t if t > 0 else 0)
+
+    table_data = [[Paragraph(h, header_style) for h in headers]]
+    for nome, valores in dados_metricas.items():
+        row = [Paragraph(nome, cell_left)]
+        for val in valores:
+            fmt_val = formatar_moeda(val) if "(R$)" in nome else formatar_decimal(val) if "(Qtd)" in nome else str(int(val))
+            row.append(Paragraph(fmt_val, cell_right))
+        
+        total_val = sum(valores)
+        fmt_total = formatar_moeda(total_val) if "(R$)" in nome else formatar_decimal(total_val) if "(Qtd)" in nome else str(int(total_val))
+        row.append(Paragraph(fmt_total, cell_bold_right))
+        table_data.append(row)
+
+    col_widths = [150] + [100] * len(filiais_ordem) + [100]
+    t = Table(table_data, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 15))
+
+    # --- 2. DEPARTAMENTOS ---
+    if not df_depto.empty:
+        elements.append(Paragraph("<b>VENDAS POR DEPARTAMENTO</b>", styles['Heading3']))
+        df_depto_agg = df_depto.groupby("NomeDepto")["ValorVenda"].sum().reset_index().sort_values("ValorVenda", ascending=False)
+        
+        depto_data = [[Paragraph("Departamento", header_style), Paragraph("Vendas (R$)", header_style)]]
+        for _, row in df_depto_agg.iterrows():
+            depto_data.append([Paragraph(row["NomeDepto"], cell_left), Paragraph(formatar_moeda(row["ValorVenda"]), cell_right)])
+            
+        t_depto = Table(depto_data, colWidths=[500, 300], repeatRows=1)
+        t_depto.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(t_depto)
+        elements.append(Spacer(1, 15))
+
+    # --- 3. FORMAS DE PAGAMENTO ---
+    if not df_pag.empty:
+        elements.append(Paragraph("<b>VENDAS POR FORMA DE PAGAMENTO</b>", styles['Heading3']))
+        df_pag_agg = df_pag.groupby("Denominacao")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
+        
+        pag_data = [[Paragraph("Forma de Pagamento", header_style), Paragraph("Vendas (R$)", header_style)]]
+        for _, row in df_pag_agg.iterrows():
+            pag_data.append([Paragraph(row["Denominacao"], cell_left), Paragraph(formatar_moeda(row["Valor"]), cell_right)])
+            
+        t_pag = Table(pag_data, colWidths=[500, 300], repeatRows=1)
+        t_pag.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(t_pag)
+        elements.append(Spacer(1, 15))
+        
+        # --- 4. PORTADORES ---
+        df_pag_port = df_pag.dropna(subset=["NomePortador"])
+        if not df_pag_port.empty:
+            elements.append(Paragraph("<b>VENDAS POR PORTADOR</b>", styles['Heading3']))
+            df_port_agg = df_pag_port.groupby("NomePortador")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
+            
+            port_data = [[Paragraph("Portador", header_style), Paragraph("Vendas (R$)", header_style)]]
+            for _, row in df_port_agg.iterrows():
+                port_data.append([Paragraph(row["NomePortador"], cell_left), Paragraph(formatar_moeda(row["Valor"]), cell_right)])
+                
+            t_port = Table(port_data, colWidths=[500, 300], repeatRows=1)
+            t_port.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(t_port)
+
+    doc.build(elements, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer
+
+def gerar_pdf_compras(df_compras, data_ini, data_fim):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
+    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
+    
+    header_data = [
+        [Paragraph("<b>Acompanhamento Gerencial - Compras</b>", left_style),
+         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
+    ]
+    header_table = Table(header_data, colWidths=[400, 400])
+    header_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_table)
+
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=7, alignment=1)
+    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=7, alignment=0)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=7, alignment=2)
+    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=7, alignment=0, fontName='Helvetica-Bold')
+    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=7, alignment=2, fontName='Helvetica-Bold')
+
+    meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    
+    df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento")
+    
+    for _, row in df_tot_depto.iterrows():
+        depto = row['Departamento']
+        df_d = df_compras[df_compras["Departamento"] == depto]
+        
+        df_pivot = df_d.pivot_table(index=['Fornecedor'], columns='Mes_Nome', values='Valor', aggfunc='sum')
+        for m in meses_colunas:
+            if m not in df_pivot.columns: df_pivot[m] = 0.0
+        
+        df_pivot = df_pivot[meses_colunas]
+        df_pivot['Total'] = df_pivot.sum(axis=1)
+        df_pivot = df_pivot.fillna(0).sort_index()
+        
+        linha_total = df_pivot.sum().to_frame().T
+        linha_total.index = ['TOTAL']
+        df_final = pd.concat([df_pivot, linha_total])
+
+        headers = ['Fornecedor'] + meses_colunas + ['Total']
+        table_data = [[Paragraph(h, header_style) for h in headers]]
+        
+        for fornecedor, r in df_final.iterrows():
+            is_total = (fornecedor == 'TOTAL')
+            row_cells = [Paragraph(fornecedor, cell_bold_left if is_total else cell_left)]
+            for m in meses_colunas + ['Total']:
+                val = r[m]
+                val_str = formatar_numero(val) if val != 0 else "-"
+                row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
+            table_data.append(row_cells)
+
+        elements.append(Paragraph(f"<b>■ Departamento: {depto}</b>", styles['Heading3']))
+        
+        col_widths = [130] + [50] * len(meses_colunas) + [70]
+        t = Table(table_data, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 15))
+    
+    doc.build(elements, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer
+
+def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini, data_fim):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
+    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
+    
+    header_data = [
+        [Paragraph("<b>Acompanhamento Gerencial - Tributos</b>", left_style),
+         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
+    ]
+    header_table = Table(header_data, colWidths=[400, 400])
+    header_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_table)
+    
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
+    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
+    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=8, alignment=2, fontName='Helvetica-Bold')
+    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=8, alignment=0, fontName='Helvetica-Bold')
+    
+    headers = ['Operação'] + [f['NomeFilial'] for _, f in colunas.iterrows()] + ['Total']
+    table_data = [[Paragraph(h, header_style) for h in headers]]
+    
+    def add_row_to_data(label, key, opts):
+        bold = opts.get('bold', False)
+        left_style = cell_bold_left if bold else cell_left
+        right_style = cell_bold_right if bold else cell_right
+        
+        row = [Paragraph(label, left_style)]
+        total = 0
+        for _, f in colunas.iterrows():
+            val = f[key] if key else 0
+            total += val
+            if 'fmt' in opts:
+                try:
+                    val_str = opts['fmt'](val, f)
+                except:
+                    val_str = formatar_moeda(val)
+            else:
+                val_str = formatar_moeda(val)
+            
+            if key == 'resultado':
+                if val < 0:
+                    val_str = f"-{formatar_moeda(abs(val))}"
+                else:
+                    val_str = formatar_moeda(val)
+            
+            row.append(Paragraph(val_str, right_style))
+        
+        if key == 'resultado':
+            total_str = formatar_moeda(total) if total >= 0 else f"-{formatar_moeda(abs(total))}"
+        else:
+            total_str = formatar_moeda(total)
+        
+        row.append(Paragraph(total_str, right_style))
+        return row
+    
+    all_rows = rows_saidas + rows_entradas + rows_resultado
+    for label, key, opts in all_rows:
+        table_data.append(add_row_to_data(label, key, opts))
+    
+    col_widths = [150] + [115] * len(colunas) + [75]
+    t = Table(table_data, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(t)
+    
+    elements.append(Spacer(1, 15))
+    
+    saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
+    saldo_pb = pb["resultado"].sum() if not pb.empty else 0
+    saldo_srb = srb["resultado"].sum() if not srb.empty else 0
+    saldo_cons = saldo_atacado + saldo_pb + saldo_srb
+    
+    result_style = ParagraphStyle('Result', parent=styles['Normal'], alignment=1, fontSize=11, spaceAfter=10)
+    results_text = f"Resultado PB - ATACADO: {formatar_moeda(saldo_atacado)} &nbsp;&nbsp;&nbsp; Resultado PB - FILIAIS: {formatar_moeda(saldo_pb)} &nbsp;&nbsp;&nbsp; Resultado SRB: {formatar_moeda(saldo_srb)} &nbsp;&nbsp;&nbsp; Consolidado: {formatar_moeda(saldo_cons)}"
+    elements.append(Paragraph(results_text, result_style))
+    
+    doc.build(elements, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer
+
+# ==========================================
+# ABA VENDAS (COM PDF E BOTOES ALINHADOS)
 # ==========================================
 with tab_visao:
     if "dt_ini_visao" not in st.session_state: st.session_state["dt_ini_visao"] = hoje
@@ -275,38 +648,67 @@ with tab_visao:
     if "h_fim_visao" not in st.session_state: st.session_state["h_fim_visao"] = datetime.strptime("23:59", "%H:%M").time()
     if "filial_visao" not in st.session_state: st.session_state["filial_visao"] = "Todas"
 
-    with st.form(key="form_filtros"):
-        c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1.2, 1.4], vertical_alignment="bottom")
-        
-        data_ini = c1.date_input("De:", key="dt_ini_visao", format="DD/MM/YYYY")
-        data_fim = c2.date_input("Até:", key="dt_fim_visao", format="DD/MM/YYYY")
-        h_ini = c3.time_input("Hora:", key="h_ini_visao")
-        h_fim = c4.time_input("Até:", key="h_fim_visao")
-        filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_visao")
-        
-        with c6:
-            col_btn1, col_btn2 = st.columns(2)
-            btn = col_btn1.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
-            btn_limpar = col_btn2.form_submit_button("🧹 Limpar", use_container_width=True)
-
-    if btn_limpar:
-        for k in ["dt_ini_visao", "dt_fim_visao", "h_ini_visao", "h_fim_visao", "filial_visao"]:
-            if k in st.session_state: del st.session_state[k]
-        st.rerun()
-
-    filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
+    c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 1, 1, 1, 1, 1, 1.2], vertical_alignment="bottom")
     
-    try:
-        with st.spinner("Carregando dados..."):
-            df_vendas = buscar_vendas(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
-            if not df_vendas.empty:
-                df_vendas["CodFilial"] = pd.to_numeric(df_vendas["CodFilial"], errors="coerce").fillna(0).astype(int)
+    data_ini = c1.date_input("De:", key="dt_ini_visao", format="DD/MM/YYYY")
+    data_fim = c2.date_input("Até:", key="dt_fim_visao", format="DD/MM/YYYY")
+    h_ini = c3.time_input("Hora:", key="h_ini_visao")
+    h_fim = c4.time_input("Até:", key="h_fim_visao")
+    filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_visao")
+    
+    with c6:
+        btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_visao")
+    
+    with c7:
+        st.button("🧹 Limpar", use_container_width=True, on_click=limpar_vendas, key="btn_limpar_visao")
+
+    if "df_vendas" not in st.session_state or btn_atualizar:
+        filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
+        try:
+            with st.spinner("Carregando dados..."):
+                df_vendas = buscar_vendas(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
+                if not df_vendas.empty:
+                    df_vendas["CodFilial"] = pd.to_numeric(df_vendas["CodFilial"], errors="coerce").fillna(0).astype(int)
+                    
+                df_depto = buscar_departamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
+                df_pag = buscar_pagamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
                 
-            df_depto = buscar_departamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
-            df_pag = buscar_pagamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
-    except Exception as e:
-        st.error(f"Erro ao carregar dados de vendas: {e}")
-        st.stop()
+                st.session_state["df_vendas"] = df_vendas
+                st.session_state["df_depto_vendas"] = df_depto
+                st.session_state["df_pag_vendas"] = df_pag
+                
+                if not df_vendas.empty:
+                    st.session_state["pdf_bytes_vendas"] = gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim)
+                else:
+                    st.session_state["pdf_bytes_vendas"] = None
+        except Exception as e:
+            st.error(f"Erro ao carregar dados de vendas: {e}")
+            st.stop()
+
+    # Botão de PDF na coluna 7 (ocupa o espaço ao lado do Limpar, mas fora dos botões principais)
+    # Para alinhar perfeitamente, colocamos o botão de download na mesma linha visual
+    with c7:
+        # Empurra o botão para alinhar com os outros (mesmo height)
+        st.markdown('<div style="margin-bottom: 0px;"></div>', unsafe_allow_html=True)
+        
+        pdf_bytes_vendas = st.session_state.get("pdf_bytes_vendas")
+        if pdf_bytes_vendas:
+            timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+            nome_arquivo = f"Acompanhamento Gerencial - Vendas {timestamp_str}.pdf"
+            st.download_button(
+                label="📄 Gerar PDF",
+                data=pdf_bytes_vendas,
+                file_name=nome_arquivo,
+                mime="application/pdf",
+                use_container_width=True,
+                key="btn_pdf_vendas"
+            )
+        else:
+            st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_vendas_disabled")
+
+    df_vendas = st.session_state.get("df_vendas", pd.DataFrame())
+    df_depto = st.session_state.get("df_depto_vendas", pd.DataFrame())
+    df_pag = st.session_state.get("df_pag_vendas", pd.DataFrame())
 
     if df_vendas.empty:
         st.info("Nenhum dado encontrado para os filtros selecionados.")
@@ -414,217 +816,6 @@ with tab_visao:
                 cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
                 dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
-
-# ==========================================
-# FUNÇÕES E CLASSES PARA PDF
-# ==========================================
-class NumberedCanvas(canvas.Canvas):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._saved_page_states = []
-
-    def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
-
-    def save(self):
-        num_pages = len(self._saved_page_states)
-        for state in self._saved_page_states:
-            self.__dict__.update(state)
-            self.draw_page_number(num_pages)
-            canvas.Canvas.showPage(self)
-        canvas.Canvas.save(self)
-
-    def draw_page_number(self, page_count):
-        self.setFont("Helvetica", 8)
-        self.setFillColor(colors.HexColor('#64748B'))
-        page_text = f"página {self._pageNumber} de {page_count}"
-        self.drawRightString(landscape(A4)[0] - 20, 15, page_text)
-
-def gerar_pdf_compras(df_compras, data_ini, data_fim):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
-    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
-    
-    header_data = [
-        [Paragraph("<b>Acompanhamento Gerencial - Compras</b>", left_style),
-         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
-    ]
-    header_table = Table(header_data, colWidths=[400, 400])
-    header_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    elements.append(header_table)
-
-    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=7, alignment=1)
-    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=7, alignment=0)
-    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=7, alignment=2)
-    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=7, alignment=0, fontName='Helvetica-Bold')
-    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=7, alignment=2, fontName='Helvetica-Bold')
-
-    meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-    
-    df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento")
-    
-    for _, row in df_tot_depto.iterrows():
-        depto = row['Departamento']
-        df_d = df_compras[df_compras["Departamento"] == depto]
-        
-        df_pivot = df_d.pivot_table(index=['Fornecedor'], columns='Mes_Nome', values='Valor', aggfunc='sum')
-        for m in meses_colunas:
-            if m not in df_pivot.columns: df_pivot[m] = 0.0
-        
-        df_pivot = df_pivot[meses_colunas]
-        df_pivot['Total'] = df_pivot.sum(axis=1)
-        df_pivot = df_pivot.fillna(0).sort_index()
-        
-        linha_total = df_pivot.sum().to_frame().T
-        linha_total.index = ['TOTAL']
-        df_final = pd.concat([df_pivot, linha_total])
-
-        headers = ['Fornecedor'] + meses_colunas + ['Total']
-        table_data = [[Paragraph(h, header_style) for h in headers]]
-        
-        for fornecedor, r in df_final.iterrows():
-            is_total = (fornecedor == 'TOTAL')
-            row_cells = [Paragraph(fornecedor, cell_bold_left if is_total else cell_left)]
-            for m in meses_colunas + ['Total']:
-                val = r[m]
-                # SEM R$ NO PDF DE COMPRAS
-                val_str = formatar_numero(val) if val != 0 else "-"
-                row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
-            table_data.append(row_cells)
-
-        elements.append(Paragraph(f"<b>■ Departamento: {depto}</b>", styles['Heading3']))
-        
-        # LARGURAS PARA COMPORTAR VALORES DE ATÉ 999.999,00 E OCUPAR 100% DA FOLHA
-        col_widths = [130] + [50] * len(meses_colunas) + [70]
-        t = Table(table_data, colWidths=col_widths, repeatRows=1)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ]))
-        elements.append(t)
-        elements.append(Spacer(1, 15))
-    
-    doc.build(elements, canvasmaker=NumberedCanvas)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini, data_fim):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
-    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
-    
-    header_data = [
-        [Paragraph("<b>Acompanhamento Gerencial - Tributos</b>", left_style),
-         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
-    ]
-    header_table = Table(header_data, colWidths=[400, 400])
-    header_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    elements.append(header_table)
-    
-    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
-    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
-    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
-    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=8, alignment=2, fontName='Helvetica-Bold')
-    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=8, alignment=0, fontName='Helvetica-Bold')
-    
-    headers = ['Operação'] + [f['NomeFilial'] for _, f in colunas.iterrows()] + ['Total']
-    table_data = [[Paragraph(h, header_style) for h in headers]]
-    
-    def add_row_to_data(label, key, opts):
-        bold = opts.get('bold', False)
-        left_style = cell_bold_left if bold else cell_left
-        right_style = cell_bold_right if bold else cell_right
-        
-        row = [Paragraph(label, left_style)]
-        total = 0
-        for _, f in colunas.iterrows():
-            val = f[key] if key else 0
-            total += val
-            if 'fmt' in opts:
-                try:
-                    val_str = opts['fmt'](val, f)
-                except:
-                    val_str = formatar_moeda(val)
-            else:
-                val_str = formatar_moeda(val)
-            
-            if key == 'resultado':
-                if val < 0:
-                    val_str = f"-{formatar_moeda(abs(val))}"
-                else:
-                    val_str = formatar_moeda(val)
-            
-            row.append(Paragraph(val_str, right_style))
-        
-        if key == 'resultado':
-            total_str = formatar_moeda(total) if total >= 0 else f"-{formatar_moeda(abs(total))}"
-        else:
-            total_str = formatar_moeda(total)
-        
-        row.append(Paragraph(total_str, right_style))
-        return row
-    
-    all_rows = rows_saidas + rows_entradas + rows_resultado
-    for label, key, opts in all_rows:
-        table_data.append(add_row_to_data(label, key, opts))
-    
-    # LARGURAS PARA TRIBUTOS TAMBÉM OCUPAREM 100% DA FOLHA
-    col_widths = [150] + [115] * len(colunas) + [75]
-    t = Table(table_data, colWidths=col_widths, repeatRows=1)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-    ]))
-    elements.append(t)
-    
-    elements.append(Spacer(1, 15))
-    
-    saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
-    saldo_pb = pb["resultado"].sum() if not pb.empty else 0
-    saldo_srb = srb["resultado"].sum() if not srb.empty else 0
-    saldo_cons = saldo_atacado + saldo_pb + saldo_srb
-    
-    result_style = ParagraphStyle('Result', parent=styles['Normal'], alignment=1, fontSize=11, spaceAfter=10)
-    results_text = f"Resultado PB - ATACADO: {formatar_moeda(saldo_atacado)} &nbsp;&nbsp;&nbsp; Resultado PB - FILIAIS: {formatar_moeda(saldo_pb)} &nbsp;&nbsp;&nbsp; Resultado SRB: {formatar_moeda(saldo_srb)} &nbsp;&nbsp;&nbsp; Consolidado: {formatar_moeda(saldo_cons)}"
-    elements.append(Paragraph(results_text, result_style))
-    
-    doc.build(elements, canvasmaker=NumberedCanvas)
-    buffer.seek(0)
-    return buffer
 
 # ==========================================
 # ABA COMPRAS (SEM FORM, BOTOES ALINHADOS)
