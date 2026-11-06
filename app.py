@@ -6,7 +6,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from io import BytesIO
 from reportlab.lib.pagesizes import A4, landscape, portrait
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
@@ -158,7 +158,6 @@ def formatar_inteiro(v):
     return f"{int(v):,}".replace(",", ".")
 
 def formatar_pct(v):
-    """Formata percentual em pt-BR: 12.34 -> '12,34%'"""
     return f"{v:.2f}%".replace(".", ",")
 
 def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
@@ -308,9 +307,7 @@ class NumberedCanvas(canvas.Canvas):
 
 
 def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
-    """Gera PDF de vendas em A4 RETRATO, compacto para caber em 1 página.
-    Inclui coluna de Participação (%) nas tabelas de Departamento, Pagamento e Portador.
-    """
+    """Gera PDF de vendas em A4 RETRATO, compacto para caber em 1 página."""
     buffer = BytesIO()
     page_size = portrait(A4)
     margin_lr = 20
@@ -327,7 +324,6 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
     elements = []
     styles = getSampleStyleSheet()
 
-    # ---- Estilos compactos ----
     title_style = ParagraphStyle('Title', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0, spaceBefore=0)
     period_style = ParagraphStyle('Period', parent=styles['Normal'], alignment=2, fontSize=8, spaceAfter=0)
 
@@ -349,7 +345,6 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
     PAD_V = 2
     PAD_H = 4
 
-    # ---- Cabeçalho ----
     header_data = [[
         Paragraph("<b>Acompanhamento Gerencial - Vendas</b>", title_style),
         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", period_style),
@@ -366,7 +361,6 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
     ]))
     elements.append(header_table)
 
-    # ---- 1. RESUMO GERAL ----
     elements.append(Paragraph("<b>RESUMO GERAL (CONSOLIDADO E POR FILIAL)</b>", section_heading))
 
     filiais_ordem = [5, 1, 2, 3, 4]
@@ -439,7 +433,6 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
         elements.append(t)
         elements.append(Spacer(1, 4))
 
-    # ---- 2. DEPARTAMENTOS (com Participação %) ----
     if not df_depto.empty:
         elements.append(Paragraph("<b>VENDAS POR DEPARTAMENTO</b>", section_heading))
         df_depto_agg = df_depto.groupby("NomeDepto")["ValorVenda"].sum().reset_index().sort_values("ValorVenda", ascending=False)
@@ -474,7 +467,6 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
         elements.append(t_depto)
         elements.append(Spacer(1, 4))
 
-    # ---- 3. FORMAS DE PAGAMENTO (com Participação %) ----
     if not df_pag.empty:
         elements.append(Paragraph("<b>VENDAS POR FORMA DE PAGAMENTO</b>", section_heading))
         df_pag_agg = df_pag.groupby("Denominacao")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
@@ -509,7 +501,6 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
         elements.append(t_pag)
         elements.append(Spacer(1, 4))
 
-        # ---- 4. PORTADORES (com Participação %) ----
         df_pag_port = df_pag.dropna(subset=["NomePortador"])
         if not df_pag_port.empty:
             elements.append(Paragraph("<b>VENDAS POR PORTADOR</b>", section_heading))
@@ -550,14 +541,19 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
 
 
 def gerar_pdf_compras(df_compras, data_ini, data_fim):
+    """PDF de compras em A4 paisagem.
+    Inclui, no início, uma tabela RESUMO POR DEPARTAMENTO (MENSAL) com total de cada mês por
+    departamento, total anual por departamento e linha TOTAL GERAL (soma de cada mês + total anual).
+    Em seguida, o detalhamento por fornecedor mês a mês (comportamento anterior).
+    """
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
     elements = []
     styles = getSampleStyleSheet()
-    
+
     left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
     right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
-    
+
     header_data = [
         [Paragraph("<b>Acompanhamento Gerencial - Compras</b>", left_style),
          Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
@@ -580,28 +576,85 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
     cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=7, alignment=2, fontName='Helvetica-Bold')
 
     meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-    
+
+    # =========================================================
+    # 1. RESUMO POR DEPARTAMENTO (MENSAL) — TOTALIZADOR
+    # =========================================================
     df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento")
-    
+
+    # Pivot Departamento × Mes_Nome
+    df_resumo = df_compras.pivot_table(
+        index="Departamento",
+        columns="Mes_Nome",
+        values="Valor",
+        aggfunc="sum"
+    )
+    for m in meses_colunas:
+        if m not in df_resumo.columns:
+            df_resumo[m] = 0.0
+    df_resumo = df_resumo[meses_colunas]
+    df_resumo["Total"] = df_resumo.sum(axis=1)
+    df_resumo = df_resumo.fillna(0).sort_index()
+
+    # Linha TOTAL GERAL
+    linha_total_geral = df_resumo.sum().to_frame().T
+    linha_total_geral.index = ["TOTAL GERAL"]
+    df_resumo_final = pd.concat([df_resumo, linha_total_geral])
+
+    elements.append(Paragraph("<b>RESUMO POR DEPARTAMENTO (MENSAL)</b>", styles['Heading3']))
+
+    resumo_headers = ['Departamento'] + meses_colunas + ['Total Anual']
+    resumo_data = [[Paragraph(h, header_style) for h in resumo_headers]]
+
+    for depto, r in df_resumo_final.iterrows():
+        is_total = (depto == "TOTAL GERAL")
+        row_cells = [Paragraph(depto, cell_bold_left if is_total else cell_left)]
+        for m in meses_colunas + ['Total']:
+            val = r[m]
+            val_str = formatar_numero(val) if val != 0 else "-"
+            row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
+        resumo_data.append(row_cells)
+
+    # Largura: 150pt depto + 12 meses × 48pt + 65pt total = 150 + 576 + 65 = 791pt (cabe em paisagem A4)
+    col_widths_resumo = [150] + [48] * len(meses_colunas) + [65]
+    t_resumo = Table(resumo_data, colWidths=col_widths_resumo, repeatRows=1)
+    t_resumo.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        # Destaque da linha TOTAL GERAL
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')),
+        ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor('#1E293B')),
+    ]))
+    elements.append(t_resumo)
+    elements.append(Spacer(1, 10))
+
+    # =========================================================
+    # 2. DETALHAMENTO POR FORNECEDOR (comportamento anterior)
+    # =========================================================
     for _, row in df_tot_depto.iterrows():
         depto = row['Departamento']
         df_d = df_compras[df_compras["Departamento"] == depto]
-        
+
         df_pivot = df_d.pivot_table(index=['Fornecedor'], columns='Mes_Nome', values='Valor', aggfunc='sum')
         for m in meses_colunas:
             if m not in df_pivot.columns: df_pivot[m] = 0.0
-        
+
         df_pivot = df_pivot[meses_colunas]
         df_pivot['Total'] = df_pivot.sum(axis=1)
         df_pivot = df_pivot.fillna(0).sort_index()
-        
+
         linha_total = df_pivot.sum().to_frame().T
         linha_total.index = ['TOTAL']
         df_final = pd.concat([df_pivot, linha_total])
 
         headers = ['Fornecedor'] + meses_colunas + ['Total']
         table_data = [[Paragraph(h, header_style) for h in headers]]
-        
+
         for fornecedor, r in df_final.iterrows():
             is_total = (fornecedor == 'TOTAL')
             row_cells = [Paragraph(fornecedor, cell_bold_left if is_total else cell_left)]
@@ -612,7 +665,7 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
             table_data.append(row_cells)
 
         elements.append(Paragraph(f"<b>■ Departamento: {depto}</b>", styles['Heading3']))
-        
+
         col_widths = [130] + [50] * len(meses_colunas) + [70]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
         t.setStyle(TableStyle([
@@ -626,10 +679,11 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
         ]))
         elements.append(t)
         elements.append(Spacer(1, 15))
-    
+
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer
+
 
 def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini, data_fim):
     buffer = BytesIO()
