@@ -113,20 +113,6 @@ filiais_dict = carregar_filiais()
 filiais_inv = {v: k for k, v in filiais_dict.items()}
 NOMES_FILIAIS = {1: "PB - ALECRIM", 2: "PB - VIA DIRETA", 3: "PB - ZONA SUL", 4: "SRB - ZONA NORTE", 5: "PB - ATACADO"}
 
-def limpar_compras():
-    st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
-    st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
-    st.session_state["filial_compras"] = "Todas"
-    st.session_state["fornecedor_compras"] = "Todos"
-    if "df_compras" in st.session_state: del st.session_state["df_compras"]
-    if "pdf_bytes_comp" in st.session_state: del st.session_state["pdf_bytes_comp"]
-
-def limpar_tributos():
-    st.session_state["dt_ini_trib"] = hoje.replace(day=1)
-    st.session_state["dt_fim_trib"] = hoje
-    if "df_trib" in st.session_state: del st.session_state["df_trib"]
-    if "pdf_bytes_trib" in st.session_state: del st.session_state["pdf_bytes_trib"]
-
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
 
 tab_visao, tab_compras, tab_tributos = st.tabs(["💰 Vendas", "🛒 Compras", "⚖️ Tributos"])
@@ -492,15 +478,12 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
             row_cells = [Paragraph(fornecedor, cell_bold_left if is_total else cell_left)]
             for m in meses_colunas + ['Total']:
                 val = r[m]
-                # AQUI FOI TROCADO PARA formatar_numero (SEM R$)
                 val_str = formatar_numero(val) if val != 0 else "-"
                 row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
             table_data.append(row_cells)
 
         elements.append(Paragraph(f"<b>■ Departamento: {depto}</b>", styles['Heading3']))
         
-        # LARGURAS AJUSTADAS PARA CABER 999.999,00 E OCUPAR 100% DA FOLHA
-        # 130 (Fornecedor) + (12 * 50) (Meses) + 70 (Total) = 800
         col_widths = [130] + [50] * len(meses_colunas) + [70]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
         t.setStyle(TableStyle([
@@ -590,8 +573,6 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     for label, key, opts in all_rows:
         table_data.append(add_row_to_data(label, key, opts))
     
-    # LARGURAS PARA TRIBUTOS TAMBÉM OCUPAREM 100% DA FOLHA
-    # 150 (Operação) + (5 * 115) (Filiais) + 75 (Total) = 800
     col_widths = [150] + [115] * len(colunas) + [75]
     t = Table(table_data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
@@ -622,7 +603,7 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     return buffer
 
 # ==========================================
-# ABA COMPRAS
+# ABA COMPRAS (COM FORM PARA EVITAR PISCADAS)
 # ==========================================
 with tab_compras:
     try:
@@ -638,17 +619,30 @@ with tab_compras:
     if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
         st.session_state["fornecedor_compras"] = "Todos"
 
-    c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 1, 1.2, 1.5, 1, 1, 1.2], vertical_alignment="bottom")
+    c_filtros, c_pdf = st.columns([5, 1], vertical_alignment="bottom")
     
-    data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
-    data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
-    filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
-    fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
-    
-    with c5:
-        btn_compras = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_compras")
-    with c6:
-        st.button("🧹 Limpar", use_container_width=True, on_click=limpar_compras, key="btn_limpar_compras")
+    with c_filtros:
+        with st.form(key="form_compras_filtros"):
+            c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1.2, 1.5, 1, 1], vertical_alignment="bottom")
+            
+            data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
+            data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
+            filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
+            fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
+            
+            with c5:
+                btn_compras = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
+            with c6:
+                btn_limpar = st.form_submit_button("🧹 Limpar", use_container_width=True)
+
+    if btn_limpar:
+        st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
+        st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
+        st.session_state["filial_compras"] = "Todas"
+        st.session_state["fornecedor_compras"] = "Todos"
+        if "df_compras" in st.session_state: del st.session_state["df_compras"]
+        if "pdf_bytes_comp" in st.session_state: del st.session_state["pdf_bytes_comp"]
+        st.rerun()
 
     if "df_compras" not in st.session_state or btn_compras:
         filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
@@ -671,7 +665,9 @@ with tab_compras:
                 st.session_state["df_compras"] = df_compras
                 st.session_state["pdf_bytes_comp"] = None
 
-    with c7:
+    with c_pdf:
+        st.write("") # Alinhamento com os botões do form
+        st.write("") # Alinhamento com os botões do form
         pdf_bytes_comp = st.session_state.get("pdf_bytes_comp")
         if pdf_bytes_comp:
             timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
@@ -774,15 +770,22 @@ with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
-    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.2], vertical_alignment="bottom")
+    c_filtros_t, c_pdf_t = st.columns([5, 1], vertical_alignment="bottom")
     
-    data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
-    data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
+    with c_filtros_t:
+        with st.form(key="form_tributos_filtros"):
+            c1, c2, c3, c4 = st.columns([1, 1, 1, 1], vertical_alignment="bottom")
+            data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
+            data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
+            with c3: btn_atualizar = st.form_submit_button("🔄 Atualizar", use_container_width=True, type="primary")
+            with c4: btn_limpar_t = st.form_submit_button("🧹 Limpar", use_container_width=True)
 
-    with c3:
-        btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_trib")
-    with c4:
-        st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos, key="btn_limpar_trib")
+    if btn_limpar_t:
+        st.session_state["dt_ini_trib"] = hoje.replace(day=1)
+        st.session_state["dt_fim_trib"] = hoje
+        if "df_trib" in st.session_state: del st.session_state["df_trib"]
+        if "pdf_bytes_trib" in st.session_state: del st.session_state["pdf_bytes_trib"]
+        st.rerun()
 
     if "df_trib" not in st.session_state or btn_atualizar:
         with st.spinner("Carregando dados tributários..."):
@@ -891,7 +894,9 @@ with tab_tributos:
                 st.session_state["df_trib"] = df_trib
                 st.session_state["pdf_bytes_trib"] = None
 
-    with c5:
+    with c_pdf_t:
+        st.write("")
+        st.write("")
         pdf_bytes_t = st.session_state.get("pdf_bytes_trib")
         if pdf_bytes_t:
             timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
