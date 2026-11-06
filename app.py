@@ -157,6 +157,10 @@ def formatar_decimal(v):
 def formatar_inteiro(v):
     return f"{int(v):,}".replace(",", ".")
 
+def formatar_pct(v):
+    """Formata percentual em pt-BR: 12.34 -> '12,34%'"""
+    return f"{v:.2f}%".replace(".", ",")
+
 def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     if df_hora.empty: return go.Figure()
     
@@ -304,7 +308,9 @@ class NumberedCanvas(canvas.Canvas):
 
 
 def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
-    """Gera PDF de vendas em A4 RETRATO, compacto para caber em 1 página."""
+    """Gera PDF de vendas em A4 RETRATO, compacto para caber em 1 página.
+    Inclui coluna de Participação (%) nas tabelas de Departamento, Pagamento e Portador.
+    """
     buffer = BytesIO()
     page_size = portrait(A4)
     margin_lr = 20
@@ -325,7 +331,6 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
     title_style = ParagraphStyle('Title', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0, spaceBefore=0)
     period_style = ParagraphStyle('Period', parent=styles['Normal'], alignment=2, fontSize=8, spaceAfter=0)
 
-    # Substitui styles['Heading3'] (que tem 12+12pt de espaço) por um compacto
     section_heading = ParagraphStyle(
         'SectionHeading',
         parent=styles['Normal'],
@@ -341,8 +346,7 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
     cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=8, alignment=2, fontName='Helvetica-Bold')
 
-    # Padding vertical compacto (padrão das tabelas)
-    PAD_V = 2   # antes era 4
+    PAD_V = 2
     PAD_H = 4
 
     # ---- Cabeçalho ----
@@ -435,17 +439,27 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
         elements.append(t)
         elements.append(Spacer(1, 4))
 
-    # ---- 2. DEPARTAMENTOS ----
+    # ---- 2. DEPARTAMENTOS (com Participação %) ----
     if not df_depto.empty:
         elements.append(Paragraph("<b>VENDAS POR DEPARTAMENTO</b>", section_heading))
         df_depto_agg = df_depto.groupby("NomeDepto")["ValorVenda"].sum().reset_index().sort_values("ValorVenda", ascending=False)
+        total_depto = df_depto_agg["ValorVenda"].sum()
 
-        depto_data = [[Paragraph("Departamento", header_style), Paragraph("Vendas (R$)", header_style)]]
+        depto_data = [[
+            Paragraph("Departamento", header_style),
+            Paragraph("Vendas (R$)", header_style),
+            Paragraph("Participação", header_style),
+        ]]
         for _, row in df_depto_agg.iterrows():
-            depto_data.append([Paragraph(row["NomeDepto"], cell_left), Paragraph(formatar_moeda(row["ValorVenda"]), cell_right)])
+            pct = (row["ValorVenda"] / total_depto * 100) if total_depto > 0 else 0
+            depto_data.append([
+                Paragraph(row["NomeDepto"], cell_left),
+                Paragraph(formatar_moeda(row["ValorVenda"]), cell_right),
+                Paragraph(formatar_pct(pct), cell_right),
+            ])
 
-        col2_widths = [usable_width * 0.65, usable_width * 0.35]
-        t_depto = Table(depto_data, colWidths=col2_widths, repeatRows=1)
+        col3_widths = [usable_width * 0.50, usable_width * 0.30, usable_width * 0.20]
+        t_depto = Table(depto_data, colWidths=col3_widths, repeatRows=1)
         t_depto.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -460,17 +474,27 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
         elements.append(t_depto)
         elements.append(Spacer(1, 4))
 
-    # ---- 3. FORMAS DE PAGAMENTO ----
+    # ---- 3. FORMAS DE PAGAMENTO (com Participação %) ----
     if not df_pag.empty:
         elements.append(Paragraph("<b>VENDAS POR FORMA DE PAGAMENTO</b>", section_heading))
         df_pag_agg = df_pag.groupby("Denominacao")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
+        total_pag = df_pag_agg["Valor"].sum()
 
-        pag_data = [[Paragraph("Forma de Pagamento", header_style), Paragraph("Vendas (R$)", header_style)]]
+        pag_data = [[
+            Paragraph("Forma de Pagamento", header_style),
+            Paragraph("Vendas (R$)", header_style),
+            Paragraph("Participação", header_style),
+        ]]
         for _, row in df_pag_agg.iterrows():
-            pag_data.append([Paragraph(row["Denominacao"], cell_left), Paragraph(formatar_moeda(row["Valor"]), cell_right)])
+            pct = (row["Valor"] / total_pag * 100) if total_pag > 0 else 0
+            pag_data.append([
+                Paragraph(row["Denominacao"], cell_left),
+                Paragraph(formatar_moeda(row["Valor"]), cell_right),
+                Paragraph(formatar_pct(pct), cell_right),
+            ])
 
-        col2_widths = [usable_width * 0.65, usable_width * 0.35]
-        t_pag = Table(pag_data, colWidths=col2_widths, repeatRows=1)
+        col3_widths = [usable_width * 0.50, usable_width * 0.30, usable_width * 0.20]
+        t_pag = Table(pag_data, colWidths=col3_widths, repeatRows=1)
         t_pag.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -485,18 +509,28 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
         elements.append(t_pag)
         elements.append(Spacer(1, 4))
 
-        # ---- 4. PORTADORES ----
+        # ---- 4. PORTADORES (com Participação %) ----
         df_pag_port = df_pag.dropna(subset=["NomePortador"])
         if not df_pag_port.empty:
             elements.append(Paragraph("<b>VENDAS POR PORTADOR</b>", section_heading))
             df_port_agg = df_pag_port.groupby("NomePortador")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
+            total_port = df_port_agg["Valor"].sum()
 
-            port_data = [[Paragraph("Portador", header_style), Paragraph("Vendas (R$)", header_style)]]
+            port_data = [[
+                Paragraph("Portador", header_style),
+                Paragraph("Vendas (R$)", header_style),
+                Paragraph("Participação", header_style),
+            ]]
             for _, row in df_port_agg.iterrows():
-                port_data.append([Paragraph(row["NomePortador"], cell_left), Paragraph(formatar_moeda(row["Valor"]), cell_right)])
+                pct = (row["Valor"] / total_port * 100) if total_port > 0 else 0
+                port_data.append([
+                    Paragraph(row["NomePortador"], cell_left),
+                    Paragraph(formatar_moeda(row["Valor"]), cell_right),
+                    Paragraph(formatar_pct(pct), cell_right),
+                ])
 
-            col2_widths = [usable_width * 0.65, usable_width * 0.35]
-            t_port = Table(port_data, colWidths=col2_widths, repeatRows=1)
+            col3_widths = [usable_width * 0.50, usable_width * 0.30, usable_width * 0.20]
+            t_port = Table(port_data, colWidths=col3_widths, repeatRows=1)
             t_port.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
