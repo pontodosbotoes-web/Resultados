@@ -25,8 +25,8 @@ Entradas AS (
         AND self.CodCliFor IS NULL
         AND p.IndisponivelVenda = 'N'
         AND (
-            (m.CodFilial = 4 AND m.TipoMov IN ('1.1','1.2'))
-            OR (m.CodFilial <> 4 AND m.TipoMov = '1.2')
+            (m.CodFilial = 4 AND m.TipoMov = '1.1')
+            OR (m.TipoMov = '1.2' AND m.DtFinalizacao IS NOT NULL)
         )
         /* FILTRO_FILIAL */
     GROUP BY YEAR(m.DataEntradaSaida), MONTH(m.DataEntradaSaida), origem.CodFilial, m.CodFilial
