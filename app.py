@@ -437,9 +437,9 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
 
 
 def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
-    """PDF de transferências em A4 paisagem.
-    Resumo: Filial Destino × Mês (usando transf_2.9 + srb_entrada, sem duplicar).
-    Detalhe por destino: 2 tabelas — ENTRADAS (recebidas) e SAÍDAS (enviadas).
+    """PDF em A4 paisagem.
+    Totais baseados em SAÍDAS (registro de quem enviou).
+    Por destino: tabela ENTRADAS (o que recebeu) + tabela SAÍDAS (o que enviou).
     """
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
@@ -461,21 +461,25 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
 
     meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-    df_para_totais = df_transf[df_transf["TipoDado"].isin(["transf_2.9", "srb_entrada"])].copy()
+    df_entradas_all = df_transf[df_transf["TipoDado"] == "ENTRADA"].copy()
+    df_saidas_all = df_transf[df_transf["TipoDado"] == "SAIDA"].copy()
 
-    # ========= RESUMO POR DESTINO (MENSAL) =========
-    df_tot_destino = df_para_totais.groupby("FilialDestino")["Valor"].sum().reset_index().sort_values("FilialDestino")
-    df_resumo = df_para_totais.pivot_table(index="FilialDestino", columns="Mes_Nome", values="Valor", aggfunc="sum")
+    # ===== RESUMO POR DESTINO (baseado em SAÍDAS) =====
+    df_resumo = df_saidas_all.pivot_table(index="FilialDestino", columns="Mes_Nome", values="Valor", aggfunc="sum")
     for m in meses_colunas:
         if m not in df_resumo.columns: df_resumo[m] = 0.0
-    df_resumo = df_resumo[meses_colunas]
-    df_resumo["Total"] = df_resumo.sum(axis=1)
-    df_resumo = df_resumo.fillna(0).sort_index()
+    if df_resumo.empty:
+        df_resumo = pd.DataFrame(columns=meses_colunas + ['Total'])
+    else:
+        df_resumo = df_resumo[meses_colunas]
+        df_resumo["Total"] = df_resumo.sum(axis=1)
+        df_resumo = df_resumo.fillna(0).sort_index()
+
     linha_total_geral = df_resumo.sum().to_frame().T
     linha_total_geral.index = ["TOTAL GERAL"]
     df_resumo_final = pd.concat([df_resumo, linha_total_geral])
 
-    elements.append(Paragraph("<b>RESUMO POR FILIAL DESTINO (MENSAL)</b>", styles['Heading3']))
+    elements.append(Paragraph("<b>RESUMO POR FILIAL DESTINO (MENSAL) — baseado em SAÍDAS</b>", styles['Heading3']))
     resumo_headers = ['Filial Destino'] + meses_colunas + ['Total Anual']
     resumo_data = [[Paragraph(h, header_style) for h in resumo_headers]]
     for destino, r in df_resumo_final.iterrows():
@@ -483,7 +487,7 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
         nome_dest = "TOTAL GERAL" if is_total else NOMES_FILIAIS.get(int(destino), f"Filial {destino}")
         row_cells = [Paragraph(nome_dest, cell_bold_left if is_total else cell_left)]
         for m in meses_colunas + ['Total']:
-            val = r[m]
+            val = r[m] if m in r else 0
             val_str = formatar_numero(val) if val != 0 else "-"
             row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
         resumo_data.append(row_cells)
@@ -493,8 +497,10 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
     elements.append(t_resumo)
     elements.append(Spacer(1, 10))
 
-    # ========= DETALHE POR DESTINO (2 tabelas: Entradas e Saídas) =========
-    def montar_tabela_pivot(df_sub, coluna_index, titulo, cor_header_hex):
+    # ===== DETALHE POR DESTINO (2 tabelas por filial) =====
+    def montar_tabela_pivot(df_sub, coluna_index, cor_header_hex):
+        if df_sub.empty:
+            return None
         df_pivot = df_sub.pivot_table(index=coluna_index, columns='Mes_Nome', values='Valor', aggfunc='sum')
         for m in meses_colunas:
             if m not in df_pivot.columns: df_pivot[m] = 0.0
@@ -504,15 +510,11 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
         linha_total = df_pivot.sum().to_frame().T
         linha_total.index = ['TOTAL']
         df_final = pd.concat([df_pivot, linha_total])
-
         headers = [coluna_index] + meses_colunas + ['Total']
         table_data = [[Paragraph(h, header_style) for h in headers]]
         for chave, r in df_final.iterrows():
             is_total = (chave == 'TOTAL')
-            if is_total:
-                nome = "TOTAL"
-            else:
-                nome = NOMES_FILIAIS.get(int(chave), f"Filial {chave}")
+            nome = "TOTAL" if is_total else NOMES_FILIAIS.get(int(chave), f"Filial {chave}")
             row_cells = [Paragraph(nome, cell_bold_left if is_total else cell_left)]
             for m in meses_colunas + ['Total']:
                 val = r[m]
@@ -524,38 +526,26 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
         t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(cor_header_hex)), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), 4), ('TOPPADDING', (0, 0), (-1, -1), 4)]))
         return t
 
-    for _, row_dest in df_tot_destino.iterrows():
-        destino = int(row_dest["FilialDestino"])
-        nome_dest = NOMES_FILIAIS.get(destino, f"Filial {destino}")
-        elements.append(Paragraph(f"<b>■ Destino: {nome_dest}</b>", styles['Heading3']))
+    todas_filiais = sorted(set(df_entradas_all["FilialDestino"].unique().tolist() + df_saidas_all["FilialOrigem"].unique().tolist()))
 
-        if destino == 4:
-            df_entradas = df_transf[(df_transf["FilialDestino"] == 4) & (df_transf["TipoDado"] == "srb_entrada")].copy()
-            df_saidas = df_transf[(df_transf["FilialDestino"] == 4) & (df_transf["TipoDado"] == "srb_saida_filiais")].copy()
-            coluna_entradas = "FilialOrigem"
-            coluna_saidas = "FilialOrigem"
-            label_entradas = "ENTRADAS na SRB (registradas na SRB — TipoMov 1.1/1.2)"
-            label_saidas = "SAÍDAS das Filiais para SRB (registradas nas Filiais — TipoMov 2.2/2.4)"
-        else:
-            df_entradas = df_transf[(df_transf["FilialDestino"] == destino) & (df_transf["TipoDado"] == "transf_2.9")].copy()
-            df_saidas = df_transf[(df_transf["FilialOrigem"] == destino) & (df_transf["TipoDado"].isin(["transf_2.9", "srb_saida_filiais"]))].copy()
-            coluna_entradas = "FilialOrigem"
-            coluna_saidas = "FilialDestino"
-            label_entradas = f"📥 ENTRADAS em {nome_dest}"
-            label_saidas = f"📤 SAÍDAS de {nome_dest}"
+    for filial in todas_filiais:
+        nome_filial = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
+        elements.append(Paragraph(f"<b>■ Filial: {nome_filial}</b>", styles['Heading3']))
 
-        elements.append(Paragraph(f"<b>{label_entradas}</b>", sub_heading))
-        if not df_entradas.empty:
-            elements.append(montar_tabela_pivot(df_entradas, coluna_entradas, "ENTRADAS", '#065F46'))
-        else:
-            elements.append(Paragraph("<i>Nenhuma entrada no período.</i>", styles['Normal']))
+        # ENTRADAS
+        df_ent = df_entradas_all[df_entradas_all["FilialDestino"] == filial]
+        elements.append(Paragraph(f"<b>📥 ENTRADAS em {nome_filial}</b>", sub_heading))
+        t_ent = montar_tabela_pivot(df_ent, "FilialOrigem", '#065F46')
+        if t_ent: elements.append(t_ent)
+        else: elements.append(Paragraph("<i>Nenhuma entrada no período.</i>", styles['Normal']))
         elements.append(Spacer(1, 6))
 
-        elements.append(Paragraph(f"<b>{label_saidas}</b>", sub_heading))
-        if not df_saidas.empty:
-            elements.append(montar_tabela_pivot(df_saidas, coluna_saidas, "SAÍDAS", '#7F1D1D'))
-        else:
-            elements.append(Paragraph("<i>Nenhuma saída no período.</i>", styles['Normal']))
+        # SAÍDAS
+        df_sai = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]
+        elements.append(Paragraph(f"<b>📤 SAÍDAS de {nome_filial}</b>", sub_heading))
+        t_sai = montar_tabela_pivot(df_sai, "FilialDestino", '#7F1D1D')
+        if t_sai: elements.append(t_sai)
+        else: elements.append(Paragraph("<i>Nenhuma saída no período.</i>", styles['Normal']))
         elements.append(Spacer(1, 12))
 
     doc.build(elements, canvasmaker=NumberedCanvas)
@@ -916,8 +906,6 @@ with tab_transferencias:
                     df_transf["FilialDestino"] = pd.to_numeric(df_transf["FilialDestino"], errors="coerce").fillna(0).astype(int)
                     df_transf["Mes"] = pd.to_numeric(df_transf["Mes"], errors="coerce").fillna(0).astype(int)
                     df_transf['Mes_Nome'] = df_transf['Mes'].map({1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'})
-                    if "TipoDado" not in df_transf.columns:
-                        df_transf["TipoDado"] = "transf_2.9"
                     st.session_state["df_transf"] = df_transf
                     st.session_state["pdf_bytes_transf"] = gerar_pdf_transferencias(df_transf, data_ini_tr, data_fim_tr)
                 else:
@@ -933,12 +921,12 @@ with tab_transferencias:
     if df_transf.empty:
         st.info("Nenhuma transferência encontrada para o período/filtros.")
     else:
-        # Totais sem duplicidade: usar transf_2.9 + srb_entrada
-        df_para_totais = df_transf[df_transf["TipoDado"].isin(["transf_2.9", "srb_entrada"])].copy()
-        tot_val_geral = df_para_totais["Valor"].sum()
+        df_entradas_all = df_transf[df_transf["TipoDado"] == "ENTRADA"].copy()
+        df_saidas_all = df_transf[df_transf["TipoDado"] == "SAIDA"].copy()
 
-        df_tot_destino = df_para_totais.groupby("FilialDestino")["Valor"].sum().reset_index()
-        df_tot_destino = df_tot_destino.sort_values("FilialDestino", ascending=True)
+        # Totais e cards baseados em SAÍDAS (registro de quem enviou)
+        tot_val_geral = df_saidas_all["Valor"].sum()
+        df_tot_destino = df_saidas_all.groupby("FilialDestino")["Valor"].sum().reset_index().sort_values("FilialDestino", ascending=True)
 
         meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -963,43 +951,26 @@ with tab_transferencias:
 
         st.write("")
 
-        if not df_tot_destino.empty:
-            destinos_nomes = []
-            for _, row in df_tot_destino.iterrows():
-                dc = int(row["FilialDestino"])
-                destinos_nomes.append(NOMES_FILIAIS.get(dc, f"Filial {dc}"))
+        # Sub-abas: todas as filiais envolvidas em QUALQUER direção
+        filiais_envolvidas = sorted(set(
+            df_entradas_all["FilialDestino"].unique().tolist()
+            + df_saidas_all["FilialOrigem"].unique().tolist()
+        ))
 
-            sub_tabs = st.tabs(destinos_nomes)
+        if filiais_envolvidas:
+            nomes_tabs = [NOMES_FILIAIS.get(int(f), f"Filial {f}") for f in filiais_envolvidas]
+            sub_tabs = st.tabs(nomes_tabs)
 
-            for sub_tab, (_, row) in zip(sub_tabs, df_tot_destino.iterrows()):
+            for sub_tab, filial in zip(sub_tabs, filiais_envolvidas):
                 with sub_tab:
-                    destino_cod = int(row["FilialDestino"])
-                    nome_dest = NOMES_FILIAIS.get(destino_cod, f"Filial {destino_cod}")
+                    nome_filial = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
 
-                    # Separar em ENTRADAS e SAÍDAS
-                    if destino_cod == 4:
-                        # SRB: entradas registradas na SRB, saídas das filiais para ela
-                        df_entradas = df_transf[(df_transf["FilialDestino"] == 4) & (df_transf["TipoDado"] == "srb_entrada")].copy()
-                        df_saidas = df_transf[(df_transf["FilialDestino"] == 4) & (df_transf["TipoDado"] == "srb_saida_filiais")].copy()
-                        coluna_entradas = "FilialOrigem"
-                        coluna_saidas = "FilialOrigem"
-                        label_entradas = "📥 ENTRADAS na SRB (registradas na SRB — TipoMov 1.1/1.2)"
-                        label_saidas = "📤 SAÍDAS das Filiais para SRB (registradas nas Filiais — TipoMov 2.2/2.4)"
-                    else:
-                        # Filial normal
-                        df_entradas = df_transf[(df_transf["FilialDestino"] == destino_cod) & (df_transf["TipoDado"] == "transf_2.9")].copy()
-                        df_saidas = df_transf[(df_transf["FilialOrigem"] == destino_cod) & (df_transf["TipoDado"].isin(["transf_2.9", "srb_saida_filiais"]))].copy()
-                        coluna_entradas = "FilialOrigem"
-                        coluna_saidas = "FilialDestino"
-                        label_entradas = f"📥 ENTRADAS em {nome_dest} (recebidas de outras filiais)"
-                        label_saidas = f"📤 SAÍDAS de {nome_dest} (enviadas para outras filiais)"
-
-                    # Tabela ENTRADAS
-                    st.markdown(f"### {label_entradas}")
-                    if df_entradas.empty:
+                    st.markdown(f"### 📥 ENTRADAS em {nome_filial}")
+                    df_ent = df_entradas_all[df_entradas_all["FilialDestino"] == filial]
+                    if df_ent.empty:
                         st.info("Nenhuma entrada no período.")
                     else:
-                        df_pivot_e = df_entradas.pivot_table(index=coluna_entradas, columns='Mes_Nome', values='Valor', aggfunc='sum')
+                        df_pivot_e = df_ent.pivot_table(index="FilialOrigem", columns='Mes_Nome', values='Valor', aggfunc='sum')
                         for m in meses_colunas:
                             if m not in df_pivot_e.columns: df_pivot_e[m] = 0.0
                         df_pivot_e = df_pivot_e[meses_colunas]
@@ -1010,23 +981,23 @@ with tab_transferencias:
                         df_final_e = pd.concat([df_pivot_e, linha_total_e])
                         df_display_e = df_final_e.copy()
                         df_display_e.index = ["TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") for i in df_display_e.index]
-                        df_display_e.index.name = coluna_entradas
+                        df_display_e.index.name = "Filial Origem"
                         def fmt_br_e(x):
                             if pd.isna(x) or x == 0: return "-"
                             return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                        def highlight_total_e(row):
+                        def hl_e(row):
                             if row.name == 'TOTAL': return ['font-weight: bold; color: #58a6ff;'] * len(row)
                             return [''] * len(row)
-                        st.dataframe(df_display_e.style.format(fmt_br_e).apply(highlight_total_e, axis=1), use_container_width=True)
+                        st.dataframe(df_display_e.style.format(fmt_br_e).apply(hl_e, axis=1), use_container_width=True)
 
                     st.write("")
 
-                    # Tabela SAÍDAS
-                    st.markdown(f"### {label_saidas}")
-                    if df_saidas.empty:
+                    st.markdown(f"### 📤 SAÍDAS de {nome_filial}")
+                    df_sai = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]
+                    if df_sai.empty:
                         st.info("Nenhuma saída no período.")
                     else:
-                        df_pivot_s = df_saidas.pivot_table(index=coluna_saidas, columns='Mes_Nome', values='Valor', aggfunc='sum')
+                        df_pivot_s = df_sai.pivot_table(index="FilialDestino", columns='Mes_Nome', values='Valor', aggfunc='sum')
                         for m in meses_colunas:
                             if m not in df_pivot_s.columns: df_pivot_s[m] = 0.0
                         df_pivot_s = df_pivot_s[meses_colunas]
@@ -1037,14 +1008,14 @@ with tab_transferencias:
                         df_final_s = pd.concat([df_pivot_s, linha_total_s])
                         df_display_s = df_final_s.copy()
                         df_display_s.index = ["TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") for i in df_display_s.index]
-                        df_display_s.index.name = coluna_saidas
+                        df_display_s.index.name = "Filial Destino"
                         def fmt_br_s(x):
                             if pd.isna(x) or x == 0: return "-"
                             return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                        def highlight_total_s(row):
+                        def hl_s(row):
                             if row.name == 'TOTAL': return ['font-weight: bold; color: #58a6ff;'] * len(row)
                             return [''] * len(row)
-                        st.dataframe(df_display_s.style.format(fmt_br_s).apply(highlight_total_s, axis=1), use_container_width=True)
+                        st.dataframe(df_display_s.style.format(fmt_br_s).apply(hl_s, axis=1), use_container_width=True)
 
 # ==========================================
 # ABA TRIBUTOS
