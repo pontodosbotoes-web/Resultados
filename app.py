@@ -546,6 +546,64 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
         t_sai = montar_tabela_pivot(df_sai, "FilialDestino", '#7F1D1D')
         if t_sai: elements.append(t_sai)
         else: elements.append(Paragraph("<i>Nenhuma saída no período.</i>", styles['Normal']))
+        elements.append(Spacer(1, 6))
+
+        # SALDO (ENTRADAS - SAÍDAS)
+        elements.append(Paragraph(f"<b>💰 SALDO em {nome_filial} (Entradas − Saídas)</b>", sub_heading))
+
+        tot_ent_mes = {m: (df_ent[df_ent["Mes_Nome"] == m]["Valor"].sum() if not df_ent.empty else 0.0) for m in meses_colunas}
+        tot_sai_mes = {m: (df_sai[df_sai["Mes_Nome"] == m]["Valor"].sum() if not df_sai.empty else 0.0) for m in meses_colunas}
+        tot_ent_ano = sum(tot_ent_mes.values())
+        tot_sai_ano = sum(tot_sai_mes.values())
+        saldo_ano = tot_ent_ano - tot_sai_ano
+
+        saldo_rows = [
+            ("📥 Total Entradas", tot_ent_mes, tot_ent_ano),
+            ("📤 Total Saídas", tot_sai_mes, tot_sai_ano),
+            ("💰 Saldo", {m: tot_ent_mes[m] - tot_sai_mes[m] for m in meses_colunas}, saldo_ano),
+        ]
+
+        saldo_headers = ['Descrição'] + meses_colunas + ['Total']
+        saldo_data = [[Paragraph(h, header_style) for h in saldo_headers]]
+
+        for label, vals_mes, val_total in saldo_rows:
+            is_saldo = label.startswith("💰")
+            row_cells = [Paragraph(label, cell_bold_left if is_saldo else cell_left)]
+            for m in meses_colunas:
+                v = vals_mes[m]
+                if v == 0:
+                    txt = "-"
+                elif is_saldo:
+                    txt = ("-" if v < 0 else "+") + formatar_numero(abs(v))
+                else:
+                    txt = formatar_numero(v)
+                row_cells.append(Paragraph(txt, cell_bold_right if is_saldo else cell_right))
+            # Total
+            if val_total == 0:
+                txt_total = "-"
+            elif is_saldo:
+                txt_total = ("-" if val_total < 0 else "+") + formatar_numero(abs(val_total))
+            else:
+                txt_total = formatar_numero(val_total)
+            row_cells.append(Paragraph(txt_total, cell_bold_right if is_saldo else cell_right))
+            saldo_data.append(row_cells)
+
+        col_widths_saldo = [130] + [50] * len(meses_colunas) + [70]
+        t_saldo = Table(saldo_data, colWidths=col_widths_saldo, repeatRows=1)
+        # Estilo: destaca a linha SALDO em amarelo claro
+        style_saldo = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#FEF3C7')),
+            ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor('#D97706')),
+        ]
+        t_saldo.setStyle(TableStyle(style_saldo))
+        elements.append(t_saldo)
         elements.append(Spacer(1, 12))
 
     doc.build(elements, canvasmaker=NumberedCanvas)
@@ -1016,6 +1074,52 @@ with tab_transferencias:
                             if row.name == 'TOTAL': return ['font-weight: bold; color: #58a6ff;'] * len(row)
                             return [''] * len(row)
                         st.dataframe(df_display_s.style.format(fmt_br_s).apply(hl_s, axis=1), use_container_width=True)
+                        
+                    st.write("")
+
+                    # ================= SALDO (ENTRADAS - SAÍDAS) =================
+                    st.markdown(f"### 💰 SALDO em {nome_filial} (Entradas − Saídas)")
+
+                    # Totais mensais de ENTRADAS e SAÍDAS
+                    tot_ent_mes = {m: (df_ent[df_ent["Mes_Nome"] == m]["Valor"].sum() if not df_ent.empty else 0.0) for m in meses_colunas}
+                    tot_sai_mes = {m: (df_sai[df_sai["Mes_Nome"] == m]["Valor"].sum() if not df_sai.empty else 0.0) for m in meses_colunas}
+
+                    tot_ent_ano = sum(tot_ent_mes.values())
+                    tot_sai_ano = sum(tot_sai_mes.values())
+                    saldo_ano = tot_ent_ano - tot_sai_ano
+
+                    saldo_dict = {
+                        "📥 Total Entradas": {**tot_ent_mes, "Total": tot_ent_ano},
+                        "📤 Total Saídas": {**tot_sai_mes, "Total": tot_sai_ano},
+                        "💰 Saldo": {**{m: tot_ent_mes[m] - tot_sai_mes[m] for m in meses_colunas}, "Total": saldo_ano},
+                    }
+                    df_saldo = pd.DataFrame(saldo_dict).T
+                    df_saldo = df_saldo[meses_colunas + ["Total"]]
+                    df_saldo.index.name = "Descrição"
+
+                    def fmt_br_saldo(x):
+                        if pd.isna(x) or x == 0: return "-"
+                        return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+                    def hl_saldo(row):
+                        base = [''] * len(row)
+                        if row.name == "💰 Saldo":
+                            base = ['font-weight: bold; color: #3fb950; background: rgba(63,185,80,0.08);'] * len(row)
+                            # Se algum valor for negativo, colore vermelho
+                            base = [
+                                'font-weight: bold; background: rgba(63,185,80,0.08); color: ' + ('#f85149' if (isinstance(v, (int, float)) and v < 0) else '#3fb950')
+                                for v in row.values
+                            ]
+                        elif row.name == "📥 Total Entradas":
+                            base = ['color: #3fb950;'] * len(row)
+                        elif row.name == "📤 Total Saídas":
+                            base = ['color: #ff7b72;'] * len(row)
+                        return base
+
+                    st.dataframe(
+                        df_saldo.style.format(fmt_br_saldo).apply(hl_saldo, axis=1),
+                        use_container_width=True
+                    )
 
 # ==========================================
 # ABA TRIBUTOS
