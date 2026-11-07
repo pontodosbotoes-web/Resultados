@@ -982,30 +982,39 @@ with tab_transferencias:
         df_entradas_all = df_transf[df_transf["TipoDado"] == "ENTRADA"].copy()
         df_saidas_all = df_transf[df_transf["TipoDado"] == "SAIDA"].copy()
 
-        # Totais e cards baseados em SAÍDAS (registro de quem enviou)
-        tot_val_geral = df_saidas_all["Valor"].sum()
-        df_tot_destino = df_saidas_all.groupby("FilialDestino")["Valor"].sum().reset_index().sort_values("FilialDestino", ascending=True)
-
         meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-        cards_data = [("🔄 Total Transferido", tot_val_geral, "#58a6ff", "")]
-        cores_destino = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e"]
-        for i, row in df_tot_destino.iterrows():
-            destino_cod = int(row["FilialDestino"])
-            nome_destino = NOMES_FILIAIS.get(destino_cod, f"Filial {destino_cod}")
-            cor = cores_destino[i % len(cores_destino)]
-            pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
-            pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
-            cards_data.append((f"📥 {nome_destino}", row["Valor"], cor, pct_html))
+        # === Cards: SALDO por Filial (Entradas − Saídas), sem participação ===
+        filiais_card = sorted(set(
+            df_entradas_all["FilialDestino"].unique().tolist()
+            + df_saidas_all["FilialOrigem"].unique().tolist()
+        ))
+
+        def fmt_saldo_card(v):
+            if v > 0:
+                return f"+ {formatar_moeda(v)}"
+            elif v < 0:
+                return f"- {formatar_moeda(abs(v))}"
+            else:
+                return formatar_moeda(0)
+
+        cards_data = []
+        for filial in filiais_card:
+            ent_v = df_entradas_all[df_entradas_all["FilialDestino"] == filial]["Valor"].sum()
+            sai_v = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]["Valor"].sum()
+            saldo_v = ent_v - sai_v
+            nome = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
+            cor = "#3fb950" if saldo_v >= 0 else "#f85149"
+            cards_data.append((f"💰 Saldo {nome}", saldo_v, cor))
 
         for i in range(0, len(cards_data), 5):
             chunk = cards_data[i:i+5]
             cols = st.columns(5)
-            for j, (nome, valor, cor, pct_html) in enumerate(chunk):
+            for j, (nome, valor, cor) in enumerate(chunk):
                 with cols[j]:
                     r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
                     bg_color = f"rgba({r}, {g}, {b}, 0.08)"
-                    st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
 
         st.write("")
 
