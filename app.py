@@ -12,7 +12,7 @@ from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 
 from src.db import carregar_filiais, carregar_fornecedores
-from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras, buscar_tributos
+from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras, buscar_transferencias, buscar_tributos
 
 st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_icon="📊")
 
@@ -41,7 +41,6 @@ st.markdown("""
         
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
 
-        /* ESTILO DO BOTÃO ATUALIZAR (VERDE) */
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"], div[data-testid="stButton"] button[kind="primary"] {
             background-color: #238636 !important;
             color: #ffffff !important;
@@ -55,7 +54,6 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(46, 160, 67, 0.4) !important;
         }
 
-        /* ESTILO DO BOTÃO LIMPAR (VERMELHO) */
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"], div[data-testid="stButton"] button {
             background-color: #da3633 !important;
             color: #ffffff !important;
@@ -69,7 +67,6 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(248, 81, 73, 0.4) !important;
         }
         
-        /* ESTILO DO BOTÃO DE DOWNLOAD (GERAR PDF) */
         div[data-testid="stDownloadButton"] button {
             background-color: #1f6feb !important;
             color: #ffffff !important;
@@ -83,7 +80,6 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(56, 139, 253, 0.4) !important;
         }
 
-        /* ===== TRIBUTOS ===== */
         .tabela-wrapper { overflow-x: auto; margin: 10px 0 30px 0; }
         .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 14px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; }
         .tributos-tabela th { background: #0d1117; color: #f0f6fc; padding: 10px 12px; border-bottom: 2px solid #30363d; font-weight: 600; white-space: nowrap; }
@@ -135,6 +131,13 @@ def limpar_compras():
     if "df_compras" in st.session_state: del st.session_state["df_compras"]
     if "pdf_bytes_comp" in st.session_state: del st.session_state["pdf_bytes_comp"]
 
+def limpar_transferencias():
+    st.session_state["dt_ini_transf"] = date(hoje.year, 1, 1)
+    st.session_state["dt_fim_transf"] = date(hoje.year, 12, 31)
+    st.session_state["filial_origem_transf"] = "Todas"
+    if "df_transf" in st.session_state: del st.session_state["df_transf"]
+    if "pdf_bytes_transf" in st.session_state: del st.session_state["pdf_bytes_transf"]
+
 def limpar_tributos():
     st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     st.session_state["dt_fim_trib"] = hoje
@@ -143,7 +146,7 @@ def limpar_tributos():
 
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
 
-tab_visao, tab_compras, tab_tributos = st.tabs(["💰 Vendas", "🛒 Compras", "⚖️ Tributos"])
+tab_visao, tab_compras, tab_transferencias, tab_tributos = st.tabs(["💰 Vendas", "🛒 Compras", "🔄 Transferências", "⚖️ Tributos"])
 
 def formatar_moeda(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -541,11 +544,6 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
 
 
 def gerar_pdf_compras(df_compras, data_ini, data_fim):
-    """PDF de compras em A4 paisagem.
-    Inclui, no início, uma tabela RESUMO POR DEPARTAMENTO (MENSAL) com total de cada mês por
-    departamento, total anual por departamento e linha TOTAL GERAL (soma de cada mês + total anual).
-    Em seguida, o detalhamento por fornecedor mês a mês (comportamento anterior).
-    """
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
     elements = []
@@ -577,12 +575,8 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
 
     meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-    # =========================================================
-    # 1. RESUMO POR DEPARTAMENTO (MENSAL) — TOTALIZADOR
-    # =========================================================
     df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento")
 
-    # Pivot Departamento × Mes_Nome
     df_resumo = df_compras.pivot_table(
         index="Departamento",
         columns="Mes_Nome",
@@ -596,7 +590,6 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
     df_resumo["Total"] = df_resumo.sum(axis=1)
     df_resumo = df_resumo.fillna(0).sort_index()
 
-    # Linha TOTAL GERAL
     linha_total_geral = df_resumo.sum().to_frame().T
     linha_total_geral.index = ["TOTAL GERAL"]
     df_resumo_final = pd.concat([df_resumo, linha_total_geral])
@@ -615,7 +608,6 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
             row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
         resumo_data.append(row_cells)
 
-    # Largura: 150pt depto + 12 meses × 48pt + 65pt total = 150 + 576 + 65 = 791pt (cabe em paisagem A4)
     col_widths_resumo = [150] + [48] * len(meses_colunas) + [65]
     t_resumo = Table(resumo_data, colWidths=col_widths_resumo, repeatRows=1)
     t_resumo.setStyle(TableStyle([
@@ -626,16 +618,12 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('TOPPADDING', (0, 0), (-1, -1), 4),
-        # Destaque da linha TOTAL GERAL
         ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')),
         ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor('#1E293B')),
     ]))
     elements.append(t_resumo)
     elements.append(Spacer(1, 10))
 
-    # =========================================================
-    # 2. DETALHAMENTO POR FORNECEDOR (comportamento anterior)
-    # =========================================================
     for _, row in df_tot_depto.iterrows():
         depto = row['Departamento']
         df_d = df_compras[df_compras["Departamento"] == depto]
@@ -665,6 +653,151 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
             table_data.append(row_cells)
 
         elements.append(Paragraph(f"<b>■ Departamento: {depto}</b>", styles['Heading3']))
+
+        col_widths = [130] + [50] * len(meses_colunas) + [70]
+        t = Table(table_data, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 15))
+
+    doc.build(elements, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer
+
+
+def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
+    """PDF de transferências em A4 paisagem.
+    Resumo: Filial Destino × Mês (o que cada destino recebeu).
+    Detalhe: por destino, Filial Origem × Mês.
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+
+    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
+    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
+
+    header_data = [
+        [Paragraph("<b>Acompanhamento Gerencial - Transferências</b>", left_style),
+         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
+    ]
+    header_table = Table(header_data, colWidths=[400, 400])
+    header_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_table)
+
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=7, alignment=1)
+    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=7, alignment=0)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=7, alignment=2)
+    cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=7, alignment=0, fontName='Helvetica-Bold')
+    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=7, alignment=2, fontName='Helvetica-Bold')
+
+    meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+    # 1. RESUMO POR FILIAL DESTINO (MENSAL)
+    df_tot_destino = df_transf.groupby("FilialDestino")["Valor"].sum().reset_index().sort_values("FilialDestino")
+
+    df_resumo = df_transf.pivot_table(
+        index="FilialDestino",
+        columns="Mes_Nome",
+        values="Valor",
+        aggfunc="sum"
+    )
+    for m in meses_colunas:
+        if m not in df_resumo.columns:
+            df_resumo[m] = 0.0
+    df_resumo = df_resumo[meses_colunas]
+    df_resumo["Total"] = df_resumo.sum(axis=1)
+    df_resumo = df_resumo.fillna(0).sort_index()
+
+    linha_total_geral = df_resumo.sum().to_frame().T
+    linha_total_geral.index = ["TOTAL GERAL"]
+    df_resumo_final = pd.concat([df_resumo, linha_total_geral])
+
+    elements.append(Paragraph("<b>RESUMO POR FILIAL DESTINO (MENSAL)</b>", styles['Heading3']))
+
+    resumo_headers = ['Filial Destino'] + meses_colunas + ['Total Anual']
+    resumo_data = [[Paragraph(h, header_style) for h in resumo_headers]]
+
+    for destino, r in df_resumo_final.iterrows():
+        is_total = (destino == "TOTAL GERAL")
+        if is_total:
+            nome_dest = "TOTAL GERAL"
+        else:
+            nome_dest = NOMES_FILIAIS.get(int(destino), f"Filial {destino}")
+        row_cells = [Paragraph(nome_dest, cell_bold_left if is_total else cell_left)]
+        for m in meses_colunas + ['Total']:
+            val = r[m]
+            val_str = formatar_numero(val) if val != 0 else "-"
+            row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
+        resumo_data.append(row_cells)
+
+    col_widths_resumo = [150] + [48] * len(meses_colunas) + [65]
+    t_resumo = Table(resumo_data, colWidths=col_widths_resumo, repeatRows=1)
+    t_resumo.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')),
+        ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor('#1E293B')),
+    ]))
+    elements.append(t_resumo)
+    elements.append(Spacer(1, 10))
+
+    # 2. DETALHE POR DESTINO: Origem × Mês
+    for _, row_dest in df_tot_destino.iterrows():
+        destino = int(row_dest["FilialDestino"])
+        nome_dest = NOMES_FILIAIS.get(destino, f"Filial {destino}")
+        df_d = df_transf[df_transf["FilialDestino"] == destino]
+
+        df_pivot = df_d.pivot_table(index=['FilialOrigem'], columns='Mes_Nome', values='Valor', aggfunc='sum')
+        for m in meses_colunas:
+            if m not in df_pivot.columns: df_pivot[m] = 0.0
+
+        df_pivot = df_pivot[meses_colunas]
+        df_pivot['Total'] = df_pivot.sum(axis=1)
+        df_pivot = df_pivot.fillna(0).sort_index()
+
+        linha_total = df_pivot.sum().to_frame().T
+        linha_total.index = ['TOTAL']
+        df_final = pd.concat([df_pivot, linha_total])
+
+        headers = ['Origem'] + meses_colunas + ['Total']
+        table_data = [[Paragraph(h, header_style) for h in headers]]
+
+        for origem, r in df_final.iterrows():
+            is_total = (origem == 'TOTAL')
+            if is_total:
+                nome_origem = "TOTAL"
+            else:
+                nome_origem = NOMES_FILIAIS.get(int(origem), f"Filial {origem}")
+            row_cells = [Paragraph(nome_origem, cell_bold_left if is_total else cell_left)]
+            for m in meses_colunas + ['Total']:
+                val = r[m]
+                val_str = formatar_numero(val) if val != 0 else "-"
+                row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
+            table_data.append(row_cells)
+
+        elements.append(Paragraph(f"<b>■ Destino: {nome_dest}</b>", styles['Heading3']))
 
         col_widths = [130] + [50] * len(meses_colunas) + [70]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -1117,6 +1250,161 @@ with tab_compras:
                     
                     st.dataframe(
                         df_final.style.format(fmt_br).apply(highlight_total, axis=1),
+                        use_container_width=True
+                    )
+
+# ==========================================
+# ABA TRANSFERÊNCIAS
+# ==========================================
+with tab_transferencias:
+    if "dt_ini_transf" not in st.session_state: st.session_state["dt_ini_transf"] = date(hoje.year, 1, 1)
+    if "dt_fim_transf" not in st.session_state: st.session_state["dt_fim_transf"] = date(hoje.year, 12, 31)
+    if "filial_origem_transf" not in st.session_state: st.session_state["filial_origem_transf"] = "Todas"
+
+    c1, c2, c3, c_acoes = st.columns([1, 1, 1.2, 2.5], vertical_alignment="bottom")
+    
+    data_ini_tr = c1.date_input("De:", key="dt_ini_transf", format="DD/MM/YYYY")
+    data_fim_tr = c2.date_input("Até:", key="dt_fim_transf", format="DD/MM/YYYY")
+    filial_tr_sel = c3.selectbox("Filial Origem:", ["Todas"] + list(filiais_inv.keys()), key="filial_origem_transf")
+    
+    with c_acoes:
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            btn_transf = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_transf")
+        with col_b2:
+            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_transferencias, key="btn_limpar_transf")
+        with col_b3:
+            pdf_bytes_tr = st.session_state.get("pdf_bytes_transf")
+            if pdf_bytes_tr:
+                timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                nome_arquivo_tr = f"Acompanhamento Gerencial - Transferencias {timestamp_str}.pdf"
+                st.download_button(
+                    label="📄 Gerar PDF",
+                    data=pdf_bytes_tr,
+                    file_name=nome_arquivo_tr,
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="btn_pdf_transf"
+                )
+            else:
+                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_transf_disabled")
+
+    _foi_primeira_carga_transf = "df_transf" not in st.session_state
+
+    if _foi_primeira_carga_transf or btn_transf:
+        filial_cod_tr = "" if filial_tr_sel == "Todas" else filiais_inv[filial_tr_sel]
+        
+        try:
+            with st.spinner("Carregando dados de transferências..."):
+                df_transf = buscar_transferencias(data_ini_tr.strftime("%Y-%m-%d"), data_fim_tr.strftime("%Y-%m-%d"), filial_cod_tr)
+                
+                if not df_transf.empty:
+                    df_transf["FilialOrigem"] = pd.to_numeric(df_transf["FilialOrigem"], errors="coerce").fillna(0).astype(int)
+                    df_transf["FilialDestino"] = pd.to_numeric(df_transf["FilialDestino"], errors="coerce").fillna(0).astype(int)
+                    df_transf["Mes"] = pd.to_numeric(df_transf["Mes"], errors="coerce").fillna(0).astype(int)
+                    df_transf['Mes_Nome'] = df_transf['Mes'].map({1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'})
+                    st.session_state["df_transf"] = df_transf
+                    st.session_state["pdf_bytes_transf"] = gerar_pdf_transferencias(df_transf, data_ini_tr, data_fim_tr)
+                else:
+                    st.session_state["df_transf"] = df_transf
+                    st.session_state["pdf_bytes_transf"] = None
+        except Exception as e:
+            st.error(f"Erro ao carregar transferências: {e}")
+            st.stop()
+
+    if _foi_primeira_carga_transf:
+        st.rerun()
+
+    df_transf = st.session_state.get("df_transf", pd.DataFrame())
+    if df_transf.empty:
+        st.info("Nenhuma transferência encontrada para o período/filtros.")
+    else:
+        tot_val_geral = df_transf["Valor"].sum()
+        
+        df_tot_destino = df_transf.groupby("FilialDestino")["Valor"].sum().reset_index()
+        df_tot_destino = df_tot_destino.sort_values("FilialDestino", ascending=True)
+        
+        meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+        cards_data = [("🔄 Total Transferido", tot_val_geral, "#58a6ff", "")]
+        cores_destino = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e"]
+        
+        for i, row in df_tot_destino.iterrows():
+            destino_cod = int(row["FilialDestino"])
+            nome_destino = NOMES_FILIAIS.get(destino_cod, f"Filial {destino_cod}")
+            cor = cores_destino[i % len(cores_destino)]
+            pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
+            pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
+            cards_data.append((f"📥 {nome_destino}", row["Valor"], cor, pct_html))
+
+        for i in range(0, len(cards_data), 5):
+            chunk = cards_data[i:i+5]
+            cols = st.columns(5)
+            for j, (nome, valor, cor, pct_html) in enumerate(chunk):
+                with cols[j]:
+                    r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
+                    bg_color = f"rgba({r}, {g}, {b}, 0.08)"
+                    st.markdown(f'''
+                        <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
+                            <div class="card-label" style="color: {cor};" title="{nome}">{nome}</div>
+                            <div class="card-value" style="color: {cor};">{formatar_moeda(valor)} {pct_html}</div>
+                        </div>
+                    ''', unsafe_allow_html=True)
+        
+        st.write("")
+
+        if not df_tot_destino.empty:
+            destinos_nomes = []
+            for _, row in df_tot_destino.iterrows():
+                dc = int(row["FilialDestino"])
+                destinos_nomes.append(NOMES_FILIAIS.get(dc, f"Filial {dc}"))
+            
+            sub_tabs = st.tabs(destinos_nomes)
+
+            for sub_tab, (_, row) in zip(sub_tabs, df_tot_destino.iterrows()):
+                with sub_tab:
+                    destino_cod = int(row["FilialDestino"])
+                    
+                    df_d = df_transf[df_transf["FilialDestino"] == destino_cod]
+                    
+                    df_pivot = df_d.pivot_table(
+                        index=['FilialOrigem'], 
+                        columns='Mes_Nome', 
+                        values='Valor', 
+                        aggfunc='sum'
+                    )
+                    
+                    for m in meses_colunas:
+                        if m not in df_pivot.columns: df_pivot[m] = 0.0
+                            
+                    df_pivot = df_pivot[meses_colunas]
+                    df_pivot['Total'] = df_pivot.sum(axis=1)
+                    df_pivot = df_pivot.fillna(0)
+                    df_pivot = df_pivot.sort_index(ascending=True)
+                    
+                    linha_total = df_pivot.sum().to_frame().T
+                    linha_total.index = ['TOTAL']
+                    df_final = pd.concat([df_pivot, linha_total])
+                    
+                    df_display = df_final.copy()
+                    df_display.index = [
+                        "TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") 
+                        for i in df_display.index
+                    ]
+                    df_display.index.name = "Filial Origem"
+                    
+                    def fmt_br(x):
+                        if pd.isna(x) or x == 0:
+                            return "-"
+                        return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    
+                    def highlight_total(row):
+                        if row.name == 'TOTAL':
+                            return ['font-weight: bold; color: #58a6ff;'] * len(row)
+                        return [''] * len(row)
+                    
+                    st.dataframe(
+                        df_display.style.format(fmt_br).apply(highlight_total, axis=1),
                         use_container_width=True
                     )
 
