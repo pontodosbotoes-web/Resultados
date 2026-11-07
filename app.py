@@ -16,19 +16,16 @@ from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, bus
 
 st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_icon="📊")
 
-# CSS Customizado
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;}
         .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 100% !important; background-color: #0d1117; }
         
         .titulo-pagina { font-size: 24px; font-weight: 700; text-align: center; color: #f0f6fc; padding-bottom: 10px; margin-bottom: 10px; }
-        
         .tema-titulo { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-top: 20px; margin-bottom: 12px; padding-bottom: 6px; }
         
         .card-item { border-radius: 10px; padding: 12px 14px 6px 14px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: 0.2s; margin-bottom: 10px;}
         .card-item:hover { filter: brightness(1.2); }
-        
         .card-label { font-size: 13px; font-weight: 600; color: #c9d1d9; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
         .card-value { font-size: 20px; font-weight: 700; color: #f0f6fc; }
         
@@ -36,47 +33,30 @@ st.markdown("""
         .pct-positiva { font-size: 13px; font-weight: 600; color: #3fb950; margin-left: 5px; }
         .pct-negativa { font-size: 13px; font-weight: 600; color: #f85149; margin-left: 5px; }
         
-        .depto-header { font-size: 18px; font-weight: 600; color: #f0f6fc; margin-top: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;}
-        .depto-valor { font-size: 16px; color: #58a6ff; font-weight: 700; background: rgba(88,166,255,0.1); padding: 2px 10px; border-radius: 15px;}
-        
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
 
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"], div[data-testid="stButton"] button[kind="primary"] {
-            background-color: #238636 !important;
-            color: #ffffff !important;
-            border: 1px solid #238636 !important;
-            transition: all 0.2s;
-            height: 42px !important;
+            background-color: #238636 !important; color: #ffffff !important; border: 1px solid #238636 !important;
+            transition: all 0.2s; height: 42px !important;
         }
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]:hover, div[data-testid="stButton"] button[kind="primary"]:hover {
-            background-color: #2ea043 !important;
-            border-color: #2ea043 !important;
+            background-color: #2ea043 !important; border-color: #2ea043 !important;
             box-shadow: 0 0 10px rgba(46, 160, 67, 0.4) !important;
         }
-
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"], div[data-testid="stButton"] button {
-            background-color: #da3633 !important;
-            color: #ffffff !important;
-            border: 1px solid #da3633 !important;
-            transition: all 0.2s;
-            height: 42px !important;
+            background-color: #da3633 !important; color: #ffffff !important; border: 1px solid #da3633 !important;
+            transition: all 0.2s; height: 42px !important;
         }
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"]:hover, div[data-testid="stButton"] button:hover {
-            background-color: #f85149 !important;
-            border-color: #f85149 !important;
+            background-color: #f85149 !important; border-color: #f85149 !important;
             box-shadow: 0 0 10px rgba(248, 81, 73, 0.4) !important;
         }
-        
         div[data-testid="stDownloadButton"] button {
-            background-color: #1f6feb !important;
-            color: #ffffff !important;
-            border: 1px solid #1f6feb !important;
-            transition: all 0.2s;
-            height: 42px !important;
+            background-color: #1f6feb !important; color: #ffffff !important; border: 1px solid #1f6feb !important;
+            transition: all 0.2s; height: 42px !important;
         }
         div[data-testid="stDownloadButton"] button:hover {
-            background-color: #388bfd !important;
-            border-color: #388bfd !important;
+            background-color: #388bfd !important; border-color: #388bfd !important;
             box-shadow: 0 0 10px rgba(56, 139, 253, 0.4) !important;
         }
 
@@ -118,31 +98,29 @@ def limpar_vendas():
     st.session_state["h_ini_visao"] = datetime.strptime("00:00", "%H:%M").time()
     st.session_state["h_fim_visao"] = datetime.strptime("23:59", "%H:%M").time()
     st.session_state["filial_visao"] = "Todas"
-    if "df_vendas" in st.session_state: del st.session_state["df_vendas"]
-    if "df_depto_vendas" in st.session_state: del st.session_state["df_depto_vendas"]
-    if "df_pag_vendas" in st.session_state: del st.session_state["df_pag_vendas"]
-    if "pdf_bytes_vendas" in st.session_state: del st.session_state["pdf_bytes_vendas"]
+    for k in ["df_vendas", "df_depto_vendas", "df_pag_vendas", "pdf_bytes_vendas"]:
+        if k in st.session_state: del st.session_state[k]
 
 def limpar_compras():
     st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
     st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
     st.session_state["filial_compras"] = "Todas"
     st.session_state["fornecedor_compras"] = "Todos"
-    if "df_compras" in st.session_state: del st.session_state["df_compras"]
-    if "pdf_bytes_comp" in st.session_state: del st.session_state["pdf_bytes_comp"]
+    for k in ["df_compras", "pdf_bytes_comp"]:
+        if k in st.session_state: del st.session_state[k]
 
 def limpar_transferencias():
     st.session_state["dt_ini_transf"] = date(hoje.year, 1, 1)
     st.session_state["dt_fim_transf"] = date(hoje.year, 12, 31)
     st.session_state["filial_origem_transf"] = "Todas"
-    if "df_transf" in st.session_state: del st.session_state["df_transf"]
-    if "pdf_bytes_transf" in st.session_state: del st.session_state["pdf_bytes_transf"]
+    for k in ["df_transf", "pdf_bytes_transf"]:
+        if k in st.session_state: del st.session_state[k]
 
 def limpar_tributos():
     st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     st.session_state["dt_fim_trib"] = hoje
-    if "df_trib" in st.session_state: del st.session_state["df_trib"]
-    if "pdf_bytes_trib" in st.session_state: del st.session_state["pdf_bytes_trib"]
+    for k in ["df_trib", "pdf_bytes_trib"]:
+        if k in st.session_state: del st.session_state[k]
 
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
 
@@ -165,62 +143,37 @@ def formatar_pct(v):
 
 def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     if df_hora.empty: return go.Figure()
-    
     if is_moeda:
         custom_data = [f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") for v in df_hora[col_valor]]
         hover_tpl = "%{x}h<br>R$ %{customdata}<extra></extra>"
     else:
         custom_data = [f"{int(v):,}".replace(",", ".") for v in df_hora[col_valor]]
         hover_tpl = "%{x}h<br>%{customdata}<extra></extra>"
-
     max_val = df_hora[col_valor].max()
-    
     r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
     cor_transparente = f"rgba({r}, {g}, {b}, 0.4)"
-    
     cores_barras = []
     for v in df_hora[col_valor]:
-        if v == max_val and max_val > 0:
-            cores_barras.append("#FFFFFF")
-        else:
-            cores_barras.append(cor_transparente)
-
+        if v == max_val and max_val > 0: cores_barras.append("#FFFFFF")
+        else: cores_barras.append(cor_transparente)
     fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=df_hora["Hora"], 
-        y=df_hora[col_valor],
-        marker_color=cores_barras,
-        customdata=custom_data,
-        hovertemplate=hover_tpl
-    ))
-    
-    fig.update_layout(
-        margin=dict(l=0, r=0, t=0, b=0), height=45,
-        xaxis=dict(visible=False, showspikes=False), 
-        yaxis=dict(visible=False, rangemode='tozero', showspikes=False),
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False,
-        hovermode="x unified",
-        bargap=0.1
-    )
+    fig.add_trace(go.Bar(x=df_hora["Hora"], y=df_hora[col_valor], marker_color=cores_barras, customdata=custom_data, hovertemplate=hover_tpl))
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=45, xaxis=dict(visible=False, showspikes=False), yaxis=dict(visible=False, rangemode='tozero', showspikes=False), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, hovermode="x unified", bargap=0.1)
     return fig
 
 def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moeda", campo_itens="porFilial", is_filial=True):
     st.markdown(f'<div class="tema-titulo">{icone} {titulo}</div>', unsafe_allow_html=True)
     total = dados.get("total", 0)
     itens = dados.get(campo_itens, [])
-    
     def html_card(nome, valor, pct_html="", is_consolidado=False):
         r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
         bg_color = f"rgba({r}, {g}, {b}, 0.08)"
-        
         border_color = cor_hex if is_consolidado else "#30363d"
         border_left = f"4px solid {cor_hex}" if is_consolidado else "1px solid #30363d"
         style_str = f"background-color: {bg_color}; border: 1px solid {border_color}; border-left: {border_left};"
-        
         label_nome = "🏆 Consolidado" if is_consolidado else nome
         label_style = f"color: {cor_hex};" if is_consolidado else ""
         value_style = f"color: {cor_hex};" if is_consolidado else ""
-        
         val_fmt = formatar_moeda(valor) if fmt == "moeda" else (formatar_inteiro(valor) if fmt == "inteiro" else formatar_decimal(valor))
         return f'<div class="card-item" style="{style_str}"><div class="card-label" style="{label_style}">{label_nome}</div><div class="card-value" style="{value_style}">{val_fmt} {pct_html}</div></div>'
 
@@ -235,7 +188,6 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
                 sinal = "+" if diff > 0 else ""
                 classe = "pct-positiva" if diff >= 0 else "pct-negativa"
                 pct_html = f'<span class="{classe}">({sinal}{diff:.1f}%)</span>'
-        
         with col:
             st.markdown(html_card(item["nome"], item["valor"], pct_html), unsafe_allow_html=True)
             if "horas" in item and dados.get("labelsHoras"):
@@ -253,11 +205,9 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
                 key_cons = f"cons_{titulo.replace(' ', '_').replace('/', '')}_{col_valor}"
                 fig_cons = criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": df_cons}), "Val", cor_hex, fmt=="moeda")
                 st.plotly_chart(fig_cons, use_container_width=True, config={'displayModeBar': False}, key=key_cons)
-        
         for i, item in enumerate(itens):
             if i + 1 >= len(cols): break
             render_card_col(cols[i + 1], item)
-            
     else:
         cols = st.columns([1.1, 1, 1, 1, 1])
         with cols[0]:
@@ -268,32 +218,26 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
                 key_cons = f"cons_{titulo.replace(' ', '_').replace('/', '')}_{col_valor}"
                 fig_cons = criar_mini_grafico(pd.DataFrame({"Hora": labels, "Val": df_cons}), "Val", cor_hex, fmt=="moeda")
                 st.plotly_chart(fig_cons, use_container_width=True, config={'displayModeBar': False}, key=key_cons)
-
         for i in range(4):
-            if i < len(itens):
-                render_card_col(cols[i+1], itens[i])
-        
+            if i < len(itens): render_card_col(cols[i+1], itens[i])
         itens_restantes = itens[4:]
         for i in range(0, len(itens_restantes), 5):
             chunk = itens_restantes[i:i+5]
             cols_chunk = st.columns(5)
-            for j, item in enumerate(chunk):
-                render_card_col(cols_chunk[j], item)
-        st.write("") 
+            for j, item in enumerate(chunk): render_card_col(cols_chunk[j], item)
+        st.write("")
 
 
 # ==========================================
-# FUNÇÕES E CLASSES PARA PDF
+# PDF
 # ==========================================
 class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._saved_page_states = []
-
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
         self._startPage()
-
     def save(self):
         num_pages = len(self._saved_page_states)
         for state in self._saved_page_states:
@@ -301,93 +245,46 @@ class NumberedCanvas(canvas.Canvas):
             self.draw_page_number(num_pages)
             canvas.Canvas.showPage(self)
         canvas.Canvas.save(self)
-
     def draw_page_number(self, page_count):
         self.setFont("Helvetica", 8)
         self.setFillColor(colors.HexColor('#64748B'))
-        page_text = f"página {self._pageNumber} de {page_count}"
-        self.drawRightString(self._pagesize[0] - 20, 15, page_text)
+        self.drawRightString(self._pagesize[0] - 20, 15, f"página {self._pageNumber} de {page_count}")
 
 
 def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
-    """Gera PDF de vendas em A4 RETRATO, compacto para caber em 1 página."""
     buffer = BytesIO()
     page_size = portrait(A4)
     margin_lr = 20
     usable_width = page_size[0] - (margin_lr * 2)
-
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=page_size,
-        rightMargin=margin_lr,
-        leftMargin=margin_lr,
-        topMargin=15,
-        bottomMargin=22,
-    )
+    doc = SimpleDocTemplate(buffer, pagesize=page_size, rightMargin=margin_lr, leftMargin=margin_lr, topMargin=15, bottomMargin=22)
     elements = []
     styles = getSampleStyleSheet()
-
     title_style = ParagraphStyle('Title', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0, spaceBefore=0)
     period_style = ParagraphStyle('Period', parent=styles['Normal'], alignment=2, fontSize=8, spaceAfter=0)
-
-    section_heading = ParagraphStyle(
-        'SectionHeading',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=10,
-        spaceBefore=4,
-        spaceAfter=3,
-        textColor=colors.HexColor('#1E293B'),
-    )
-
+    section_heading = ParagraphStyle('SectionHeading', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, spaceBefore=4, spaceAfter=3, textColor=colors.HexColor('#1E293B'))
     header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
     cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
     cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=8, alignment=2, fontName='Helvetica-Bold')
+    PAD_V = 2; PAD_H = 4
 
-    PAD_V = 2
-    PAD_H = 4
-
-    header_data = [[
-        Paragraph("<b>Acompanhamento Gerencial - Vendas</b>", title_style),
-        Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", period_style),
-    ]]
+    header_data = [[Paragraph("<b>Acompanhamento Gerencial - Vendas</b>", title_style), Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", period_style)]]
     header_table = Table(header_data, colWidths=[usable_width * 0.60, usable_width * 0.40])
-    header_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('TOPPADDING', (0, 0), (-1, -1), 0),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
+    header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 6), ('TOPPADDING', (0, 0), (-1, -1), 0), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
     elements.append(header_table)
 
     elements.append(Paragraph("<b>RESUMO GERAL (CONSOLIDADO E POR FILIAL)</b>", section_heading))
-
     filiais_ordem = [5, 1, 2, 3, 4]
-    filiais_ativas = [
-        f for f in filiais_ordem
-        if df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum() > 0
-    ]
-
+    filiais_ativas = [f for f in filiais_ordem if df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum() > 0]
     if filiais_ativas:
         headers = ['Operação'] + [NOMES_FILIAIS[f] for f in filiais_ativas] + ['Total']
-
-        tot_vendas = df_vendas["ValorVenda"].sum()
-        tot_trans = df_vendas["QtdVendas"].sum()
-        tot_itens = df_vendas["QtdItens"].sum()
-
+        tot_vendas = df_vendas["ValorVenda"].sum(); tot_trans = df_vendas["QtdVendas"].sum(); tot_itens = df_vendas["QtdItens"].sum()
         dados_metricas = {
             "Vendas (R$)": [df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum() for f in filiais_ativas],
             "Transações (Qtd)": [df_vendas[df_vendas["CodFilial"] == f]["QtdVendas"].sum() for f in filiais_ativas],
-            "Ticket Médio (R$)": [],
-            "Itens (Qtd)": [df_vendas[df_vendas["CodFilial"] == f]["QtdItens"].sum() for f in filiais_ativas],
-            "Itens por Venda (R$)": [],
-            "Itens por Transação (Qtd)": [],
+            "Ticket Médio (R$)": [], "Itens (Qtd)": [df_vendas[df_vendas["CodFilial"] == f]["QtdItens"].sum() for f in filiais_ativas],
+            "Itens por Venda (R$)": [], "Itens por Transação (Qtd)": [],
         }
-
         for f in filiais_ativas:
             v = df_vendas[df_vendas["CodFilial"] == f]["ValorVenda"].sum()
             t = df_vendas[df_vendas["CodFilial"] == f]["QtdVendas"].sum()
@@ -395,44 +292,25 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
             dados_metricas["Ticket Médio (R$)"].append(v / t if t > 0 else 0)
             dados_metricas["Itens por Venda (R$)"].append(v / i if i > 0 else 0)
             dados_metricas["Itens por Transação (Qtd)"].append(i / t if t > 0 else 0)
-
         table_data = [[Paragraph(h, header_style) for h in headers]]
         for nome, valores in dados_metricas.items():
             row = [Paragraph(nome, cell_left)]
             for val in valores:
                 fmt_val = formatar_moeda(val) if "(R$)" in nome else formatar_decimal(val) if "(Qtd)" in nome else str(int(val))
                 row.append(Paragraph(fmt_val, cell_right))
-
-            if nome == "Ticket Médio (R$)":
-                total_val = tot_vendas / tot_trans if tot_trans else 0
-            elif nome == "Itens por Venda (R$)":
-                total_val = tot_vendas / tot_itens if tot_itens else 0
-            elif nome == "Itens por Transação (Qtd)":
-                total_val = tot_itens / tot_trans if tot_trans else 0
-            else:
-                total_val = sum(valores)
-
+            if nome == "Ticket Médio (R$)": total_val = tot_vendas / tot_trans if tot_trans else 0
+            elif nome == "Itens por Venda (R$)": total_val = tot_vendas / tot_itens if tot_itens else 0
+            elif nome == "Itens por Transação (Qtd)": total_val = tot_itens / tot_trans if tot_trans else 0
+            else: total_val = sum(valores)
             fmt_total = formatar_moeda(total_val) if "(R$)" in nome else formatar_decimal(total_val) if "(Qtd)" in nome else str(int(total_val))
             row.append(Paragraph(fmt_total, cell_bold_right))
             table_data.append(row)
-
         n_numeric = len(filiais_ativas) + 1
         col_operacao = 120
         col_numeric = (usable_width - col_operacao) / n_numeric
         col_widths = [col_operacao] + [col_numeric] * n_numeric
-
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V),
-            ('TOPPADDING', (0, 0), (-1, -1), PAD_V),
-            ('LEFTPADDING', (0, 0), (-1, -1), PAD_H),
-            ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H),
-        ]))
+        t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V), ('TOPPADDING', (0, 0), (-1, -1), PAD_V), ('LEFTPADDING', (0, 0), (-1, -1), PAD_H), ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H)]))
         elements.append(t)
         elements.append(Spacer(1, 4))
 
@@ -440,33 +318,13 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
         elements.append(Paragraph("<b>VENDAS POR DEPARTAMENTO</b>", section_heading))
         df_depto_agg = df_depto.groupby("NomeDepto")["ValorVenda"].sum().reset_index().sort_values("ValorVenda", ascending=False)
         total_depto = df_depto_agg["ValorVenda"].sum()
-
-        depto_data = [[
-            Paragraph("Departamento", header_style),
-            Paragraph("Vendas (R$)", header_style),
-            Paragraph("Participação", header_style),
-        ]]
+        depto_data = [[Paragraph("Departamento", header_style), Paragraph("Vendas (R$)", header_style), Paragraph("Participação", header_style)]]
         for _, row in df_depto_agg.iterrows():
             pct = (row["ValorVenda"] / total_depto * 100) if total_depto > 0 else 0
-            depto_data.append([
-                Paragraph(row["NomeDepto"], cell_left),
-                Paragraph(formatar_moeda(row["ValorVenda"]), cell_right),
-                Paragraph(formatar_pct(pct), cell_right),
-            ])
-
+            depto_data.append([Paragraph(row["NomeDepto"], cell_left), Paragraph(formatar_moeda(row["ValorVenda"]), cell_right), Paragraph(formatar_pct(pct), cell_right)])
         col3_widths = [usable_width * 0.50, usable_width * 0.30, usable_width * 0.20]
         t_depto = Table(depto_data, colWidths=col3_widths, repeatRows=1)
-        t_depto.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V),
-            ('TOPPADDING', (0, 0), (-1, -1), PAD_V),
-            ('LEFTPADDING', (0, 0), (-1, -1), PAD_H),
-            ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H),
-        ]))
+        t_depto.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V), ('TOPPADDING', (0, 0), (-1, -1), PAD_V), ('LEFTPADDING', (0, 0), (-1, -1), PAD_H), ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H)]))
         elements.append(t_depto)
         elements.append(Spacer(1, 4))
 
@@ -474,68 +332,27 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
         elements.append(Paragraph("<b>VENDAS POR FORMA DE PAGAMENTO</b>", section_heading))
         df_pag_agg = df_pag.groupby("Denominacao")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
         total_pag = df_pag_agg["Valor"].sum()
-
-        pag_data = [[
-            Paragraph("Forma de Pagamento", header_style),
-            Paragraph("Vendas (R$)", header_style),
-            Paragraph("Participação", header_style),
-        ]]
+        pag_data = [[Paragraph("Forma de Pagamento", header_style), Paragraph("Vendas (R$)", header_style), Paragraph("Participação", header_style)]]
         for _, row in df_pag_agg.iterrows():
             pct = (row["Valor"] / total_pag * 100) if total_pag > 0 else 0
-            pag_data.append([
-                Paragraph(row["Denominacao"], cell_left),
-                Paragraph(formatar_moeda(row["Valor"]), cell_right),
-                Paragraph(formatar_pct(pct), cell_right),
-            ])
-
+            pag_data.append([Paragraph(row["Denominacao"], cell_left), Paragraph(formatar_moeda(row["Valor"]), cell_right), Paragraph(formatar_pct(pct), cell_right)])
         col3_widths = [usable_width * 0.50, usable_width * 0.30, usable_width * 0.20]
         t_pag = Table(pag_data, colWidths=col3_widths, repeatRows=1)
-        t_pag.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V),
-            ('TOPPADDING', (0, 0), (-1, -1), PAD_V),
-            ('LEFTPADDING', (0, 0), (-1, -1), PAD_H),
-            ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H),
-        ]))
+        t_pag.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V), ('TOPPADDING', (0, 0), (-1, -1), PAD_V), ('LEFTPADDING', (0, 0), (-1, -1), PAD_H), ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H)]))
         elements.append(t_pag)
         elements.append(Spacer(1, 4))
-
         df_pag_port = df_pag.dropna(subset=["NomePortador"])
         if not df_pag_port.empty:
             elements.append(Paragraph("<b>VENDAS POR PORTADOR</b>", section_heading))
             df_port_agg = df_pag_port.groupby("NomePortador")["Valor"].sum().reset_index().sort_values("Valor", ascending=False)
             total_port = df_port_agg["Valor"].sum()
-
-            port_data = [[
-                Paragraph("Portador", header_style),
-                Paragraph("Vendas (R$)", header_style),
-                Paragraph("Participação", header_style),
-            ]]
+            port_data = [[Paragraph("Portador", header_style), Paragraph("Vendas (R$)", header_style), Paragraph("Participação", header_style)]]
             for _, row in df_port_agg.iterrows():
                 pct = (row["Valor"] / total_port * 100) if total_port > 0 else 0
-                port_data.append([
-                    Paragraph(row["NomePortador"], cell_left),
-                    Paragraph(formatar_moeda(row["Valor"]), cell_right),
-                    Paragraph(formatar_pct(pct), cell_right),
-                ])
-
+                port_data.append([Paragraph(row["NomePortador"], cell_left), Paragraph(formatar_moeda(row["Valor"]), cell_right), Paragraph(formatar_pct(pct), cell_right)])
             col3_widths = [usable_width * 0.50, usable_width * 0.30, usable_width * 0.20]
             t_port = Table(port_data, colWidths=col3_widths, repeatRows=1)
-            t_port.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V),
-                ('TOPPADDING', (0, 0), (-1, -1), PAD_V),
-                ('LEFTPADDING', (0, 0), (-1, -1), PAD_H),
-                ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H),
-            ]))
+            t_port.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), PAD_V), ('TOPPADDING', (0, 0), (-1, -1), PAD_V), ('LEFTPADDING', (0, 0), (-1, -1), PAD_H), ('RIGHTPADDING', (0, 0), (-1, -1), PAD_H)]))
             elements.append(t_port)
 
     doc.build(elements, canvasmaker=NumberedCanvas)
@@ -548,57 +365,31 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
     elements = []
     styles = getSampleStyleSheet()
-
     left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
     right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
-
-    header_data = [
-        [Paragraph("<b>Acompanhamento Gerencial - Compras</b>", left_style),
-         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
-    ]
+    header_data = [[Paragraph("<b>Acompanhamento Gerencial - Compras</b>", left_style), Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]]
     header_table = Table(header_data, colWidths=[400, 400])
-    header_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
+    header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 15), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
     elements.append(header_table)
-
     header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=7, alignment=1)
     cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=7, alignment=0)
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=7, alignment=2)
     cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=7, alignment=0, fontName='Helvetica-Bold')
     cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=7, alignment=2, fontName='Helvetica-Bold')
-
     meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
     df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento")
-
-    df_resumo = df_compras.pivot_table(
-        index="Departamento",
-        columns="Mes_Nome",
-        values="Valor",
-        aggfunc="sum"
-    )
+    df_resumo = df_compras.pivot_table(index="Departamento", columns="Mes_Nome", values="Valor", aggfunc="sum")
     for m in meses_colunas:
-        if m not in df_resumo.columns:
-            df_resumo[m] = 0.0
+        if m not in df_resumo.columns: df_resumo[m] = 0.0
     df_resumo = df_resumo[meses_colunas]
     df_resumo["Total"] = df_resumo.sum(axis=1)
     df_resumo = df_resumo.fillna(0).sort_index()
-
     linha_total_geral = df_resumo.sum().to_frame().T
     linha_total_geral.index = ["TOTAL GERAL"]
     df_resumo_final = pd.concat([df_resumo, linha_total_geral])
-
     elements.append(Paragraph("<b>RESUMO POR DEPARTAMENTO (MENSAL)</b>", styles['Heading3']))
-
     resumo_headers = ['Departamento'] + meses_colunas + ['Total Anual']
     resumo_data = [[Paragraph(h, header_style) for h in resumo_headers]]
-
     for depto, r in df_resumo_final.iterrows():
         is_total = (depto == "TOTAL GERAL")
         row_cells = [Paragraph(depto, cell_bold_left if is_total else cell_left)]
@@ -607,42 +398,25 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
             val_str = formatar_numero(val) if val != 0 else "-"
             row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
         resumo_data.append(row_cells)
-
     col_widths_resumo = [150] + [48] * len(meses_colunas) + [65]
     t_resumo = Table(resumo_data, colWidths=col_widths_resumo, repeatRows=1)
-    t_resumo.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')),
-        ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor('#1E293B')),
-    ]))
+    t_resumo.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), 4), ('TOPPADDING', (0, 0), (-1, -1), 4), ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')), ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor('#1E293B'))]))
     elements.append(t_resumo)
     elements.append(Spacer(1, 10))
-
     for _, row in df_tot_depto.iterrows():
         depto = row['Departamento']
         df_d = df_compras[df_compras["Departamento"] == depto]
-
         df_pivot = df_d.pivot_table(index=['Fornecedor'], columns='Mes_Nome', values='Valor', aggfunc='sum')
         for m in meses_colunas:
             if m not in df_pivot.columns: df_pivot[m] = 0.0
-
         df_pivot = df_pivot[meses_colunas]
         df_pivot['Total'] = df_pivot.sum(axis=1)
         df_pivot = df_pivot.fillna(0).sort_index()
-
         linha_total = df_pivot.sum().to_frame().T
         linha_total.index = ['TOTAL']
         df_final = pd.concat([df_pivot, linha_total])
-
         headers = ['Fornecedor'] + meses_colunas + ['Total']
         table_data = [[Paragraph(h, header_style) for h in headers]]
-
         for fornecedor, r in df_final.iterrows():
             is_total = (fornecedor == 'TOTAL')
             row_cells = [Paragraph(fornecedor, cell_bold_left if is_total else cell_left)]
@@ -651,23 +425,12 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
                 val_str = formatar_numero(val) if val != 0 else "-"
                 row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
             table_data.append(row_cells)
-
         elements.append(Paragraph(f"<b>■ Departamento: {depto}</b>", styles['Heading3']))
-
         col_widths = [130] + [50] * len(meses_colunas) + [70]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ]))
+        t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), 4), ('TOPPADDING', (0, 0), (-1, -1), 4)]))
         elements.append(t)
         elements.append(Spacer(1, 15))
-
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer
@@ -675,30 +438,18 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
 
 def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
     """PDF de transferências em A4 paisagem.
-    Resumo: Filial Destino × Mês (o que cada destino recebeu).
-    Detalhe: por destino, Filial Origem × Mês.
+    Resumo: Filial Destino × Mês (usando transf_2.9 + srb_entrada, sem duplicar).
+    Detalhe por destino: 2 tabelas — ENTRADAS (recebidas) e SAÍDAS (enviadas).
     """
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
     elements = []
     styles = getSampleStyleSheet()
-
     left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
     right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
-
-    header_data = [
-        [Paragraph("<b>Acompanhamento Gerencial - Transferências</b>", left_style),
-         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
-    ]
+    header_data = [[Paragraph("<b>Acompanhamento Gerencial - Transferências</b>", left_style), Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]]
     header_table = Table(header_data, colWidths=[400, 400])
-    header_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
+    header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 15), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
     elements.append(header_table)
 
     header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=7, alignment=1)
@@ -706,112 +457,106 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=7, alignment=2)
     cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=7, alignment=0, fontName='Helvetica-Bold')
     cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=7, alignment=2, fontName='Helvetica-Bold')
+    sub_heading = ParagraphStyle('SubHeading', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, spaceBefore=6, spaceAfter=3, textColor=colors.HexColor('#1E293B'))
 
     meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-    # 1. RESUMO POR FILIAL DESTINO (MENSAL)
-    df_tot_destino = df_transf.groupby("FilialDestino")["Valor"].sum().reset_index().sort_values("FilialDestino")
+    df_para_totais = df_transf[df_transf["TipoDado"].isin(["transf_2.9", "srb_entrada"])].copy()
 
-    df_resumo = df_transf.pivot_table(
-        index="FilialDestino",
-        columns="Mes_Nome",
-        values="Valor",
-        aggfunc="sum"
-    )
+    # ========= RESUMO POR DESTINO (MENSAL) =========
+    df_tot_destino = df_para_totais.groupby("FilialDestino")["Valor"].sum().reset_index().sort_values("FilialDestino")
+    df_resumo = df_para_totais.pivot_table(index="FilialDestino", columns="Mes_Nome", values="Valor", aggfunc="sum")
     for m in meses_colunas:
-        if m not in df_resumo.columns:
-            df_resumo[m] = 0.0
+        if m not in df_resumo.columns: df_resumo[m] = 0.0
     df_resumo = df_resumo[meses_colunas]
     df_resumo["Total"] = df_resumo.sum(axis=1)
     df_resumo = df_resumo.fillna(0).sort_index()
-
     linha_total_geral = df_resumo.sum().to_frame().T
     linha_total_geral.index = ["TOTAL GERAL"]
     df_resumo_final = pd.concat([df_resumo, linha_total_geral])
 
     elements.append(Paragraph("<b>RESUMO POR FILIAL DESTINO (MENSAL)</b>", styles['Heading3']))
-
     resumo_headers = ['Filial Destino'] + meses_colunas + ['Total Anual']
     resumo_data = [[Paragraph(h, header_style) for h in resumo_headers]]
-
     for destino, r in df_resumo_final.iterrows():
         is_total = (destino == "TOTAL GERAL")
-        if is_total:
-            nome_dest = "TOTAL GERAL"
-        else:
-            nome_dest = NOMES_FILIAIS.get(int(destino), f"Filial {destino}")
+        nome_dest = "TOTAL GERAL" if is_total else NOMES_FILIAIS.get(int(destino), f"Filial {destino}")
         row_cells = [Paragraph(nome_dest, cell_bold_left if is_total else cell_left)]
         for m in meses_colunas + ['Total']:
             val = r[m]
             val_str = formatar_numero(val) if val != 0 else "-"
             row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
         resumo_data.append(row_cells)
-
     col_widths_resumo = [150] + [48] * len(meses_colunas) + [65]
     t_resumo = Table(resumo_data, colWidths=col_widths_resumo, repeatRows=1)
-    t_resumo.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')),
-        ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor('#1E293B')),
-    ]))
+    t_resumo.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), 4), ('TOPPADDING', (0, 0), (-1, -1), 4), ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')), ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor('#1E293B'))]))
     elements.append(t_resumo)
     elements.append(Spacer(1, 10))
 
-    # 2. DETALHE POR DESTINO: Origem × Mês
-    for _, row_dest in df_tot_destino.iterrows():
-        destino = int(row_dest["FilialDestino"])
-        nome_dest = NOMES_FILIAIS.get(destino, f"Filial {destino}")
-        df_d = df_transf[df_transf["FilialDestino"] == destino]
-
-        df_pivot = df_d.pivot_table(index=['FilialOrigem'], columns='Mes_Nome', values='Valor', aggfunc='sum')
+    # ========= DETALHE POR DESTINO (2 tabelas: Entradas e Saídas) =========
+    def montar_tabela_pivot(df_sub, coluna_index, titulo, cor_header_hex):
+        df_pivot = df_sub.pivot_table(index=coluna_index, columns='Mes_Nome', values='Valor', aggfunc='sum')
         for m in meses_colunas:
             if m not in df_pivot.columns: df_pivot[m] = 0.0
-
         df_pivot = df_pivot[meses_colunas]
         df_pivot['Total'] = df_pivot.sum(axis=1)
         df_pivot = df_pivot.fillna(0).sort_index()
-
         linha_total = df_pivot.sum().to_frame().T
         linha_total.index = ['TOTAL']
         df_final = pd.concat([df_pivot, linha_total])
 
-        headers = ['Origem'] + meses_colunas + ['Total']
+        headers = [coluna_index] + meses_colunas + ['Total']
         table_data = [[Paragraph(h, header_style) for h in headers]]
-
-        for origem, r in df_final.iterrows():
-            is_total = (origem == 'TOTAL')
+        for chave, r in df_final.iterrows():
+            is_total = (chave == 'TOTAL')
             if is_total:
-                nome_origem = "TOTAL"
+                nome = "TOTAL"
             else:
-                nome_origem = NOMES_FILIAIS.get(int(origem), f"Filial {origem}")
-            row_cells = [Paragraph(nome_origem, cell_bold_left if is_total else cell_left)]
+                nome = NOMES_FILIAIS.get(int(chave), f"Filial {chave}")
+            row_cells = [Paragraph(nome, cell_bold_left if is_total else cell_left)]
             for m in meses_colunas + ['Total']:
                 val = r[m]
                 val_str = formatar_numero(val) if val != 0 else "-"
                 row_cells.append(Paragraph(val_str, cell_bold_right if is_total else cell_right))
             table_data.append(row_cells)
-
-        elements.append(Paragraph(f"<b>■ Destino: {nome_dest}</b>", styles['Heading3']))
-
         col_widths = [130] + [50] * len(meses_colunas) + [70]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ]))
-        elements.append(t)
-        elements.append(Spacer(1, 15))
+        t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(cor_header_hex)), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), 4), ('TOPPADDING', (0, 0), (-1, -1), 4)]))
+        return t
+
+    for _, row_dest in df_tot_destino.iterrows():
+        destino = int(row_dest["FilialDestino"])
+        nome_dest = NOMES_FILIAIS.get(destino, f"Filial {destino}")
+        elements.append(Paragraph(f"<b>■ Destino: {nome_dest}</b>", styles['Heading3']))
+
+        if destino == 4:
+            df_entradas = df_transf[(df_transf["FilialDestino"] == 4) & (df_transf["TipoDado"] == "srb_entrada")].copy()
+            df_saidas = df_transf[(df_transf["FilialDestino"] == 4) & (df_transf["TipoDado"] == "srb_saida_filiais")].copy()
+            coluna_entradas = "FilialOrigem"
+            coluna_saidas = "FilialOrigem"
+            label_entradas = "ENTRADAS na SRB (registradas na SRB — TipoMov 1.1/1.2)"
+            label_saidas = "SAÍDAS das Filiais para SRB (registradas nas Filiais — TipoMov 2.2/2.4)"
+        else:
+            df_entradas = df_transf[(df_transf["FilialDestino"] == destino) & (df_transf["TipoDado"] == "transf_2.9")].copy()
+            df_saidas = df_transf[(df_transf["FilialOrigem"] == destino) & (df_transf["TipoDado"].isin(["transf_2.9", "srb_saida_filiais"]))].copy()
+            coluna_entradas = "FilialOrigem"
+            coluna_saidas = "FilialDestino"
+            label_entradas = f"📥 ENTRADAS em {nome_dest}"
+            label_saidas = f"📤 SAÍDAS de {nome_dest}"
+
+        elements.append(Paragraph(f"<b>{label_entradas}</b>", sub_heading))
+        if not df_entradas.empty:
+            elements.append(montar_tabela_pivot(df_entradas, coluna_entradas, "ENTRADAS", '#065F46'))
+        else:
+            elements.append(Paragraph("<i>Nenhuma entrada no período.</i>", styles['Normal']))
+        elements.append(Spacer(1, 6))
+
+        elements.append(Paragraph(f"<b>{label_saidas}</b>", sub_heading))
+        if not df_saidas.empty:
+            elements.append(montar_tabela_pivot(df_saidas, coluna_saidas, "SAÍDAS", '#7F1D1D'))
+        else:
+            elements.append(Paragraph("<i>Nenhuma saída no período.</i>", styles['Normal']))
+        elements.append(Spacer(1, 12))
 
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
@@ -823,100 +568,59 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
     elements = []
     styles = getSampleStyleSheet()
-    
     left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
     right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
-    
-    header_data = [
-        [Paragraph("<b>Acompanhamento Gerencial - Tributos</b>", left_style),
-         Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]
-    ]
+    header_data = [[Paragraph("<b>Acompanhamento Gerencial - Tributos</b>", left_style), Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]]
     header_table = Table(header_data, colWidths=[400, 400])
-    header_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
+    header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 15), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
     elements.append(header_table)
-    
     header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
     cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
     cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=8, alignment=2, fontName='Helvetica-Bold')
     cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=8, alignment=0, fontName='Helvetica-Bold')
-    
     headers = ['Operação'] + [f['NomeFilial'] for _, f in colunas.iterrows()] + ['Total']
     table_data = [[Paragraph(h, header_style) for h in headers]]
-    
     def add_row_to_data(label, key, opts):
         bold = opts.get('bold', False)
-        left_style = cell_bold_left if bold else cell_left
-        right_style = cell_bold_right if bold else cell_right
-        
-        row = [Paragraph(label, left_style)]
+        left_s = cell_bold_left if bold else cell_left
+        right_s = cell_bold_right if bold else cell_right
+        row = [Paragraph(label, left_s)]
         total = 0
         for _, f in colunas.iterrows():
             val = f[key] if key else 0
             total += val
             if 'fmt' in opts:
-                try:
-                    val_str = opts['fmt'](val, f)
-                except:
-                    val_str = formatar_moeda(val)
-            else:
-                val_str = formatar_moeda(val)
-            
+                try: val_str = opts['fmt'](val, f)
+                except: val_str = formatar_moeda(val)
+            else: val_str = formatar_moeda(val)
             if key == 'resultado':
-                if val < 0:
-                    val_str = f"-{formatar_moeda(abs(val))}"
-                else:
-                    val_str = formatar_moeda(val)
-            
-            row.append(Paragraph(val_str, right_style))
-        
+                val_str = f"-{formatar_moeda(abs(val))}" if val < 0 else formatar_moeda(val)
+            row.append(Paragraph(val_str, right_s))
         if key == 'resultado':
             total_str = formatar_moeda(total) if total >= 0 else f"-{formatar_moeda(abs(total))}"
         else:
             total_str = formatar_moeda(total)
-        
-        row.append(Paragraph(total_str, right_style))
+        row.append(Paragraph(total_str, right_s))
         return row
-    
-    all_rows = rows_saidas + rows_entradas + rows_resultado
-    for label, key, opts in all_rows:
+    for label, key, opts in rows_saidas + rows_entradas + rows_resultado:
         table_data.append(add_row_to_data(label, key, opts))
-    
     col_widths = [150] + [115] * len(colunas) + [75]
     t = Table(table_data, colWidths=col_widths, repeatRows=1)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-    ]))
+    t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('FONTSIZE', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 4), ('TOPPADDING', (0, 0), (-1, -1), 4)]))
     elements.append(t)
-    
     elements.append(Spacer(1, 15))
-    
     saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
     saldo_pb = pb["resultado"].sum() if not pb.empty else 0
     saldo_srb = srb["resultado"].sum() if not srb.empty else 0
     saldo_cons = saldo_atacado + saldo_pb + saldo_srb
-    
     result_style = ParagraphStyle('Result', parent=styles['Normal'], alignment=1, fontSize=11, spaceAfter=10)
     results_text = f"Resultado PB - ATACADO: {formatar_moeda(saldo_atacado)} &nbsp;&nbsp;&nbsp; Resultado PB - FILIAIS: {formatar_moeda(saldo_pb)} &nbsp;&nbsp;&nbsp; Resultado SRB: {formatar_moeda(saldo_srb)} &nbsp;&nbsp;&nbsp; Consolidado: {formatar_moeda(saldo_cons)}"
     elements.append(Paragraph(results_text, result_style))
-    
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer
+
 
 # ==========================================
 # ABA VENDAS
@@ -929,13 +633,12 @@ with tab_visao:
     if "filial_visao" not in st.session_state: st.session_state["filial_visao"] = "Todas"
 
     c1, c2, c3, c4, c5, c_acoes = st.columns([1, 1, 1, 1, 1.2, 2.5], vertical_alignment="bottom")
-    
     data_ini = c1.date_input("De:", key="dt_ini_visao", format="DD/MM/YYYY")
     data_fim = c2.date_input("Até:", key="dt_fim_visao", format="DD/MM/YYYY")
     h_ini = c3.time_input("Hora:", key="h_ini_visao")
     h_fim = c4.time_input("Até:", key="h_fim_visao")
     filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_visao")
-    
+
     with c_acoes:
         col_b1, col_b2, col_b3 = st.columns(3)
         with col_b1:
@@ -945,21 +648,12 @@ with tab_visao:
         with col_b3:
             pdf_bytes_visao = st.session_state.get("pdf_bytes_vendas")
             if pdf_bytes_visao:
-                timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                nome_arquivo_visao = f"Acompanhamento Gerencial - Vendas {timestamp_str}.pdf"
-                st.download_button(
-                    label="📄 Gerar PDF",
-                    data=pdf_bytes_visao,
-                    file_name=nome_arquivo_visao,
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="btn_pdf_vendas"
-                )
+                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_visao, file_name=f"Acompanhamento Gerencial - Vendas {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_vendas")
             else:
                 st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_vendas_disabled")
 
     _foi_primeira_carga_visao = "df_vendas" not in st.session_state
-
     if _foi_primeira_carga_visao or btn_atualizar:
         filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
         try:
@@ -967,24 +661,17 @@ with tab_visao:
                 df_vendas = buscar_vendas(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
                 if not df_vendas.empty:
                     df_vendas["CodFilial"] = pd.to_numeric(df_vendas["CodFilial"], errors="coerce").fillna(0).astype(int)
-                    
                 df_depto = buscar_departamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
                 df_pag = buscar_pagamentos(data_ini.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d"), h_ini.hour, h_fim.hour, filial_cod)
-                
                 st.session_state["df_vendas"] = df_vendas
                 st.session_state["df_depto_vendas"] = df_depto
                 st.session_state["df_pag_vendas"] = df_pag
-                
-                if not df_vendas.empty:
-                    st.session_state["pdf_bytes_vendas"] = gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim)
-                else:
-                    st.session_state["pdf_bytes_vendas"] = None
+                st.session_state["pdf_bytes_vendas"] = gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim) if not df_vendas.empty else None
         except Exception as e:
             st.error(f"Erro ao carregar dados de vendas: {e}")
             st.stop()
 
-    if _foi_primeira_carga_visao:
-        st.rerun()
+    if _foi_primeira_carga_visao: st.rerun()
 
     df_vendas = st.session_state.get("df_vendas", pd.DataFrame())
     df_depto = st.session_state.get("df_depto_vendas", pd.DataFrame())
@@ -997,7 +684,6 @@ with tab_visao:
         tot_vendas = df_vendas["ValorVenda"].sum()
         tot_trans = df_vendas["QtdVendas"].sum()
         tot_itens = df_vendas["QtdItens"].sum()
-
         temas = [
             {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#58a6ff", "fmt": "moeda", "pct": "participacao"},
             {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#3fb950", "fmt": "inteiro", "pct": "participacao"},
@@ -1006,29 +692,21 @@ with tab_visao:
             {"id": "itens_venda", "titulo": "Itens por Venda (R$/item)", "icone": "💰", "total": (tot_vendas / tot_itens if tot_itens else 0), "col": "ItensVenda", "cor": "#4fd1c5", "fmt": "moeda", "pct": "variacao"},
             {"id": "itens_trans", "titulo": "Itens por Transação", "icone": "📊", "total": (tot_itens / tot_trans if tot_trans else 0), "col": "ItensTrans", "cor": "#f687b3", "fmt": "decimal", "pct": "variacao"},
         ]
-
         for t in temas:
             itens_filial = []
             for cod, nome in NOMES_FILIAIS.items():
                 df_f = df_vendas[df_vendas["CodFilial"] == cod]
-                v_vendas = df_f["ValorVenda"].sum()
-                v_trans = df_f["QtdVendas"].sum()
-                v_itens = df_f["QtdItens"].sum()
-                
+                v_vendas = df_f["ValorVenda"].sum(); v_trans = df_f["QtdVendas"].sum(); v_itens = df_f["QtdItens"].sum()
                 if t["col"] == "ValorVenda": val = v_vendas
                 elif t["col"] == "QtdVendas": val = v_trans
                 elif t["col"] == "QtdItens": val = v_itens
                 elif t["col"] == "Ticket": val = (v_vendas / v_trans if v_trans else 0)
                 elif t["col"] == "ItensVenda": val = (v_vendas / v_itens if v_itens else 0)
                 elif t["col"] == "ItensTrans": val = (v_itens / v_trans if v_trans else 0)
-                
                 h_list = []
                 for h in labels_h:
                     df_fh = df_f[df_f["Hora"] == h]
-                    h_vendas = df_fh["ValorVenda"].sum()
-                    h_trans = df_fh["QtdVendas"].sum()
-                    h_itens = df_fh["QtdItens"].sum()
-                    
+                    h_vendas = df_fh["ValorVenda"].sum(); h_trans = df_fh["QtdVendas"].sum(); h_itens = df_fh["QtdItens"].sum()
                     if t["col"] == "ValorVenda": hv = h_vendas
                     elif t["col"] == "QtdVendas": hv = h_trans
                     elif t["col"] == "QtdItens": hv = h_itens
@@ -1036,15 +714,11 @@ with tab_visao:
                     elif t["col"] == "ItensVenda": hv = (h_vendas / h_itens if h_itens else 0)
                     elif t["col"] == "ItensTrans": hv = (h_itens / h_trans if h_trans else 0)
                     h_list.append(hv)
-                    
                 itens_filial.append({"nome": nome, "valor": val, "horas": h_list})
-
             cons_horas = []
             for h in labels_h:
                 df_h = df_vendas[df_vendas["Hora"] == h]
-                h_v = df_h["ValorVenda"].sum()
-                h_t = df_h["QtdVendas"].sum()
-                h_i = df_h["QtdItens"].sum()
+                h_v = df_h["ValorVenda"].sum(); h_t = df_h["QtdVendas"].sum(); h_i = df_h["QtdItens"].sum()
                 if t["col"] == "ValorVenda": hv = h_v
                 elif t["col"] == "QtdVendas": hv = h_t
                 elif t["col"] == "QtdItens": hv = h_i
@@ -1052,7 +726,6 @@ with tab_visao:
                 elif t["col"] == "ItensVenda": hv = (h_v / h_i if h_i else 0)
                 elif t["col"] == "ItensTrans": hv = (h_i / h_t if h_t else 0)
                 cons_horas.append(hv)
-
             dados_tema = {"total": t["total"], "porFilial": itens_filial, "labelsHoras": labels_h, "horasConsolidado": cons_horas}
             renderizar_tema(t["titulo"], t["icone"], dados_tema, t["col"], t["cor"], t["pct"], t["fmt"], "porFilial", is_filial=True)
 
@@ -1105,22 +778,20 @@ with tab_compras:
         lista_fornecedores = carregar_fornecedores()
     except Exception:
         lista_fornecedores = []
-    
+
     if "dt_ini_compras" not in st.session_state: st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
     if "dt_fim_compras" not in st.session_state: st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
     if "filial_compras" not in st.session_state: st.session_state["filial_compras"] = "Todas"
     if "fornecedor_compras" not in st.session_state: st.session_state["fornecedor_compras"] = "Todos"
-
     if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
         st.session_state["fornecedor_compras"] = "Todos"
 
     c1, c2, c3, c4, c_acoes = st.columns([1, 1, 1.2, 1.5, 2.5], vertical_alignment="bottom")
-    
     data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
     data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
     filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
     fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
-    
+
     with c_acoes:
         col_b1, col_b2, col_b3 = st.columns(3)
         with col_b1:
@@ -1130,32 +801,20 @@ with tab_compras:
         with col_b3:
             pdf_bytes_comp = st.session_state.get("pdf_bytes_comp")
             if pdf_bytes_comp:
-                timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                nome_arquivo_comp = f"Acompanhamento Gerencial - Compras {timestamp_str}.pdf"
-                st.download_button(
-                    label="📄 Gerar PDF",
-                    data=pdf_bytes_comp,
-                    file_name=nome_arquivo_comp,
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="btn_pdf_compras"
-                )
+                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_comp, file_name=f"Acompanhamento Gerencial - Compras {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_compras")
             else:
                 st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_compras_disabled")
 
     _foi_primeira_carga_compras = "df_compras" not in st.session_state
-
     if _foi_primeira_carga_compras or btn_compras:
         filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
-        
         try:
             with st.spinner("Carregando dados de compras..."):
                 df_compras = buscar_compras(data_ini_c.strftime("%Y-%m-%d"), data_fim_c.strftime("%Y-%m-%d"), filial_cod_c)
-                
                 if not df_compras.empty:
                     if fornecedor_sel != "Todos":
                         df_compras = df_compras[df_compras["Fornecedor"] == fornecedor_sel]
-                    
                     if not df_compras.empty:
                         df_compras['Mes_Nome'] = df_compras['Mes'].map({1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'})
                         st.session_state["df_compras"] = df_compras
@@ -1170,29 +829,22 @@ with tab_compras:
             st.error(f"Erro ao carregar compras: {e}")
             st.stop()
 
-    if _foi_primeira_carga_compras:
-        st.rerun()
+    if _foi_primeira_carga_compras: st.rerun()
 
     df_compras = st.session_state.get("df_compras", pd.DataFrame())
     if df_compras.empty:
         st.info("Nenhuma compra encontrada para o período/filtros.")
     else:
         tot_val_geral = df_compras["Valor"].sum()
-        
-        df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index()
-        df_tot_depto = df_tot_depto.sort_values("Departamento", ascending=True)
-        
+        df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento", ascending=True)
         meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
         cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff", "")]
         cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
-        
         for i, row in df_tot_depto.iterrows():
             cor = cores_depto[i % len(cores_depto)]
             pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
             pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
             cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor, pct_html))
-
         for i in range(0, len(cards_data), 5):
             chunk = cards_data[i:i+5]
             cols = st.columns(5)
@@ -1200,58 +852,31 @@ with tab_compras:
                 with cols[j]:
                     r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
                     bg_color = f"rgba({r}, {g}, {b}, 0.08)"
-                    st.markdown(f'''
-                        <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
-                            <div class="card-label" style="color: {cor};" title="{nome}">{nome}</div>
-                            <div class="card-value" style="color: {cor};">{formatar_moeda(valor)} {pct_html}</div>
-                        </div>
-                    ''', unsafe_allow_html=True)
-        
+                    st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
         st.write("")
-
         if not df_tot_depto.empty:
             deptos_nomes = df_tot_depto['Departamento'].tolist()
             sub_tabs = st.tabs(deptos_nomes)
-
             for sub_tab, (_, row) in zip(sub_tabs, df_tot_depto.iterrows()):
                 with sub_tab:
                     depto = row['Departamento']
-                    
                     df_d = df_compras[df_compras["Departamento"] == depto]
-                    
-                    df_pivot = df_d.pivot_table(
-                        index=['Fornecedor'], 
-                        columns='Mes_Nome', 
-                        values='Valor', 
-                        aggfunc='sum'
-                    )
-                    
+                    df_pivot = df_d.pivot_table(index=['Fornecedor'], columns='Mes_Nome', values='Valor', aggfunc='sum')
                     for m in meses_colunas:
                         if m not in df_pivot.columns: df_pivot[m] = 0.0
-                            
                     df_pivot = df_pivot[meses_colunas]
                     df_pivot['Total'] = df_pivot.sum(axis=1)
-                    df_pivot = df_pivot.fillna(0)
-                    df_pivot = df_pivot.sort_index(ascending=True)
-                    
+                    df_pivot = df_pivot.fillna(0).sort_index(ascending=True)
                     linha_total = df_pivot.sum().to_frame().T
                     linha_total.index = ['TOTAL']
                     df_final = pd.concat([df_pivot, linha_total])
-                    
                     def fmt_br(x):
-                        if pd.isna(x) or x == 0:
-                            return "-"
+                        if pd.isna(x) or x == 0: return "-"
                         return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    
                     def highlight_total(row):
-                        if row.name == 'TOTAL':
-                            return ['font-weight: bold; color: #58a6ff;'] * len(row)
+                        if row.name == 'TOTAL': return ['font-weight: bold; color: #58a6ff;'] * len(row)
                         return [''] * len(row)
-                    
-                    st.dataframe(
-                        df_final.style.format(fmt_br).apply(highlight_total, axis=1),
-                        use_container_width=True
-                    )
+                    st.dataframe(df_final.style.format(fmt_br).apply(highlight_total, axis=1), use_container_width=True)
 
 # ==========================================
 # ABA TRANSFERÊNCIAS
@@ -1262,11 +887,10 @@ with tab_transferencias:
     if "filial_origem_transf" not in st.session_state: st.session_state["filial_origem_transf"] = "Todas"
 
     c1, c2, c3, c_acoes = st.columns([1, 1, 1.2, 2.5], vertical_alignment="bottom")
-    
     data_ini_tr = c1.date_input("De:", key="dt_ini_transf", format="DD/MM/YYYY")
     data_fim_tr = c2.date_input("Até:", key="dt_fim_transf", format="DD/MM/YYYY")
-    filial_tr_sel = c3.selectbox("Filial Origem:", ["Todas"] + list(filiais_inv.keys()), key="filial_origem_transf")
-    
+    filial_tr_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_origem_transf")
+
     with c_acoes:
         col_b1, col_b2, col_b3 = st.columns(3)
         with col_b1:
@@ -1276,33 +900,24 @@ with tab_transferencias:
         with col_b3:
             pdf_bytes_tr = st.session_state.get("pdf_bytes_transf")
             if pdf_bytes_tr:
-                timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                nome_arquivo_tr = f"Acompanhamento Gerencial - Transferencias {timestamp_str}.pdf"
-                st.download_button(
-                    label="📄 Gerar PDF",
-                    data=pdf_bytes_tr,
-                    file_name=nome_arquivo_tr,
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="btn_pdf_transf"
-                )
+                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_tr, file_name=f"Acompanhamento Gerencial - Transferencias {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_transf")
             else:
                 st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_transf_disabled")
 
     _foi_primeira_carga_transf = "df_transf" not in st.session_state
-
     if _foi_primeira_carga_transf or btn_transf:
         filial_cod_tr = "" if filial_tr_sel == "Todas" else filiais_inv[filial_tr_sel]
-        
         try:
             with st.spinner("Carregando dados de transferências..."):
                 df_transf = buscar_transferencias(data_ini_tr.strftime("%Y-%m-%d"), data_fim_tr.strftime("%Y-%m-%d"), filial_cod_tr)
-                
                 if not df_transf.empty:
                     df_transf["FilialOrigem"] = pd.to_numeric(df_transf["FilialOrigem"], errors="coerce").fillna(0).astype(int)
                     df_transf["FilialDestino"] = pd.to_numeric(df_transf["FilialDestino"], errors="coerce").fillna(0).astype(int)
                     df_transf["Mes"] = pd.to_numeric(df_transf["Mes"], errors="coerce").fillna(0).astype(int)
                     df_transf['Mes_Nome'] = df_transf['Mes'].map({1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'})
+                    if "TipoDado" not in df_transf.columns:
+                        df_transf["TipoDado"] = "transf_2.9"
                     st.session_state["df_transf"] = df_transf
                     st.session_state["pdf_bytes_transf"] = gerar_pdf_transferencias(df_transf, data_ini_tr, data_fim_tr)
                 else:
@@ -1312,23 +927,23 @@ with tab_transferencias:
             st.error(f"Erro ao carregar transferências: {e}")
             st.stop()
 
-    if _foi_primeira_carga_transf:
-        st.rerun()
+    if _foi_primeira_carga_transf: st.rerun()
 
     df_transf = st.session_state.get("df_transf", pd.DataFrame())
     if df_transf.empty:
         st.info("Nenhuma transferência encontrada para o período/filtros.")
     else:
-        tot_val_geral = df_transf["Valor"].sum()
-        
-        df_tot_destino = df_transf.groupby("FilialDestino")["Valor"].sum().reset_index()
+        # Totais sem duplicidade: usar transf_2.9 + srb_entrada
+        df_para_totais = df_transf[df_transf["TipoDado"].isin(["transf_2.9", "srb_entrada"])].copy()
+        tot_val_geral = df_para_totais["Valor"].sum()
+
+        df_tot_destino = df_para_totais.groupby("FilialDestino")["Valor"].sum().reset_index()
         df_tot_destino = df_tot_destino.sort_values("FilialDestino", ascending=True)
-        
+
         meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
         cards_data = [("🔄 Total Transferido", tot_val_geral, "#58a6ff", "")]
         cores_destino = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e"]
-        
         for i, row in df_tot_destino.iterrows():
             destino_cod = int(row["FilialDestino"])
             nome_destino = NOMES_FILIAIS.get(destino_cod, f"Filial {destino_cod}")
@@ -1344,13 +959,8 @@ with tab_transferencias:
                 with cols[j]:
                     r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
                     bg_color = f"rgba({r}, {g}, {b}, 0.08)"
-                    st.markdown(f'''
-                        <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
-                            <div class="card-label" style="color: {cor};" title="{nome}">{nome}</div>
-                            <div class="card-value" style="color: {cor};">{formatar_moeda(valor)} {pct_html}</div>
-                        </div>
-                    ''', unsafe_allow_html=True)
-        
+                    st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
+
         st.write("")
 
         if not df_tot_destino.empty:
@@ -1358,55 +968,83 @@ with tab_transferencias:
             for _, row in df_tot_destino.iterrows():
                 dc = int(row["FilialDestino"])
                 destinos_nomes.append(NOMES_FILIAIS.get(dc, f"Filial {dc}"))
-            
+
             sub_tabs = st.tabs(destinos_nomes)
 
             for sub_tab, (_, row) in zip(sub_tabs, df_tot_destino.iterrows()):
                 with sub_tab:
                     destino_cod = int(row["FilialDestino"])
-                    
-                    df_d = df_transf[df_transf["FilialDestino"] == destino_cod]
-                    
-                    df_pivot = df_d.pivot_table(
-                        index=['FilialOrigem'], 
-                        columns='Mes_Nome', 
-                        values='Valor', 
-                        aggfunc='sum'
-                    )
-                    
-                    for m in meses_colunas:
-                        if m not in df_pivot.columns: df_pivot[m] = 0.0
-                            
-                    df_pivot = df_pivot[meses_colunas]
-                    df_pivot['Total'] = df_pivot.sum(axis=1)
-                    df_pivot = df_pivot.fillna(0)
-                    df_pivot = df_pivot.sort_index(ascending=True)
-                    
-                    linha_total = df_pivot.sum().to_frame().T
-                    linha_total.index = ['TOTAL']
-                    df_final = pd.concat([df_pivot, linha_total])
-                    
-                    df_display = df_final.copy()
-                    df_display.index = [
-                        "TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") 
-                        for i in df_display.index
-                    ]
-                    df_display.index.name = "Filial Origem"
-                    
-                    def fmt_br(x):
-                        if pd.isna(x) or x == 0:
-                            return "-"
-                        return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    
-                    def highlight_total(row):
-                        if row.name == 'TOTAL':
-                            return ['font-weight: bold; color: #58a6ff;'] * len(row)
-                        return [''] * len(row)
-                    
-                    st.dataframe(
-                        df_display.style.format(fmt_br).apply(highlight_total, axis=1),
-                        use_container_width=True
-                    )
+                    nome_dest = NOMES_FILIAIS.get(destino_cod, f"Filial {destino_cod}")
+
+                    # Separar em ENTRADAS e SAÍDAS
+                    if destino_cod == 4:
+                        # SRB: entradas registradas na SRB, saídas das filiais para ela
+                        df_entradas = df_transf[(df_transf["FilialDestino"] == 4) & (df_transf["TipoDado"] == "srb_entrada")].copy()
+                        df_saidas = df_transf[(df_transf["FilialDestino"] == 4) & (df_transf["TipoDado"] == "srb_saida_filiais")].copy()
+                        coluna_entradas = "FilialOrigem"
+                        coluna_saidas = "FilialOrigem"
+                        label_entradas = "📥 ENTRADAS na SRB (registradas na SRB — TipoMov 1.1/1.2)"
+                        label_saidas = "📤 SAÍDAS das Filiais para SRB (registradas nas Filiais — TipoMov 2.2/2.4)"
+                    else:
+                        # Filial normal
+                        df_entradas = df_transf[(df_transf["FilialDestino"] == destino_cod) & (df_transf["TipoDado"] == "transf_2.9")].copy()
+                        df_saidas = df_transf[(df_transf["FilialOrigem"] == destino_cod) & (df_transf["TipoDado"].isin(["transf_2.9", "srb_saida_filiais"]))].copy()
+                        coluna_entradas = "FilialOrigem"
+                        coluna_saidas = "FilialDestino"
+                        label_entradas = f"📥 ENTRADAS em {nome_dest} (recebidas de outras filiais)"
+                        label_saidas = f"📤 SAÍDAS de {nome_dest} (enviadas para outras filiais)"
+
+                    # Tabela ENTRADAS
+                    st.markdown(f"### {label_entradas}")
+                    if df_entradas.empty:
+                        st.info("Nenhuma entrada no período.")
+                    else:
+                        df_pivot_e = df_entradas.pivot_table(index=coluna_entradas, columns='Mes_Nome', values='Valor', aggfunc='sum')
+                        for m in meses_colunas:
+                            if m not in df_pivot_e.columns: df_pivot_e[m] = 0.0
+                        df_pivot_e = df_pivot_e[meses_colunas]
+                        df_pivot_e['Total'] = df_pivot_e.sum(axis=1)
+                        df_pivot_e = df_pivot_e.fillna(0).sort_index()
+                        linha_total_e = df_pivot_e.sum().to_frame().T
+                        linha_total_e.index = ['TOTAL']
+                        df_final_e = pd.concat([df_pivot_e, linha_total_e])
+                        df_display_e = df_final_e.copy()
+                        df_display_e.index = ["TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") for i in df_display_e.index]
+                        df_display_e.index.name = coluna_entradas
+                        def fmt_br_e(x):
+                            if pd.isna(x) or x == 0: return "-"
+                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        def highlight_total_e(row):
+                            if row.name == 'TOTAL': return ['font-weight: bold; color: #58a6ff;'] * len(row)
+                            return [''] * len(row)
+                        st.dataframe(df_display_e.style.format(fmt_br_e).apply(highlight_total_e, axis=1), use_container_width=True)
+
+                    st.write("")
+
+                    # Tabela SAÍDAS
+                    st.markdown(f"### {label_saidas}")
+                    if df_saidas.empty:
+                        st.info("Nenhuma saída no período.")
+                    else:
+                        df_pivot_s = df_saidas.pivot_table(index=coluna_saidas, columns='Mes_Nome', values='Valor', aggfunc='sum')
+                        for m in meses_colunas:
+                            if m not in df_pivot_s.columns: df_pivot_s[m] = 0.0
+                        df_pivot_s = df_pivot_s[meses_colunas]
+                        df_pivot_s['Total'] = df_pivot_s.sum(axis=1)
+                        df_pivot_s = df_pivot_s.fillna(0).sort_index()
+                        linha_total_s = df_pivot_s.sum().to_frame().T
+                        linha_total_s.index = ['TOTAL']
+                        df_final_s = pd.concat([df_pivot_s, linha_total_s])
+                        df_display_s = df_final_s.copy()
+                        df_display_s.index = ["TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") for i in df_display_s.index]
+                        df_display_s.index.name = coluna_saidas
+                        def fmt_br_s(x):
+                            if pd.isna(x) or x == 0: return "-"
+                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        def highlight_total_s(row):
+                            if row.name == 'TOTAL': return ['font-weight: bold; color: #58a6ff;'] * len(row)
+                            return [''] * len(row)
+                        st.dataframe(df_display_s.style.format(fmt_br_s).apply(highlight_total_s, axis=1), use_container_width=True)
 
 # ==========================================
 # ABA TRIBUTOS
@@ -1416,7 +1054,6 @@ with tab_tributos:
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
     c1, c2, c_acoes = st.columns([1, 1, 2.5], vertical_alignment="bottom")
-    
     data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
     data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
 
@@ -1429,45 +1066,31 @@ with tab_tributos:
         with col_b3:
             pdf_bytes_t = st.session_state.get("pdf_bytes_trib")
             if pdf_bytes_t:
-                timestamp_str = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                nome_arquivo_t = f"Acompanhamento Gerencial - Tributos {timestamp_str}.pdf"
-                st.download_button(
-                    label="📄 Gerar PDF",
-                    data=pdf_bytes_t,
-                    file_name=nome_arquivo_t,
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="btn_pdf_trib"
-                )
+                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_t, file_name=f"Acompanhamento Gerencial - Tributos {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_trib")
             else:
                 st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_trib_disabled")
 
     _foi_primeira_carga_trib = "df_trib" not in st.session_state
-
     if _foi_primeira_carga_trib or btn_atualizar_trib:
         try:
             with st.spinner("Carregando dados tributários..."):
                 df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
-                
                 if not df_trib.empty:
                     df_trib["CodFilial"] = pd.to_numeric(df_trib["CodFilial"], errors="coerce").fillna(0).astype(int)
                     cols_numeric = ["VendasBruto", "VendasLiquidoDesconto", "ICMS_Vendas", "DevolucaoVendas", "TransfEnvTotal", "TransfEnvTrib", "TransfEnvNaoTrib", "ICMS_TransfEnv", "ComprasTotal", "ComprasTrib", "ComprasNaoTrib", "ICMS_Compras", "TransfRecTotal", "TransfRecTrib", "TransfRecNaoTrib", "ICMS_TransfRec", "TributosAntecipados"]
                     for c in cols_numeric:
                         df_trib[c] = pd.to_numeric(df_trib[c], errors="coerce").fillna(0)
-                        
                     tem_movimento = ((df_trib["VendasBruto"] > 0) | (df_trib["ComprasTotal"] > 0) | (df_trib["TransfEnvTotal"] > 0) | (df_trib["TransfRecTotal"] > 0) | (df_trib["TributosAntecipados"] != 0))
                     df_trib = df_trib[tem_movimento].copy()
-                    
                     if not df_trib.empty:
                         df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
-                        
                         df_trib["tributoVendasIntegral"] = df_trib["ICMS_Vendas"]
                         df_trib["pctVendasEfetivo"] = (df_trib["ICMS_Vendas"] / df_trib["VendasBruto"] * 100).fillna(0)
                         df_trib["tributoVendasAdicional"] = 0.0
                         df_trib["pctAdicional"] = 0.0
                         df_trib["icmsTransfEnv"] = df_trib["ICMS_TransfEnv"]
                         df_trib["pctTransfEnvEfetivo"] = (df_trib["ICMS_TransfEnv"] / df_trib["TransfEnvTotal"] * 100).fillna(0)
-                        
                         mask_atacado = df_trib["CodFilial"] == 5
                         df_trib.loc[mask_atacado, "tributoVendasIntegral"] = df_trib.loc[mask_atacado, "VendasBruto"] * 0.071
                         df_trib.loc[mask_atacado, "pctVendasEfetivo"] = 7.10
@@ -1482,7 +1105,6 @@ with tab_tributos:
                         df_trib.loc[mask_atacado, "TransfRecTrib"] = 0.0
                         df_trib.loc[mask_atacado, "ComprasNaoTrib"] = df_trib.loc[mask_atacado, "ComprasTotal"]
                         df_trib.loc[mask_atacado, "TransfRecNaoTrib"] = df_trib.loc[mask_atacado, "TransfRecTotal"]
-                        
                         mask_srb = df_trib["CodFilial"] == 4
                         df_trib.loc[mask_srb, "tributoVendasIntegral"] = df_trib.loc[mask_srb, "VendasBruto"] * 0.143
                         df_trib.loc[mask_srb, "pctVendasEfetivo"] = 14.30
@@ -1496,7 +1118,6 @@ with tab_tributos:
                         df_trib.loc[mask_srb, "TransfRecTrib"] = 0.0
                         df_trib.loc[mask_srb, "ComprasNaoTrib"] = df_trib.loc[mask_srb, "ComprasTotal"]
                         df_trib.loc[mask_srb, "TransfRecNaoTrib"] = df_trib.loc[mask_srb, "TransfRecTotal"]
-                            
                         df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
                         df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
                         df_trib["totalSaidasNaoTrib"] = df_trib["TransfEnvNaoTrib"]
@@ -1506,12 +1127,10 @@ with tab_tributos:
                         df_trib["debitoICMS"] = df_trib["tributoVendasIntegral"] + df_trib["tributoVendasAdicional"] + df_trib["icmsTransfEnv"]
                         df_trib["creditoICMS"] = df_trib["ICMS_Compras"] + df_trib["ICMS_TransfRec"] + df_trib["TributosAntecipados"]
                         df_trib["resultado"] = df_trib["creditoICMS"] - df_trib["debitoICMS"]
-
                         atacado = df_trib[df_trib["CodFilial"] == 5]
                         pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
                         srb = df_trib[df_trib["CodFilial"] == 4]
                         colunas = pd.concat([atacado, pb, srb])
-                        
                         rows_saidas = [
                             ("Valor Vendas Bruto", "VendasBruto", {}),
                             ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
@@ -1525,7 +1144,6 @@ with tab_tributos:
                             ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
                             ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
                         ]
-                        
                         rows_entradas = [
                             ("Valor Compras", "ComprasTotal", {}),
                             ("Tributo Compras", "ICMS_Compras", {}),
@@ -1537,11 +1155,7 @@ with tab_tributos:
                             ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
                             ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
                         ]
-                        
-                        rows_resultado = [
-                            ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
-                        ]
-
+                        rows_resultado = [("Resultado", "resultado", {"bold": True, "cls": "resultado"})]
                         pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
                         st.session_state["pdf_bytes_trib"] = pdf_bytes
                         st.session_state["df_trib"] = df_trib
@@ -1555,8 +1169,7 @@ with tab_tributos:
             st.error(f"Erro ao carregar tributos: {e}")
             st.stop()
 
-    if _foi_primeira_carga_trib:
-        st.rerun()
+    if _foi_primeira_carga_trib: st.rerun()
 
     df_trib = st.session_state.get("df_trib", pd.DataFrame())
     if df_trib.empty:
@@ -1566,7 +1179,6 @@ with tab_tributos:
         pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
         srb = df_trib[df_trib["CodFilial"] == 4]
         colunas = pd.concat([atacado, pb, srb])
-        
         rows_saidas = [
             ("Valor Vendas Bruto", "VendasBruto", {}),
             ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
@@ -1580,7 +1192,6 @@ with tab_tributos:
             ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
             ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
         ]
-        
         rows_entradas = [
             ("Valor Compras", "ComprasTotal", {}),
             ("Tributo Compras", "ICMS_Compras", {}),
@@ -1592,43 +1203,33 @@ with tab_tributos:
             ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
             ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
         ]
-        
-        rows_resultado = [
-            ("Resultado", "resultado", {"bold": True, "cls": "resultado"})
-        ]
-        
+        rows_resultado = [("Resultado", "resultado", {"bold": True, "cls": "resultado"})]
+
         saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
         saldo_pb = pb["resultado"].sum() if not pb.empty else 0
         saldo_srb = srb["resultado"].sum() if not srb.empty else 0
         saldo_cons = saldo_atacado + saldo_pb + saldo_srb
-        
+
         c_cards = st.columns(4)
         def render_card_trib(col, title, val):
             cor = "#3fb950" if val >= 0 else "#f85149"
             r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
             bg_color = f"rgba({r}, {g}, {b}, 0.08)"
             with col:
-                st.markdown(f'''
-                    <div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};">
-                        <div class="card-label" style="color: {cor}; white-space: normal;">{title}</div>
-                        <div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div>
-                    </div>
-                ''', unsafe_allow_html=True)
-        
+                st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
         render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
         render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
         render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
         render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
-        
-        st.write("") 
-        
+
+        st.write("")
+
         def build_trib_table(rows_list):
             html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
             html += '<thead><tr><th style="text-align:left;">Operação</th>'
             for _, f in colunas.iterrows():
                 html += f'<th style="text-align:right;">{f["NomeFilial"]}</th>'
             html += '<th style="text-align:right;">📊 Total</th></tr></thead><tbody>'
-            
             for label, key, opts in rows_list:
                 cls = opts.get("cls", "")
                 bold = opts.get("bold", False)
@@ -1645,23 +1246,18 @@ with tab_tributos:
                     if key == "resultado":
                         val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
                     html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
-                    
                 if key == "resultado":
                     total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
                 else:
                     total_str = formatar_numero(total)
                 html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
-            
             html += '</tbody></table></div>'
             return html
 
         tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
-        
         with tab_saidas:
             st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
-
         with tab_entradas:
             st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
-
         with tab_resultado:
             st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
