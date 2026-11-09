@@ -124,7 +124,7 @@ def limpar_tributos():
 
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
 
-tab_visao, tab_compras, tab_transferencias, tab_tributos = st.tabs(["💰 Vendas", "🛒 Compras", "🔄 Transferências", "⚖️ Tributos"])
+tab_tributos, tab_visao, tab_compras, tab_transferencias = st.tabs(["⚖️ Tributos", "💰 Vendas", "🛒 Compras", "🔄 Transferências"])
 
 def formatar_moeda(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
