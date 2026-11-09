@@ -24,6 +24,7 @@ Entradas AS (
         AND origem.CodFilial <> m.CodFilial
         AND self.CodCliFor IS NULL
         AND p.IndisponivelVenda = 'N'
+        AND ISNULL(m.Status, '') <> 'C'
         AND (
             (m.CodFilial = 4 AND m.TipoMov = '1.1')
             OR (m.TipoMov = '1.2' AND m.DtFinalizacao IS NOT NULL)
@@ -51,6 +52,7 @@ Saidas AS (
         AND self.CodCliFor IS NULL
         AND p.IndisponivelVenda = 'N'
         AND m.NfeStatus = 'U'
+        AND ISNULL(m.Status, '') <> 'C'
         AND (
             (m.CodFilial = 4 AND m.TipoMov IN ('2.2','2.9'))
             OR (m.CodFilial <> 4 AND m.TipoMov IN ('2.2','2.4','2.9'))
