@@ -1067,16 +1067,20 @@ with tab_sazonalidade:
     else:
         def _cor_idx(v):
             if pd.isna(v): return ""
-            # 1. Melhor (Verde Escuro) - acima de 1.05
             if v > 1.05: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
-            # 2. Bom (Verde Claro) - entre 1.025 e 1.05
             if v > 1.025: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
-            # 3. Normal (Amarelo) - entre 0.975 e 1.025
             if v >= 0.975: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"
-            # 4. Ruim (Vermelho Claro) - entre 0.95 e 0.975
             if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
-            # 5. Pior (Vermelho Escuro) - abaixo de 0.95
             return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
+
+        # NOVA FUNÇÃO: Degradê específico para Horas
+        def _cor_hora_idx(v):
+            if pd.isna(v): return ""
+            if v >= 3.00: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"  # Acima de 3,00 (Melhor)
+            if v >= 2.00: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"  # 2,00 a 3,00
+            if v >= 1.00: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"  # 1,00 a 2,00
+            if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"  # 0,95 a 1,00
+            return "background-color: #fecaca; color: #991b1b; font-weight: 700;"                # Abaixo de 0,95 (Pior)
 
         def _cor_comp(v):
             if pd.isna(v): return ""
@@ -1090,37 +1094,9 @@ with tab_sazonalidade:
                 st.info("Sem dados para o período.")
                 return
             styled = df_idx.style.format(fmt_func).map(cor_func)
+            styled = styled.set_properties(**{'text-align': 'right'}) # Alinha os números à direita
             st.dataframe(styled, use_container_width=True)
             
-        def _render_com_pct(df_idx, titulo, cor_func):
-            st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
-            if df_idx.empty:
-                st.info("Sem dados para o período.")
-                return
-            
-            df_str = df_idx.copy()
-            df_num = df_idx.copy()
-
-            def fmt_val_pct(val, total):
-                if pd.isna(val) or val == 0: return "-"
-                pct = ((val / total) - 1) * 100 if total > 0 else 0
-                return f"{val:.4f} ({pct:+.2f}%)".replace(".", ",")
-
-            for col in df_str.columns:
-                if col != "Total":
-                    df_str[col] = df_str.apply(lambda row: fmt_val_pct(row[col], row["Total"]), axis=1)
-                else:
-                    df_str[col] = df_str["Total"].apply(lambda x: f"{x:.4f}".replace(".", ",") if not pd.isna(x) else "-")
-
-            def apply_colors(row_str, row_num):
-                return [cor_func(row_num[col]) for col in row_str.index]
-
-            styled = df_str.style.apply(lambda s: apply_colors(s, df_num.loc[s.name]), axis=1)
-            styled = styled.set_properties(**{'text-align': 'right'})
-            styled = styled.set_properties(subset=[df_str.index.name], **{'text-align': 'left'})
-            st.dataframe(styled, use_container_width=True)
-
-        # Função atualizada para maior segurança com o Pandas
         def _render_com_pct(df_idx, titulo, cor_func):
             st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
             if df_idx.empty:
@@ -1144,6 +1120,7 @@ with tab_sazonalidade:
                 return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
 
             styled = df_display.style.apply(apply_colors, axis=1)
+            styled = styled.set_properties(**{'text-align': 'right'}) # Alinha os números à direita
             st.dataframe(styled, use_container_width=True)
 
         # Chamadas atualizadas:
@@ -1155,10 +1132,13 @@ with tab_sazonalidade:
 
         st.markdown("---") # Linha divisória visual
 
-        _render_com_pct(df_hist_hora_idx, "🕒 Índice de Sazonalidade (HORAS) — Histórico Completo", _cor_idx)
+        # ALTERADO AQUI: _cor_hora_idx
+        _render_com_pct(df_hist_hora_idx, "🕒 Índice de Sazonalidade (HORAS) — Histórico Completo", _cor_hora_idx)
         st.write("")
-        _render_com_pct(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", _cor_idx)
+        # ALTERADO AQUI: _cor_hora_idx
+        _render_com_pct(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", _cor_hora_idx)
         st.write("")
+        # O comparativo continua usando _cor_comp, pois ele avalia a variação percentual, não o índice bruto.
         _render(df_comp_hora, "📈 Comparativo (HORAS) — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
         
 # ==========================================
