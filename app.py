@@ -1122,9 +1122,11 @@ with tab_sazonalidade:
 
         def _cor_comp(v):
             if pd.isna(v): return ""
-            if v < -2: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
-            if v > 2: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
-            return "background-color: #f1f5f9; color: #475569; font-weight: 600;"
+            if v >= 5.0: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
+            if v >= 2.5: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
+            if v > -2.5: return "background-color: #f1f5f9; color: #475569; font-weight: 600;"
+            if v > -5.0: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
+            return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
 
         def _render(df_idx, titulo, fmt_func, cor_func):
             st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
@@ -1165,26 +1167,28 @@ with tab_sazonalidade:
         legenda_dias = '''
         <div class="legenda-container">
             <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > 1,05 (Melhor)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 1,025 a 1,05</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 1,025 a 1,05 (Crescendo)</div>
             <div class="legenda-item"><div class="legenda-cor" style="background-color:#fef3c7;"></div> 0,975 a 1,025 (Normal)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 0,975</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 0,975 (Regredindo)</div>
             <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < 0,95 (Pior)</div>
         </div>
         '''
         legenda_horas = '''
         <div class="legenda-container">
             <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > 3,00 (Melhor)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 2,00 a 3,00</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 2,00 a 3,00 (Crescendo)</div>
             <div class="legenda-item"><div class="legenda-cor" style="background-color:#fef3c7;"></div> 1,00 a 2,00 (Normal)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 1,00</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 1,00 (Regredindo)</div>
             <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < 0,95 (Pior)</div>
         </div>
         '''
         legenda_comp = '''
         <div class="legenda-container">
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> > +2% (Melhor)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#f1f5f9;"></div> -2% a +2% (Normal)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> < -2% (Pior)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > +5,0% (Melhor)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> +2,5% a +5,0% (Crescendo)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#f1f5f9;"></div> -2,5% a +2,5% (Normal)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> -5,0% a -2,5% (Regredindo)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < -5,0% (Pior)</div>
         </div>
         '''
 
