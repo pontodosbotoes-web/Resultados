@@ -749,20 +749,31 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
     header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 15), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
     elements.append(header_table)
 
-    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
-    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
-    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
-
-    def montar_tabela(df_idx, formato_func):
+    def montar_tabela(df_idx, formato_func, com_pct=False, is_hora=False):
         if df_idx is None or df_idx.empty:
             return Paragraph("<i>Sem dados.</i>", styles['Normal'])
+        
+        # Ajusta fonte e padding baseado no tipo (dias vs horas)
+        font_sz = 6.5 if is_hora else 8
+        pad_v = 1 if is_hora else 4
+        
+        header_style = ParagraphStyle(f'Header_{is_hora}', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=font_sz, alignment=1)
+        cell_left = ParagraphStyle(f'CellLeft_{is_hora}', parent=styles['Normal'], fontSize=font_sz, alignment=0)
+        cell_right = ParagraphStyle(f'CellRight_{is_hora}', parent=styles['Normal'], fontSize=font_sz, alignment=2)
+
         headers = [df_idx.index.name or "Index"] + list(df_idx.columns)
         data = [[Paragraph(h, header_style) for h in headers]]
         for idx, row in df_idx.iterrows():
             cells = [Paragraph(str(idx), cell_left)]
             for col in df_idx.columns:
                 v = row[col]
-                cells.append(Paragraph(formato_func(v), cell_right))
+                if com_pct and col != "Total" and not pd.isna(v) and v != 0:
+                    total = row["Total"]
+                    pct = ((v / total) - 1) * 100 if total > 0 else 0
+                    txt = f"{v:.4f} ({pct:+.2f}%)".replace(".", ",")
+                else:
+                    txt = formato_func(v)
+                cells.append(Paragraph(txt, cell_right))
             data.append(cells)
         
         col_widths = [90] + [93] * len(df_idx.columns) 
@@ -773,35 +784,47 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), pad_v),
+            ('TOPPADDING', (0, 0), (-1, -1), pad_v),
         ]))
         return t
 
-    # 1. Tabelas de Dias
-    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS) — HISTÓRICO COMPLETO</b>", styles['Heading3']))
-    elements.append(montar_tabela(df_hist_idx, formatar_indice))
+    # --- ESTILOS DOS CABEÇALHOS ---
+    heading_dia = ParagraphStyle('H_Dia', parent=styles['Heading3'], fontSize=10, spaceBefore=6, spaceAfter=4, textColor=colors.HexColor('#1E293B'))
+    heading_hora = ParagraphStyle('H_Hora', parent=styles['Heading3'], fontSize=8, spaceBefore=4, spaceAfter=2, textColor=colors.HexColor('#1E293B'))
+
+    # ==========================================
+    # FOLHA 1: DIAS DA SEMANA
+    # ==========================================
+    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS) — HISTÓRICO COMPLETO</b>", heading_dia))
+    elements.append(montar_tabela(df_hist_idx, formatar_indice, com_pct=True))
     elements.append(Spacer(1, 15))
 
-    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS) — PERÍODO SELECIONADO</b>", styles['Heading3']))
-    elements.append(montar_tabela(df_periodo_idx, formatar_indice))
+    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS) — PERÍODO SELECIONADO</b>", heading_dia))
+    elements.append(montar_tabela(df_periodo_idx, formatar_indice, com_pct=True))
     elements.append(Spacer(1, 15))
 
-    elements.append(Paragraph("<b>COMPARATIVO (DIAS) — PERÍODO vs. HISTÓRICO (variação %)</b>", styles['Heading3']))
+    elements.append(Paragraph("<b>COMPARATIVO (DIAS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_dia))
     elements.append(montar_tabela(df_comparativo, formatar_variacao_pct))
-    elements.append(Spacer(1, 25)) # Mais espaço entre blocos
+    
+    # ==========================================
+    # QUEBRA DE PÁGINA
+    # ==========================================
+    elements.append(PageBreak())
+    
+    # ==========================================
+    # FOLHA 2: HORAS
+    # ==========================================
+    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (HORAS) — HISTÓRICO COMPLETO</b>", heading_hora))
+    elements.append(montar_tabela(df_hist_hora, formatar_indice, com_pct=True, is_hora=True))
+    elements.append(Spacer(1, 6))
 
-    # 2. Tabelas de Horas
-    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (HORAS) — HISTÓRICO COMPLETO</b>", styles['Heading3']))
-    elements.append(montar_tabela(df_hist_hora, formatar_indice))
-    elements.append(Spacer(1, 15))
+    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (HORAS) — PERÍODO SELECIONADO</b>", heading_hora))
+    elements.append(montar_tabela(df_periodo_hora, formatar_indice, com_pct=True, is_hora=True))
+    elements.append(Spacer(1, 6))
 
-    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (HORAS) — PERÍODO SELECIONADO</b>", styles['Heading3']))
-    elements.append(montar_tabela(df_periodo_hora, formatar_indice))
-    elements.append(Spacer(1, 15))
-
-    elements.append(Paragraph("<b>COMPARATIVO (HORAS) — PERÍODO vs. HISTÓRICO (variação %)</b>", styles['Heading3']))
-    elements.append(montar_tabela(df_comp_hora, formatar_variacao_pct))
+    elements.append(Paragraph("<b>COMPARATIVO (HORAS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_hora))
+    elements.append(montar_tabela(df_comp_hora, formatar_variacao_pct, is_hora=True))
 
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
@@ -1060,6 +1083,34 @@ with tab_sazonalidade:
                 st.info("Sem dados para o período.")
                 return
             styled = df_idx.style.format(fmt_func).map(cor_func)
+            st.dataframe(styled, use_container_width=True)
+            
+        def _render_com_pct(df_idx, titulo, cor_func):
+            st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
+            if df_idx.empty:
+                st.info("Sem dados para o período.")
+                return
+            
+            df_str = df_idx.copy()
+            df_num = df_idx.copy()
+
+            def fmt_val_pct(val, total):
+                if pd.isna(val) or val == 0: return "-"
+                pct = ((val / total) - 1) * 100 if total > 0 else 0
+                return f"{val:.4f} ({pct:+.2f}%)".replace(".", ",")
+
+            for col in df_str.columns:
+                if col != "Total":
+                    df_str[col] = df_str.apply(lambda row: fmt_val_pct(row[col], row["Total"]), axis=1)
+                else:
+                    df_str[col] = df_str["Total"].apply(lambda x: f"{x:.4f}".replace(".", ",") if not pd.isna(x) else "-")
+
+            def apply_colors(row_str, row_num):
+                return [cor_func(row_num[col]) for col in row_str.index]
+
+            styled = df_str.style.apply(lambda s: apply_colors(s, df_num.loc[s.name]), axis=1)
+            styled = styled.set_properties(**{'text-align': 'right'})
+            styled = styled.set_properties(subset=[df_str.index.name], **{'text-align': 'left'})
             st.dataframe(styled, use_container_width=True)
 
         _render(df_hist_idx, "📊 Índice de Sazonalidade (DIAS) — Histórico Completo", formatar_indice, _cor_idx)
