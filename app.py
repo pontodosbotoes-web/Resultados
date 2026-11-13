@@ -126,8 +126,8 @@ def limpar_tributos():
 def limpar_sazonalidade():
     st.session_state["dt_ini_saz"] = hoje - timedelta(days=365)
     st.session_state["dt_fim_saz"] = hoje
-    st.session_state["h_ini_saz"] = datetime.strptime("00:00", "%H:%M").time()
-    st.session_state["h_fim_saz"] = datetime.strptime("23:59", "%H:%M").time()
+    st.session_state["h_ini_saz"] = datetime.strptime("08:00", "%H:%M").time()
+    st.session_state["h_fim_saz"] = datetime.strptime("20:59", "%H:%M").time()
     for k in ["df_saz_hist", "df_saz_periodo", "df_saz_comparativo", "df_saz_hist_hora", "df_saz_periodo_hora", "df_saz_comp_hora", "pdf_bytes_saz"]:
         if k in st.session_state: del st.session_state[k]
 
@@ -961,8 +961,8 @@ with tab_visao:
 with tab_sazonalidade:
     if "dt_ini_saz" not in st.session_state: st.session_state["dt_ini_saz"] = hoje - timedelta(days=365)
     if "dt_fim_saz" not in st.session_state: st.session_state["dt_fim_saz"] = hoje
-    if "h_ini_saz" not in st.session_state: st.session_state["h_ini_saz"] = datetime.strptime("00:00", "%H:%M").time()
-    if "h_fim_saz" not in st.session_state: st.session_state["h_fim_saz"] = datetime.strptime("23:59", "%H:%M").time()
+    if "h_ini_saz" not in st.session_state: st.session_state["h_ini_saz"] = datetime.strptime("08:00", "%H:%M").time()
+    if "h_fim_saz" not in st.session_state: st.session_state["h_fim_saz"] = datetime.strptime("20:59", "%H:%M").time()
 
     c1, c2, c3, c4, c_acoes = st.columns([1, 1, 1, 1, 2.5], vertical_alignment="bottom")
     data_ini_saz = c1.date_input("De:", key="dt_ini_saz", format="DD/MM/YYYY")
