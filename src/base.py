@@ -42,11 +42,16 @@ def buscar_pagamentos(data_inicio, data_fim, hora_inicio, hora_fim, filial):
 def buscar_compras(data_inicio, data_fim, filial):
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
     return _executar_query("visao_compras.sql", params, filial)
-    
+
 @st.cache_data(ttl=600)
-def buscar_sazonalidade(data_inicio, data_fim, filial=""):
-    params = {"data_inicio": data_inicio, "data_fim": data_fim}
+def buscar_sazonalidade(data_inicio, data_fim, hora_inicio, hora_fim, filial=""):
+    params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
     return _executar_query("visao_sazonalidade.sql", params, filial)
+
+@st.cache_data(ttl=600)
+def buscar_sazonalidade_hora(data_inicio, data_fim, hora_inicio, hora_fim, filial=""):
+    params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
+    return _executar_query("visao_sazonalidade_hora.sql", params, filial)
 
 def buscar_transferencias(data_inicio, data_fim, filial):
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
