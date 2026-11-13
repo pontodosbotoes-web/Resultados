@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from io import BytesIO
 from reportlab.lib.pagesizes import A4, landscape, portrait
@@ -12,7 +12,7 @@ from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 
 from src.db import carregar_filiais, carregar_fornecedores
-from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras, buscar_transferencias, buscar_tributos
+from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras, buscar_transferencias, buscar_tributos, buscar_sazonalidade
 
 st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_icon="📊")
 
@@ -122,9 +122,15 @@ def limpar_tributos():
     for k in ["df_trib", "pdf_bytes_trib"]:
         if k in st.session_state: del st.session_state[k]
 
+def limpar_sazonalidade():
+    st.session_state["dt_ini_saz"] = hoje - timedelta(days=365)
+    st.session_state["dt_fim_saz"] = hoje
+    for k in ["df_saz_hist", "df_saz_periodo", "pdf_bytes_saz"]:
+        if k in st.session_state: del st.session_state[k]
+
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
 
-tab_tributos, tab_visao, tab_compras, tab_transferencias = st.tabs(["⚖️ Tributos", "💰 Vendas", "🛒 Compras", "🔄 Transferências"])
+tab_tributos, tab_visao, tab_sazonalidade, tab_compras, tab_transferencias = st.tabs(["⚖️ Tributos", "💰 Vendas", "📅 Sazonalidade", "🛒 Compras", "🔄 Transferências"])
 
 def formatar_moeda(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -669,6 +675,124 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     buffer.seek(0)
     return buffer
 
+# ==========================================
+# SAZONALIDADE — funções auxiliares
+# ==========================================
+DIAS_SEMANA = {1: "Segunda", 2: "Terça", 3: "Quarta", 4: "Quinta", 5: "Sexta", 6: "Sábado"}
+
+def formatar_indice(v):
+    if pd.isna(v): return "-"
+    return f"{v:.4f}".replace(".", ",")
+
+def formatar_variacao_pct(v):
+    if pd.isna(v): return "-"
+    return f"{v:+.2f}%".replace(".", ",")
+
+
+def calcular_indices_sazonalidade(df):
+    """Recebe DataFrame com CodFilial, DiaSemana, Valor, QtdDias.
+    Retorna DataFrame indexado por DiaSemana (1..6), colunas = nomes das filiais + Total.
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    df = df.copy()
+    df["CodFilial"] = pd.to_numeric(df["CodFilial"], errors="coerce").fillna(0).astype(int)
+    df["DiaSemana"] = pd.to_numeric(df["DiaSemana"], errors="coerce").fillna(0).astype(int)
+    df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0)
+    df["QtdDias"] = pd.to_numeric(df["QtdDias"], errors="coerce").fillna(0)
+
+    resultado = {}
+    for cod in [1, 2, 3, 4]:
+        sub = df[df["CodFilial"] == cod]
+        if sub.empty:
+            continue
+        soma_dia = sub.groupby("DiaSemana")["Valor"].sum()
+        qtd_dia = sub.groupby("DiaSemana")["QtdDias"].sum()
+        media_dia = (soma_dia / qtd_dia).replace([float("inf"), -float("inf")], 0).fillna(0)
+        media_geral = sub["Valor"].sum() / sub["QtdDias"].sum() if sub["QtdDias"].sum() > 0 else 0
+        if media_geral == 0:
+            continue
+        idx_bruto = media_dia / media_geral
+        soma_idx = idx_bruto.sum()
+        if soma_idx == 0:
+            continue
+        idx_norm = idx_bruto * 6 / soma_idx
+        resultado[cod] = idx_norm
+
+    if not resultado:
+        return pd.DataFrame()
+
+    df_idx = pd.DataFrame(resultado)
+    df_idx = df_idx.reindex(range(1, 7)).fillna(0)
+
+    # Coluna Total = média dos índices das 4 filiais (também soma 6)
+    df_idx["Total"] = df_idx.mean(axis=1)
+
+    df_idx.index = [DIAS_SEMANA[d] for d in df_idx.index]
+    df_idx.index.name = "Dia da Semana"
+
+    # Renomear colunas com nome das filiais
+    nomes = {cod: NOMES_FILIAIS.get(cod, f"Filial {cod}") for cod in [1, 2, 3, 4]}
+    df_idx = df_idx.rename(columns=nomes)
+    return df_idx
+
+
+def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, data_ini, data_fim):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
+    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
+    header_data = [[Paragraph("<b>Acompanhamento Gerencial - Sazonalidade Semanal</b>", left_style),
+                    Paragraph(f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]]
+    header_table = Table(header_data, colWidths=[400, 400])
+    header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 15), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
+    elements.append(header_table)
+
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
+    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
+
+    def montar_tabela(df_idx, formato_func):
+        if df_idx is None or df_idx.empty:
+            return Paragraph("<i>Sem dados.</i>", styles['Normal'])
+        headers = [df_idx.index.name or "Dia"] + list(df_idx.columns)
+        data = [[Paragraph(h, header_style) for h in headers]]
+        for dia, row in df_idx.iterrows():
+            cells = [Paragraph(dia, cell_left)]
+            for col in df_idx.columns:
+                v = row[col]
+                cells.append(Paragraph(formato_func(v), cell_right))
+            data.append(cells)
+        col_widths = [110] + [120] * len(df_idx.columns)
+        t = Table(data, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        return t
+
+    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE — HISTÓRICO COMPLETO</b>", styles['Heading3']))
+    elements.append(montar_tabela(df_hist_idx, formatar_indice))
+    elements.append(Spacer(1, 15))
+
+    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE — PERÍODO SELECIONADO</b>", styles['Heading3']))
+    elements.append(montar_tabela(df_periodo_idx, formatar_indice))
+    elements.append(Spacer(1, 15))
+
+    elements.append(Paragraph("<b>COMPARATIVO — PERÍODO vs. HISTÓRICO (variação %)</b>", styles['Heading3']))
+    elements.append(montar_tabela(df_comparativo, formatar_variacao_pct))
+
+    doc.build(elements, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer
 
 # ==========================================
 # ABA VENDAS
@@ -817,6 +941,100 @@ with tab_visao:
                 cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
                 dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
                 renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
+
+# ==========================================
+# ABA SAZONALIDADE
+# ==========================================
+with tab_sazonalidade:
+    if "dt_ini_saz" not in st.session_state: st.session_state["dt_ini_saz"] = hoje - timedelta(days=365)
+    if "dt_fim_saz" not in st.session_state: st.session_state["dt_fim_saz"] = hoje
+
+    c1, c2, c_acoes = st.columns([1, 1, 2.5], vertical_alignment="bottom")
+    data_ini_saz = c1.date_input("De:", key="dt_ini_saz", format="DD/MM/YYYY")
+    data_fim_saz = c2.date_input("Até:", key="dt_fim_saz", format="DD/MM/YYYY")
+
+    with c_acoes:
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            btn_saz = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_saz")
+        with col_b2:
+            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_sazonalidade, key="btn_limpar_saz")
+        with col_b3:
+            pdf_bytes_saz = st.session_state.get("pdf_bytes_saz")
+            if pdf_bytes_saz:
+                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_saz, file_name=f"Acompanhamento Gerencial - Sazonalidade {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_saz")
+            else:
+                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_saz_disabled")
+
+    _foi_primeira_carga_saz = "df_saz_hist" not in st.session_state
+    if _foi_primeira_carga_saz or btn_saz:
+        try:
+            with st.spinner("Carregando dados de sazonalidade..."):
+                # Histórico completo do banco
+                df_hist = buscar_sazonalidade("1900-01-01", "2100-12-31", "")
+                # Período configurável
+                df_periodo = buscar_sazonalidade(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), "")
+
+                df_hist_idx = calcular_indices_sazonalidade(df_hist)
+                df_periodo_idx = calcular_indices_sazonalidade(df_periodo)
+
+                # Comparativo: variação percentual do índice do período vs. histórico
+                if not df_hist_idx.empty and not df_periodo_idx.empty:
+                    df_comparativo = ((df_periodo_idx / df_hist_idx) - 1) * 100
+                    df_comparativo = df_comparativo.replace([float("inf"), -float("inf")], None).round(2)
+                else:
+                    df_comparativo = pd.DataFrame()
+
+                st.session_state["df_saz_hist"] = df_hist_idx
+                st.session_state["df_saz_periodo"] = df_periodo_idx
+                st.session_state["df_saz_comparativo"] = df_comparativo
+
+                if not df_hist_idx.empty and not df_periodo_idx.empty:
+                    st.session_state["pdf_bytes_saz"] = gerar_pdf_sazonalidade(
+                        df_hist_idx, df_periodo_idx, df_comparativo, data_ini_saz, data_fim_saz
+                    )
+                else:
+                    st.session_state["pdf_bytes_saz"] = None
+        except Exception as e:
+            st.error(f"Erro ao carregar sazonalidade: {e}")
+            st.stop()
+
+    if _foi_primeira_carga_saz: st.rerun()
+
+    df_hist_idx = st.session_state.get("df_saz_hist", pd.DataFrame())
+    df_periodo_idx = st.session_state.get("df_saz_periodo", pd.DataFrame())
+    df_comparativo = st.session_state.get("df_saz_comparativo", pd.DataFrame())
+
+    if df_hist_idx.empty and df_periodo_idx.empty:
+        st.info("Nenhum dado de vendas encontrado.")
+    else:
+        # Estilização: verde > 1,05 | amarelo entre 0,95 e 1,05 | vermelho < 0,95
+        def _cor_idx(v):
+            if pd.isna(v): return ""
+            if v < 0.95: return "background-color: rgba(248,81,73,0.20); color: #f85149; font-weight: 600;"
+            if v > 1.05: return "background-color: rgba(63,185,80,0.20); color: #3fb950; font-weight: 600;"
+            return "background-color: rgba(210,153,34,0.15); color: #d29922;"
+
+        def _cor_comp(v):
+            if pd.isna(v): return ""
+            if v < -2: return "background-color: rgba(248,81,73,0.20); color: #f85149; font-weight: 600;"
+            if v > 2: return "background-color: rgba(63,185,80,0.20); color: #3fb950; font-weight: 600;"
+            return "background-color: rgba(139,148,158,0.10); color: #c9d1d9;"
+
+        def _render(df_idx, titulo, fmt_func, cor_func):
+            st.markdown(f"### {titulo}")
+            if df_idx.empty:
+                st.info("Sem dados para o período.")
+                return
+            styled = df_idx.style.format(fmt_func).map(cor_func)
+            st.dataframe(styled, use_container_width=True)
+
+        _render(df_hist_idx, "📊 Índice de Sazonalidade — Histórico Completo", formatar_indice, _cor_idx)
+        st.write("")
+        _render(df_periodo_idx, f"📊 Índice de Sazonalidade — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", formatar_indice, _cor_idx)
+        st.write("")
+        _render(df_comparativo, "📈 Comparativo — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
 
 # ==========================================
 # ABA COMPRAS
