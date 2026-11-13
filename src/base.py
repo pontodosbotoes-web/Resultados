@@ -52,6 +52,11 @@ def buscar_sazonalidade(data_inicio, data_fim, hora_inicio, hora_fim, filial="")
 def buscar_sazonalidade_hora(data_inicio, data_fim, hora_inicio, hora_fim, filial=""):
     params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
     return _executar_query("visao_sazonalidade_hora.sql", params, filial)
+    
+@st.cache_data(ttl=600)
+def buscar_sazonalidade_diautil(data_inicio, data_fim, filial=""):
+    params = {"data_inicio": data_inicio, "data_fim": data_fim}
+    return _executar_query("visao_sazonalidade_diautil.sql", params, filial)
 
 def buscar_transferencias(data_inicio, data_fim, filial):
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
