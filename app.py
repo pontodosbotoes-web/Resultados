@@ -19,66 +19,66 @@ st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_ic
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;}
-        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 100% !important; background-color: #0d1117; }
+        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 100% !important; background-color: #ffffff; }
         
-        .titulo-pagina { font-size: 24px; font-weight: 700; text-align: center; color: #f0f6fc; padding-bottom: 10px; margin-bottom: 10px; }
-        .tema-titulo { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-top: 20px; margin-bottom: 12px; padding-bottom: 6px; }
+        .titulo-pagina { font-size: 24px; font-weight: 700; text-align: center; color: #111827; padding-bottom: 10px; margin-bottom: 10px; }
+        .tema-titulo { font-size: 20px; font-weight: 700; color: #1f2937; margin-top: 20px; margin-bottom: 12px; padding-bottom: 6px; }
         
-        .card-item { border-radius: 10px; padding: 12px 14px 6px 14px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: 0.2s; margin-bottom: 10px;}
-        .card-item:hover { filter: brightness(1.2); }
-        .card-label { font-size: 13px; font-weight: 600; color: #c9d1d9; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-        .card-value { font-size: 20px; font-weight: 700; color: #f0f6fc; }
+        .card-item { border-radius: 10px; padding: 12px 14px 6px 14px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: 0.2s; margin-bottom: 10px; }
+        .card-item:hover { filter: brightness(0.95); }
+        .card-label { font-size: 13px; font-weight: 600; color: #4b5563; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+        .card-value { font-size: 20px; font-weight: 700; color: #111827; }
         
-        .pct-participacao { font-size: 13px; font-weight: 600; color: #f6ad55; margin-left: 5px; }
-        .pct-positiva { font-size: 13px; font-weight: 600; color: #3fb950; margin-left: 5px; }
-        .pct-negativa { font-size: 13px; font-weight: 600; color: #f85149; margin-left: 5px; }
+        .pct-participacao { font-size: 13px; font-weight: 600; color: #d97706; margin-left: 5px; }
+        .pct-positiva { font-size: 13px; font-weight: 600; color: #16a34a; margin-left: 5px; }
+        .pct-negativa { font-size: 13px; font-weight: 600; color: #dc2626; margin-left: 5px; }
         
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
 
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"], div[data-testid="stButton"] button[kind="primary"] {
-            background-color: #238636 !important; color: #ffffff !important; border: 1px solid #238636 !important;
+            background-color: #16a34a !important; color: #ffffff !important; border: 1px solid #16a34a !important;
             transition: all 0.2s; height: 42px !important;
         }
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]:hover, div[data-testid="stButton"] button[kind="primary"]:hover {
-            background-color: #2ea043 !important; border-color: #2ea043 !important;
-            box-shadow: 0 0 10px rgba(46, 160, 67, 0.4) !important;
+            background-color: #15803d !important; border-color: #15803d !important;
+            box-shadow: 0 0 10px rgba(22, 163, 74, 0.4) !important;
         }
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"], div[data-testid="stButton"] button {
-            background-color: #da3633 !important; color: #ffffff !important; border: 1px solid #da3633 !important;
+            background-color: #dc2626 !important; color: #ffffff !important; border: 1px solid #dc2626 !important;
             transition: all 0.2s; height: 42px !important;
         }
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"]:hover, div[data-testid="stButton"] button:hover {
-            background-color: #f85149 !important; border-color: #f85149 !important;
-            box-shadow: 0 0 10px rgba(248, 81, 73, 0.4) !important;
+            background-color: #b91c1c !important; border-color: #b91c1c !important;
+            box-shadow: 0 0 10px rgba(220, 38, 38, 0.4) !important;
         }
         div[data-testid="stDownloadButton"] button {
-            background-color: #1f6feb !important; color: #ffffff !important; border: 1px solid #1f6feb !important;
+            background-color: #2563eb !important; color: #ffffff !important; border: 1px solid #2563eb !important;
             transition: all 0.2s; height: 42px !important;
         }
         div[data-testid="stDownloadButton"] button:hover {
-            background-color: #388bfd !important; border-color: #388bfd !important;
-            box-shadow: 0 0 10px rgba(56, 139, 253, 0.4) !important;
+            background-color: #1d4ed8 !important; border-color: #1d4ed8 !important;
+            box-shadow: 0 0 10px rgba(37, 99, 235, 0.4) !important;
         }
 
         .tabela-wrapper { overflow-x: auto; margin: 10px 0 30px 0; }
-        .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 14px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; }
-        .tributos-tabela th { background: #0d1117; color: #f0f6fc; padding: 10px 12px; border-bottom: 2px solid #30363d; font-weight: 600; white-space: nowrap; }
-        .tributos-tabela td { padding: 8px 12px; border-bottom: 1px solid #21262d; color: #c9d1d9; }
+        .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 14px; background: #ffffff; border-radius: 8px; border: 1px solid #e5e7eb; }
+        .tributos-tabela th { background: #f3f4f6; color: #111827; padding: 10px 12px; border-bottom: 2px solid #e5e7eb; font-weight: 600; white-space: nowrap; }
+        .tributos-tabela td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; color: #374151; }
         .tributos-tabela td:first-child { text-align: left !important; font-weight: 500; }
         .tributos-tabela td:not(:first-child) { text-align: right !important; font-variant-numeric: tabular-nums; }
-        .tributos-tabela tr:hover td { background: #1c2128; }
+        .tributos-tabela tr:hover td { background: #f9fafb; }
         
-        .tributos-tabela .total-entrada td { color: #3fb950; font-weight: 700; background: rgba(63, 185, 80, 0.08); border-top: 1px solid #3fb950; }
-        .tributos-tabela .subtotal-entrada td { color: #56d364; font-weight: 600; background: rgba(63, 185, 80, 0.04); }
-        .tributos-tabela .total-saida td { color: #ff7b72; font-weight: 700; background: rgba(248, 81, 73, 0.08); border-top: 1px solid #f85149; }
-        .tributos-tabela .subtotal-saida td { color: #ffa198; font-weight: 600; background: rgba(248, 81, 73, 0.04); }
-        .tributos-tabela .debito td { color: #f85149; font-weight: 700; background: rgba(248, 81, 73, 0.1); border-top: 1px solid #f85149; }
-        .tributos-tabela .credito td { color: #3fb950; font-weight: 700; background: rgba(63, 185, 80, 0.1); border-top: 1px solid #3fb950; }
-        .tributos-tabela .resultado td { font-weight: 700; font-size: 15px; border-top: 3px double #58a6ff; border-bottom: 3px double #58a6ff; padding-top: 12px; padding-bottom: 12px; }
-        .tributos-tabela .resultado td:first-child { color: #58a6ff; }
-        .tributos-tabela .devolucao td { color: #ffa198; font-style: italic; }
-        .tributos-tabela .nao-tributada td { color: #8b949e; font-style: italic; background: rgba(139, 148, 158, 0.04); }
-        .tributos-tabela .bloco-fim td { border-bottom: 3px solid #58a6ff !important; }
+        .tributos-tabela .total-entrada td { color: #15803d; font-weight: 700; background: rgba(21, 128, 61, 0.08); border-top: 1px solid #15803d; }
+        .tributos-tabela .subtotal-entrada td { color: #166534; font-weight: 600; background: rgba(21, 128, 61, 0.04); }
+        .tributos-tabela .total-saida td { color: #b91c1c; font-weight: 700; background: rgba(185, 28, 28, 0.08); border-top: 1px solid #b91c1c; }
+        .tributos-tabela .subtotal-saida td { color: #991b1b; font-weight: 600; background: rgba(185, 28, 28, 0.04); }
+        .tributos-tabela .debito td { color: #b91c1c; font-weight: 700; background: rgba(185, 28, 28, 0.1); border-top: 1px solid #b91c1c; }
+        .tributos-tabela .credito td { color: #15803d; font-weight: 700; background: rgba(21, 128, 61, 0.1); border-top: 1px solid #15803d; }
+        .tributos-tabela .resultado td { font-weight: 700; font-size: 15px; border-top: 3px double #2563eb; border-bottom: 3px double #2563eb; padding-top: 12px; padding-bottom: 12px; }
+        .tributos-tabela .resultado td:first-child { color: #2563eb; }
+        .tributos-tabela .devolucao td { color: #991b1b; font-style: italic; }
+        .tributos-tabela .nao-tributada td { color: #6b7280; font-style: italic; background: rgba(107, 114, 128, 0.04); }
+        .tributos-tabela .bloco-fim td { border-bottom: 3px solid #2563eb !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -160,7 +160,7 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     cor_transparente = f"rgba({r}, {g}, {b}, 0.4)"
     cores_barras = []
     for v in df_hora[col_valor]:
-        if v == max_val and max_val > 0: cores_barras.append("#FFFFFF")
+        if v == max_val and max_val > 0: cores_barras.append("#000000")
         else: cores_barras.append(cor_transparente)
     fig = go.Figure()
     fig.add_trace(go.Bar(x=df_hora["Hora"], y=df_hora[col_valor], marker_color=cores_barras, customdata=custom_data, hovertemplate=hover_tpl))
@@ -171,14 +171,14 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
     st.markdown(f'<div class="tema-titulo">{icone} {titulo}</div>', unsafe_allow_html=True)
     total = dados.get("total", 0)
     itens = dados.get(campo_itens, [])
+    
     def html_card(nome, valor, pct_html="", is_consolidado=False):
         r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
-        bg_color = f"rgba({r}, {g}, {b}, 0.08)"
-        border_color = cor_hex if is_consolidado else "#30363d"
-        border_left = f"4px solid {cor_hex}" if is_consolidado else "1px solid #30363d"
-        style_str = f"background-color: {bg_color}; border: 1px solid {border_color}; border-left: {border_left};"
+        bg_color = f"rgba({r}, {g}, {b}, 0.05)"
+        border_left = f"4px solid {cor_hex}"
+        style_str = f"background-color: {bg_color}; border: 1px solid #e5e7eb; border-left: {border_left}; box-shadow: 0 1px 3px rgba(0,0,0,0.05);"
         label_nome = "🏆 Consolidado" if is_consolidado else nome
-        label_style = f"color: {cor_hex};" if is_consolidado else ""
+        label_style = f"color: {cor_hex}; font-weight: 700;" if is_consolidado else ""
         value_style = f"color: {cor_hex};" if is_consolidado else ""
         val_fmt = formatar_moeda(valor) if fmt == "moeda" else (formatar_inteiro(valor) if fmt == "inteiro" else formatar_decimal(valor))
         return f'<div class="card-item" style="{style_str}"><div class="card-label" style="{label_style}">{label_nome}</div><div class="card-value" style="{value_style}">{val_fmt} {pct_html}</div></div>'
@@ -443,10 +443,6 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
 
 
 def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
-    """PDF em A4 paisagem.
-    Totais baseados em SAÍDAS (registro de quem enviou).
-    Por destino: tabela ENTRADAS (o que recebeu) + tabela SAÍDAS (o que enviou).
-    """
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
     elements = []
@@ -470,7 +466,6 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
     df_entradas_all = df_transf[df_transf["TipoDado"] == "ENTRADA"].copy()
     df_saidas_all = df_transf[df_transf["TipoDado"] == "SAIDA"].copy()
 
-    # ===== RESUMO POR DESTINO (baseado em SAÍDAS) =====
     df_resumo = df_saidas_all.pivot_table(index="FilialDestino", columns="Mes_Nome", values="Valor", aggfunc="sum")
     for m in meses_colunas:
         if m not in df_resumo.columns: df_resumo[m] = 0.0
@@ -503,7 +498,6 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
     elements.append(t_resumo)
     elements.append(Spacer(1, 10))
 
-    # ===== DETALHE POR DESTINO (2 tabelas por filial) =====
     def montar_tabela_pivot(df_sub, coluna_index, cor_header_hex):
         if df_sub.empty:
             return None
@@ -538,7 +532,6 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
         nome_filial = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
         elements.append(Paragraph(f"<b>■ Filial: {nome_filial}</b>", styles['Heading3']))
 
-        # ENTRADAS
         df_ent = df_entradas_all[df_entradas_all["FilialDestino"] == filial]
         elements.append(Paragraph(f"<b>📥 ENTRADAS em {nome_filial}</b>", sub_heading))
         t_ent = montar_tabela_pivot(df_ent, "FilialOrigem", '#065F46')
@@ -546,7 +539,6 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
         else: elements.append(Paragraph("<i>Nenhuma entrada no período.</i>", styles['Normal']))
         elements.append(Spacer(1, 6))
 
-        # SAÍDAS
         df_sai = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]
         elements.append(Paragraph(f"<b>📤 SAÍDAS de {nome_filial}</b>", sub_heading))
         t_sai = montar_tabela_pivot(df_sai, "FilialDestino", '#7F1D1D')
@@ -554,7 +546,6 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
         else: elements.append(Paragraph("<i>Nenhuma saída no período.</i>", styles['Normal']))
         elements.append(Spacer(1, 6))
 
-        # SALDO (ENTRADAS - SAÍDAS)
         elements.append(Paragraph(f"<b>💰 SALDO em {nome_filial} (Entradas − Saídas)</b>", sub_heading))
 
         tot_ent_mes = {m: (df_ent[df_ent["Mes_Nome"] == m]["Valor"].sum() if not df_ent.empty else 0.0) for m in meses_colunas}
@@ -584,7 +575,6 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
                 else:
                     txt = formatar_numero(v)
                 row_cells.append(Paragraph(txt, cell_bold_right if is_saldo else cell_right))
-            # Total
             if val_total == 0:
                 txt_total = "-"
             elif is_saldo:
@@ -596,7 +586,6 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
 
         col_widths_saldo = [130] + [50] * len(meses_colunas) + [70]
         t_saldo = Table(saldo_data, colWidths=col_widths_saldo, repeatRows=1)
-        # Estilo: destaca a linha SALDO em amarelo claro
         style_saldo = [
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -688,11 +677,7 @@ def formatar_variacao_pct(v):
     if pd.isna(v): return "-"
     return f"{v:+.2f}%".replace(".", ",")
 
-
 def calcular_indices_sazonalidade(df):
-    """Recebe DataFrame com CodFilial, DiaSemana, Valor, QtdDias.
-    Retorna DataFrame indexado por DiaSemana (1..6), colunas = nomes das filiais + Total.
-    """
     if df.empty:
         return pd.DataFrame()
 
@@ -725,18 +710,13 @@ def calcular_indices_sazonalidade(df):
 
     df_idx = pd.DataFrame(resultado)
     df_idx = df_idx.reindex(range(1, 7)).fillna(0)
-
-    # Coluna Total = média dos índices das 4 filiais (também soma 6)
     df_idx["Total"] = df_idx.mean(axis=1)
-
     df_idx.index = [DIAS_SEMANA[d] for d in df_idx.index]
     df_idx.index.name = "Dia da Semana"
 
-    # Renomear colunas com nome das filiais
     nomes = {cod: NOMES_FILIAIS.get(cod, f"Filial {cod}") for cod in [1, 2, 3, 4]}
     df_idx = df_idx.rename(columns=nomes)
     return df_idx
-
 
 def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, data_ini, data_fim):
     buffer = BytesIO()
@@ -857,12 +837,12 @@ with tab_visao:
         tot_trans = df_vendas["QtdVendas"].sum()
         tot_itens = df_vendas["QtdItens"].sum()
         temas = [
-            {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#58a6ff", "fmt": "moeda", "pct": "participacao"},
-            {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#3fb950", "fmt": "inteiro", "pct": "participacao"},
-            {"id": "ticket", "titulo": "Ticket Médio", "icone": "🎫", "total": (tot_vendas / tot_trans if tot_trans else 0), "col": "Ticket", "cor": "#d29922", "fmt": "moeda", "pct": "variacao"},
-            {"id": "itens", "titulo": "Itens", "icone": "📦", "total": tot_itens, "col": "QtdItens", "cor": "#9f7aea", "fmt": "decimal", "pct": "participacao"},
-            {"id": "itens_venda", "titulo": "Itens por Venda (R$/item)", "icone": "💰", "total": (tot_vendas / tot_itens if tot_itens else 0), "col": "ItensVenda", "cor": "#4fd1c5", "fmt": "moeda", "pct": "variacao"},
-            {"id": "itens_trans", "titulo": "Itens por Transação", "icone": "📊", "total": (tot_itens / tot_trans if tot_trans else 0), "col": "ItensTrans", "cor": "#f687b3", "fmt": "decimal", "pct": "variacao"},
+            {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#2563eb", "fmt": "moeda", "pct": "participacao"},
+            {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#16a34a", "fmt": "inteiro", "pct": "participacao"},
+            {"id": "ticket", "titulo": "Ticket Médio", "icone": "🎫", "total": (tot_vendas / tot_trans if tot_trans else 0), "col": "Ticket", "cor": "#d97706", "fmt": "moeda", "pct": "variacao"},
+            {"id": "itens", "titulo": "Itens", "icone": "📦", "total": tot_itens, "col": "QtdItens", "cor": "#7c3aed", "fmt": "decimal", "pct": "participacao"},
+            {"id": "itens_venda", "titulo": "Itens por Venda (R$/item)", "icone": "💰", "total": (tot_vendas / tot_itens if tot_itens else 0), "col": "ItensVenda", "cor": "#0d9488", "fmt": "moeda", "pct": "variacao"},
+            {"id": "itens_trans", "titulo": "Itens por Transação", "icone": "📊", "total": (tot_itens / tot_trans if tot_trans else 0), "col": "ItensTrans", "cor": "#db2777", "fmt": "decimal", "pct": "variacao"},
         ]
         for t in temas:
             itens_filial = []
@@ -913,7 +893,7 @@ with tab_visao:
             itens_depto = sorted(itens_depto, key=lambda x: x["valor"], reverse=True)
             cons_horas_d = [df_depto[df_depto["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
             dados_d = {"total": tot_depto, "departamentos": itens_depto, "labelsHoras": labels_depto, "horasConsolidado": cons_horas_d}
-            renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#38bdf8", "participacao", "moeda", "departamentos", is_filial=False)
+            renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#0284c7", "participacao", "moeda", "departamentos", is_filial=False)
 
         if not df_pag.empty:
             labels_pag = sorted(df_pag["Hora"].unique().tolist())
@@ -927,7 +907,7 @@ with tab_visao:
             itens_pag = sorted(itens_pag, key=lambda x: x["valor"], reverse=True)
             cons_horas_p = [df_pag[df_pag["Hora"] == h]["Valor"].sum() for h in labels_pag]
             dados_p = {"total": tot_pag, "porForma": itens_pag, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_p}
-            renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#f0883e", "participacao", "moeda", "porForma", is_filial=False)
+            renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#ea580c", "participacao", "moeda", "porForma", is_filial=False)
 
             df_pag_port = df_pag.dropna(subset=["NomePortador"])
             if not df_pag_port.empty:
@@ -940,7 +920,7 @@ with tab_visao:
                 itens_port = sorted(itens_port, key=lambda x: x["valor"], reverse=True)
                 cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
                 dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
-                renderizar_tema("Portador", "👤", dados_pt, "Valor", "#f97583", "participacao", "moeda", "porPortador", is_filial=False)
+                renderizar_tema("Portador", "👤", dados_pt, "Valor", "#e11d48", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
 # ABA SAZONALIDADE
@@ -971,15 +951,12 @@ with tab_sazonalidade:
     if _foi_primeira_carga_saz or btn_saz:
         try:
             with st.spinner("Carregando dados de sazonalidade..."):
-                # Histórico completo do banco
                 df_hist = buscar_sazonalidade("1900-01-01", "2100-12-31", "")
-                # Período configurável
                 df_periodo = buscar_sazonalidade(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), "")
 
                 df_hist_idx = calcular_indices_sazonalidade(df_hist)
                 df_periodo_idx = calcular_indices_sazonalidade(df_periodo)
 
-                # Comparativo: variação percentual do índice do período vs. histórico
                 if not df_hist_idx.empty and not df_periodo_idx.empty:
                     df_comparativo = ((df_periodo_idx / df_hist_idx) - 1) * 100
                     df_comparativo = df_comparativo.replace([float("inf"), -float("inf")], None).round(2)
@@ -1009,18 +986,17 @@ with tab_sazonalidade:
     if df_hist_idx.empty and df_periodo_idx.empty:
         st.info("Nenhum dado de vendas encontrado.")
     else:
-        # Estilização: verde > 1,05 | amarelo entre 0,95 e 1,05 | vermelho < 0,95
         def _cor_idx(v):
             if pd.isna(v): return ""
-            if v < 0.95: return "background-color: rgba(248,81,73,0.20); color: #f85149; font-weight: 600;"
-            if v > 1.05: return "background-color: rgba(63,185,80,0.20); color: #3fb950; font-weight: 600;"
-            return "background-color: rgba(210,153,34,0.15); color: #d29922;"
+            if v < 0.95: return "background-color: rgba(220,38,38,0.15); color: #b91c1c; font-weight: 700;"
+            if v > 1.05: return "background-color: rgba(22,163,74,0.15); color: #15803d; font-weight: 700;"
+            return "background-color: rgba(217,119,6,0.15); color: #b45309; font-weight: 700;"
 
         def _cor_comp(v):
             if pd.isna(v): return ""
-            if v < -2: return "background-color: rgba(248,81,73,0.20); color: #f85149; font-weight: 600;"
-            if v > 2: return "background-color: rgba(63,185,80,0.20); color: #3fb950; font-weight: 600;"
-            return "background-color: rgba(139,148,158,0.10); color: #c9d1d9;"
+            if v < -2: return "background-color: rgba(220,38,38,0.15); color: #b91c1c; font-weight: 700;"
+            if v > 2: return "background-color: rgba(22,163,74,0.15); color: #15803d; font-weight: 700;"
+            return "background-color: rgba(107,114,128,0.10); color: #4b5563; font-weight: 600;"
 
         def _render(df_idx, titulo, fmt_func, cor_func):
             st.markdown(f"### {titulo}")
@@ -1104,8 +1080,8 @@ with tab_compras:
         tot_val_geral = df_compras["Valor"].sum()
         df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento", ascending=True)
         meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-        cards_data = [("💰 Total Comprado", tot_val_geral, "#58a6ff", "")]
-        cores_depto = ["#3fb950", "#d29922", "#9f7aea", "#f687b3", "#38bdf8", "#f0883e", "#f97583", "#4fd1c5"]
+        cards_data = [("💰 Total Comprado", tot_val_geral, "#2563eb", "")]
+        cores_depto = ["#16a34a", "#d97706", "#7c3aed", "#db2777", "#0284c7", "#ea580c", "#e11d48", "#0d9488"]
         for i, row in df_tot_depto.iterrows():
             cor = cores_depto[i % len(cores_depto)]
             pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
@@ -1117,8 +1093,8 @@ with tab_compras:
             for j, (nome, valor, cor, pct_html) in enumerate(chunk):
                 with cols[j]:
                     r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
-                    bg_color = f"rgba({r}, {g}, {b}, 0.08)"
-                    st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
+                    bg_color = f"rgba({r}, {g}, {b}, 0.05)"
+                    st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid #e5e7eb; border-left: 4px solid {cor}; box-shadow: 0 1px 3px rgba(0,0,0,0.05);"><div class="card-label" style="color: {cor}; font-weight: 700;" title="{nome}">{nome}</div><div class="card-value">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
         st.write("")
         if not df_tot_depto.empty:
             deptos_nomes = df_tot_depto['Departamento'].tolist()
@@ -1140,7 +1116,7 @@ with tab_compras:
                         if pd.isna(x) or x == 0: return "-"
                         return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                     def highlight_total(row):
-                        if row.name == 'TOTAL': return ['font-weight: bold; color: #58a6ff;'] * len(row)
+                        if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb;'] * len(row)
                         return [''] * len(row)
                     st.dataframe(df_final.style.format(fmt_br).apply(highlight_total, axis=1), use_container_width=True)
 
@@ -1202,7 +1178,6 @@ with tab_transferencias:
 
         meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-        # === Cards: SALDO por Filial (Entradas − Saídas), sem participação ===
         filiais_card = sorted(set(
             df_entradas_all["FilialDestino"].unique().tolist()
             + df_saidas_all["FilialOrigem"].unique().tolist()
@@ -1222,7 +1197,7 @@ with tab_transferencias:
             sai_v = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]["Valor"].sum()
             saldo_v = ent_v - sai_v
             nome = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
-            cor = "#3fb950" if saldo_v >= 0 else "#f85149"
+            cor = "#16a34a" if saldo_v >= 0 else "#dc2626"
             cards_data.append((f"💰 Saldo {nome}", saldo_v, cor))
 
         for i in range(0, len(cards_data), 5):
@@ -1231,12 +1206,11 @@ with tab_transferencias:
             for j, (nome, valor, cor) in enumerate(chunk):
                 with cols[j]:
                     r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
-                    bg_color = f"rgba({r}, {g}, {b}, 0.08)"
-                    st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
+                    bg_color = f"rgba({r}, {g}, {b}, 0.05)"
+                    st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid #e5e7eb; border-left: 4px solid {cor}; box-shadow: 0 1px 3px rgba(0,0,0,0.05);"><div class="card-label" style="color: {cor}; font-weight: 700;" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
 
         st.write("")
 
-        # Sub-abas: todas as filiais envolvidas em QUALQUER direção
         filiais_envolvidas = sorted(set(
             df_entradas_all["FilialDestino"].unique().tolist()
             + df_saidas_all["FilialOrigem"].unique().tolist()
@@ -1271,7 +1245,7 @@ with tab_transferencias:
                             if pd.isna(x) or x == 0: return "-"
                             return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                         def hl_e(row):
-                            if row.name == 'TOTAL': return ['font-weight: bold; color: #58a6ff;'] * len(row)
+                            if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb;'] * len(row)
                             return [''] * len(row)
                         st.dataframe(df_display_e.style.format(fmt_br_e).apply(hl_e, axis=1), use_container_width=True)
 
@@ -1298,16 +1272,14 @@ with tab_transferencias:
                             if pd.isna(x) or x == 0: return "-"
                             return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                         def hl_s(row):
-                            if row.name == 'TOTAL': return ['font-weight: bold; color: #58a6ff;'] * len(row)
+                            if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb;'] * len(row)
                             return [''] * len(row)
                         st.dataframe(df_display_s.style.format(fmt_br_s).apply(hl_s, axis=1), use_container_width=True)
                         
                     st.write("")
 
-                    # ================= SALDO (ENTRADAS - SAÍDAS) =================
                     st.markdown(f"### 💰 SALDO em {nome_filial} (Entradas − Saídas)")
 
-                    # Totais mensais de ENTRADAS e SAÍDAS
                     tot_ent_mes = {m: (df_ent[df_ent["Mes_Nome"] == m]["Valor"].sum() if not df_ent.empty else 0.0) for m in meses_colunas}
                     tot_sai_mes = {m: (df_sai[df_sai["Mes_Nome"] == m]["Valor"].sum() if not df_sai.empty else 0.0) for m in meses_colunas}
 
@@ -1331,16 +1303,15 @@ with tab_transferencias:
                     def hl_saldo(row):
                         base = [''] * len(row)
                         if row.name == "💰 Saldo":
-                            base = ['font-weight: bold; color: #3fb950; background: rgba(63,185,80,0.08);'] * len(row)
-                            # Se algum valor for negativo, colore vermelho
+                            base = ['font-weight: bold; color: #16a34a; background: rgba(22,163,74,0.08);'] * len(row)
                             base = [
-                                'font-weight: bold; background: rgba(63,185,80,0.08); color: ' + ('#f85149' if (isinstance(v, (int, float)) and v < 0) else '#3fb950')
+                                'font-weight: bold; background: rgba(22,163,74,0.08); color: ' + ('#dc2626' if (isinstance(v, (int, float)) and v < 0) else '#16a34a')
                                 for v in row.values
                             ]
                         elif row.name == "📥 Total Entradas":
-                            base = ['color: #3fb950;'] * len(row)
+                            base = ['color: #16a34a; font-weight: 600;'] * len(row)
                         elif row.name == "📤 Total Saídas":
-                            base = ['color: #ff7b72;'] * len(row)
+                            base = ['color: #dc2626; font-weight: 600;'] * len(row)
                         return base
 
                     st.dataframe(
@@ -1514,11 +1485,11 @@ with tab_tributos:
 
         c_cards = st.columns(4)
         def render_card_trib(col, title, val):
-            cor = "#3fb950" if val >= 0 else "#f85149"
+            cor = "#16a34a" if val >= 0 else "#dc2626"
             r = int(cor[1:3], 16); g = int(cor[3:5], 16); b = int(cor[5:7], 16)
-            bg_color = f"rgba({r}, {g}, {b}, 0.08)"
+            bg_color = f"rgba({r}, {g}, {b}, 0.05)"
             with col:
-                st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid {cor}; border-left: 4px solid {cor};"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="card-item" style="background-color: {bg_color}; border: 1px solid #e5e7eb; border-left: 4px solid {cor}; box-shadow: 0 1px 3px rgba(0,0,0,0.05);"><div class="card-label" style="color: {cor}; font-weight: 700; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
         render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
         render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
         render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
