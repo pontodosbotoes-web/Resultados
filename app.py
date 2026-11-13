@@ -1067,9 +1067,16 @@ with tab_sazonalidade:
     else:
         def _cor_idx(v):
             if pd.isna(v): return ""
-            if v < 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
-            if v > 1.05: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
-            return "background-color: #fef3c7; color: #b45309; font-weight: 700;"
+            # 1. Melhor (Verde Escuro) - acima de 1.05
+            if v > 1.05: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
+            # 2. Bom (Verde Claro) - entre 1.025 e 1.05
+            if v > 1.025: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
+            # 3. Normal (Amarelo) - entre 0.975 e 1.025
+            if v >= 0.975: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"
+            # 4. Ruim (Vermelho Claro) - entre 0.95 e 0.975
+            if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
+            # 5. Pior (Vermelho Escuro) - abaixo de 0.95
+            return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
 
         def _cor_comp(v):
             if pd.isna(v): return ""
