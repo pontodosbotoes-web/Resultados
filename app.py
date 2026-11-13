@@ -12,7 +12,7 @@ from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 
 from src.db import carregar_filiais, carregar_fornecedores
-from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras, buscar_transferencias, buscar_tributos, buscar_sazonalidade, buscar_sazonalidade_hora
+from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras, buscar_transferencias, buscar_tributos, buscar_sazonalidade, buscar_sazonalidade_hora, buscar_sazonalidade_diautil
 
 st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_icon="📊")
 
@@ -733,8 +733,17 @@ def calcular_indices_sazonalidade_hora(df):
         df_idx.index.name = "Hora"
         df_idx = df_idx[df_idx["Total"] > 0]  # ← NOVO: remove horas sem movimento
     return df_idx
+    
+def calcular_indices_sazonalidade_diautil(df):
+    # Usa 21 como multiplicador base (média de dias úteis no mês)
+    df_idx = _calc_idx_generic(df, "DiaUtil", range(1, 24), 21)
+    if not df_idx.empty:
+        df_idx.index = [f"{d}º Dia" for d in df_idx.index]
+        df_idx.index.name = "Dia Útil"
+        df_idx = df_idx[df_idx["Total"] > 0]  # Remove dias sem movimento
+    return df_idx
 
-def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_hora, df_periodo_hora, df_comp_hora, data_ini, data_fim, h_ini, h_fim):
+def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_hora, df_periodo_hora, df_comp_hora, df_hist_diautil, df_periodo_diautil, df_comp_diautil, data_ini, data_fim, h_ini, h_fim):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=portrait(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
     elements = []
@@ -753,7 +762,6 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
         if df_idx is None or df_idx.empty:
             return Paragraph("<i>Sem dados.</i>", styles['Normal'])
         
-        # Ajusta fonte e padding baseado no tipo (dias vs horas)
         font_sz = 6.5 if is_hora else 8
         pad_v = 1 if is_hora else 4
         
@@ -789,42 +797,42 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
         ]))
         return t
 
-    # --- ESTILOS DOS CABEÇALHOS ---
     heading_dia = ParagraphStyle('H_Dia', parent=styles['Heading3'], fontSize=10, spaceBefore=6, spaceAfter=4, textColor=colors.HexColor('#1E293B'))
     heading_hora = ParagraphStyle('H_Hora', parent=styles['Heading3'], fontSize=8, spaceBefore=4, spaceAfter=2, textColor=colors.HexColor('#1E293B'))
 
-    # ==========================================
     # FOLHA 1: DIAS DA SEMANA
-    # ==========================================
     elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS) — HISTÓRICO COMPLETO</b>", heading_dia))
     elements.append(montar_tabela(df_hist_idx, formatar_indice, com_pct=True))
     elements.append(Spacer(1, 15))
-
     elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS) — PERÍODO SELECIONADO</b>", heading_dia))
     elements.append(montar_tabela(df_periodo_idx, formatar_indice, com_pct=True))
     elements.append(Spacer(1, 15))
-
     elements.append(Paragraph("<b>COMPARATIVO (DIAS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_dia))
     elements.append(montar_tabela(df_comparativo, formatar_variacao_pct))
     
-    # ==========================================
-    # QUEBRA DE PÁGINA
-    # ==========================================
     elements.append(PageBreak())
     
-    # ==========================================
     # FOLHA 2: HORAS
-    # ==========================================
     elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (HORAS) — HISTÓRICO COMPLETO</b>", heading_hora))
     elements.append(montar_tabela(df_hist_hora, formatar_indice, com_pct=True, is_hora=True))
     elements.append(Spacer(1, 6))
-
     elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (HORAS) — PERÍODO SELECIONADO</b>", heading_hora))
     elements.append(montar_tabela(df_periodo_hora, formatar_indice, com_pct=True, is_hora=True))
     elements.append(Spacer(1, 6))
-
     elements.append(Paragraph("<b>COMPARATIVO (HORAS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_hora))
     elements.append(montar_tabela(df_comp_hora, formatar_variacao_pct, is_hora=True))
+
+    elements.append(PageBreak())
+
+    # FOLHA 3: DIAS ÚTEIS
+    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS ÚTEIS) — HISTÓRICO COMPLETO</b>", heading_dia))
+    elements.append(montar_tabela(df_hist_diautil, formatar_indice, com_pct=True))
+    elements.append(Spacer(1, 15))
+    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS ÚTEIS) — PERÍODO SELECIONADO</b>", heading_dia))
+    elements.append(montar_tabela(df_periodo_diautil, formatar_indice, com_pct=True))
+    elements.append(Spacer(1, 15))
+    elements.append(Paragraph("<b>COMPARATIVO (DIAS ÚTEIS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_dia))
+    elements.append(montar_tabela(df_comp_diautil, formatar_variacao_pct))
 
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
@@ -1017,10 +1025,15 @@ with tab_sazonalidade:
                 df_hist_hora = buscar_sazonalidade_hora("1900-01-01", "2100-12-31", h_ini_saz.hour, h_fim_saz.hour, "")
                 df_periodo_hora = buscar_sazonalidade_hora(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
 
+                df_hist_diautil = buscar_sazonalidade_diautil("1900-01-01", "2100-12-31", "")
+                df_periodo_diautil = buscar_sazonalidade_diautil(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), "")
+
                 df_hist_idx = calcular_indices_sazonalidade(df_hist)
                 df_periodo_idx = calcular_indices_sazonalidade(df_periodo)
                 df_hist_hora_idx = calcular_indices_sazonalidade_hora(df_hist_hora)
                 df_periodo_hora_idx = calcular_indices_sazonalidade_hora(df_periodo_hora)
+                df_hist_diautil_idx = calcular_indices_sazonalidade_diautil(df_hist_diautil)
+                df_periodo_diautil_idx = calcular_indices_sazonalidade_diautil(df_periodo_diautil)
 
                 if not df_hist_idx.empty and not df_periodo_idx.empty:
                     df_comparativo = ((df_periodo_idx / df_hist_idx) - 1) * 100
@@ -1034,17 +1047,27 @@ with tab_sazonalidade:
                 else:
                     df_comp_hora = pd.DataFrame()
 
+                if not df_hist_diautil_idx.empty and not df_periodo_diautil_idx.empty:
+                    df_comp_diautil = ((df_periodo_diautil_idx / df_hist_diautil_idx) - 1) * 100
+                    df_comp_diautil = df_comp_diautil.replace([float("inf"), -float("inf")], None).round(2)
+                else:
+                    df_comp_diautil = pd.DataFrame()
+
                 st.session_state["df_saz_hist"] = df_hist_idx
                 st.session_state["df_saz_periodo"] = df_periodo_idx
                 st.session_state["df_saz_comparativo"] = df_comparativo
                 st.session_state["df_saz_hist_hora"] = df_hist_hora_idx
                 st.session_state["df_saz_periodo_hora"] = df_periodo_hora_idx
                 st.session_state["df_saz_comp_hora"] = df_comp_hora
+                st.session_state["df_saz_hist_diautil"] = df_hist_diautil_idx
+                st.session_state["df_saz_periodo_diautil"] = df_periodo_diautil_idx
+                st.session_state["df_saz_comp_diautil"] = df_comp_diautil
 
                 if not df_hist_idx.empty and not df_periodo_idx.empty:
                     st.session_state["pdf_bytes_saz"] = gerar_pdf_sazonalidade(
                         df_hist_idx, df_periodo_idx, df_comparativo, 
                         df_hist_hora_idx, df_periodo_hora_idx, df_comp_hora,
+                        df_hist_diautil_idx, df_periodo_diautil_idx, df_comp_diautil,
                         data_ini_saz, data_fim_saz, h_ini_saz, h_fim_saz
                     )
                 else:
@@ -1061,6 +1084,9 @@ with tab_sazonalidade:
     df_hist_hora_idx = st.session_state.get("df_saz_hist_hora", pd.DataFrame())
     df_periodo_hora_idx = st.session_state.get("df_saz_periodo_hora", pd.DataFrame())
     df_comp_hora = st.session_state.get("df_saz_comp_hora", pd.DataFrame())
+    df_hist_diautil_idx = st.session_state.get("df_saz_hist_diautil", pd.DataFrame())
+    df_periodo_diautil_idx = st.session_state.get("df_saz_periodo_diautil", pd.DataFrame())
+    df_comp_diautil = st.session_state.get("df_saz_comp_diautil", pd.DataFrame())
 
     if df_hist_idx.empty and df_periodo_idx.empty:
         st.info("Nenhum dado de vendas encontrado.")
@@ -1073,14 +1099,13 @@ with tab_sazonalidade:
             if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
             return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
 
-        # NOVA FUNÇÃO: Degradê específico para Horas
         def _cor_hora_idx(v):
             if pd.isna(v): return ""
-            if v >= 3.00: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"  # Acima de 3,00 (Melhor)
-            if v >= 2.00: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"  # 2,00 a 3,00
-            if v >= 1.00: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"  # 1,00 a 2,00
-            if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"  # 0,95 a 1,00
-            return "background-color: #fecaca; color: #991b1b; font-weight: 700;"                # Abaixo de 0,95 (Pior)
+            if v >= 3.00: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
+            if v >= 2.00: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
+            if v >= 1.00: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"
+            if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
+            return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
 
         def _cor_comp(v):
             if pd.isna(v): return ""
@@ -1094,7 +1119,7 @@ with tab_sazonalidade:
                 st.info("Sem dados para o período.")
                 return
             styled = df_idx.style.format(fmt_func).map(cor_func)
-            styled = styled.set_properties(**{'text-align': 'right'}) # Alinha os números à direita
+            styled = styled.set_properties(**{'text-align': 'right'})
             st.dataframe(styled, use_container_width=True)
             
         def _render_com_pct(df_idx, titulo, cor_func):
@@ -1120,25 +1145,32 @@ with tab_sazonalidade:
                 return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
 
             styled = df_display.style.apply(apply_colors, axis=1)
-            styled = styled.set_properties(**{'text-align': 'right'}) # Alinha os números à direita
+            styled = styled.set_properties(**{'text-align': 'right'})
             st.dataframe(styled, use_container_width=True)
 
-        # Chamadas atualizadas:
+        # --- TABELAS DE DIAS DA SEMANA ---
         _render_com_pct(df_hist_idx, "📊 Índice de Sazonalidade (DIAS) — Histórico Completo", _cor_idx)
         st.write("")
         _render_com_pct(df_periodo_idx, f"📊 Índice de Sazonalidade (DIAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", _cor_idx)
         st.write("")
         _render(df_comparativo, "📈 Comparativo (DIAS) — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
 
-        st.markdown("---") # Linha divisória visual
+        st.markdown("---")
 
-        # ALTERADO AQUI: _cor_hora_idx
+        # --- TABELAS DE DIAS ÚTEIS ---
+        _render_com_pct(df_hist_diautil_idx, "📊 Índice de Sazonalidade (DIAS ÚTEIS) — Histórico Completo", _cor_idx)
+        st.write("")
+        _render_com_pct(df_periodo_diautil_idx, f"📊 Índice de Sazonalidade (DIAS ÚTEIS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", _cor_idx)
+        st.write("")
+        _render(df_comp_diautil, "📈 Comparativo (DIAS ÚTEIS) — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
+
+        st.markdown("---")
+
+        # --- TABELAS DE HORAS ---
         _render_com_pct(df_hist_hora_idx, "🕒 Índice de Sazonalidade (HORAS) — Histórico Completo", _cor_hora_idx)
         st.write("")
-        # ALTERADO AQUI: _cor_hora_idx
         _render_com_pct(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", _cor_hora_idx)
         st.write("")
-        # O comparativo continua usando _cor_comp, pois ele avalia a variação percentual, não o índice bruto.
         _render(df_comp_hora, "📈 Comparativo (HORAS) — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
         
 # ==========================================
