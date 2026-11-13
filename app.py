@@ -12,7 +12,13 @@ from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 
 from src.db import carregar_filiais, carregar_fornecedores
-from src.base import buscar_vendas, buscar_departamentos, buscar_pagamentos, buscar_compras, buscar_transferencias, buscar_tributos, buscar_sazonalidade, buscar_sazonalidade_hora, buscar_sazonalidade_diautil
+from src.base import (
+    buscar_tributos,
+    buscar_vendas, buscar_departamentos, buscar_pagamentos,
+    buscar_sazonalidade, buscar_sazonalidade_hora, buscar_sazonalidade_diautil,
+    buscar_compras,
+    buscar_transferencias
+)
 
 st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_icon="📊")
 
@@ -80,6 +86,10 @@ st.markdown("""
         .tributos-tabela .devolucao td { color: #dc2626; font-style: italic; }
         .tributos-tabela .nao-tributada td { color: #64748b; font-style: italic; background: #f8fafc; }
         .tributos-tabela .bloco-fim td { border-bottom: 3px solid #3b82f6 !important; }
+        /* Legenda de Cores */
+        .legenda-container { display: flex; gap: 15px; font-size: 12px; color: #475569; margin-top: -5px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .legenda-item { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+        .legenda-cor { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.1); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -128,7 +138,10 @@ def limpar_sazonalidade():
     st.session_state["dt_fim_saz"] = hoje
     st.session_state["h_ini_saz"] = datetime.strptime("08:00", "%H:%M").time()
     st.session_state["h_fim_saz"] = datetime.strptime("20:59", "%H:%M").time()
-    for k in ["df_saz_hist", "df_saz_periodo", "df_saz_comparativo", "df_saz_hist_hora", "df_saz_periodo_hora", "df_saz_comp_hora", "pdf_bytes_saz"]:
+    for k in ["df_saz_hist", "df_saz_periodo", "df_saz_comparativo", 
+              "df_saz_hist_hora", "df_saz_periodo_hora", "df_saz_comp_hora", 
+              "df_saz_hist_diautil", "df_saz_periodo_diautil", "df_saz_comp_diautil", 
+              "pdf_bytes_saz"]:
         if k in st.session_state: del st.session_state[k]
 
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
@@ -1148,30 +1161,66 @@ with tab_sazonalidade:
             styled = styled.set_properties(**{'text-align': 'right'})
             st.dataframe(styled, use_container_width=True)
 
+        # DEFINIÇÃO DAS LEGENDAS HTML
+        legenda_dias = '''
+        <div class="legenda-container">
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > 1,05 (Melhor)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 1,025 a 1,05</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fef3c7;"></div> 0,975 a 1,025 (Normal)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 0,975</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < 0,95 (Pior)</div>
+        </div>
+        '''
+        legenda_horas = '''
+        <div class="legenda-container">
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > 3,00 (Melhor)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 2,00 a 3,00</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fef3c7;"></div> 1,00 a 2,00 (Normal)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 1,00</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < 0,95 (Pior)</div>
+        </div>
+        '''
+        legenda_comp = '''
+        <div class="legenda-container">
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> > +2% (Melhor)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#f1f5f9;"></div> -2% a +2% (Normal)</div>
+            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> < -2% (Pior)</div>
+        </div>
+        '''
+
         # --- TABELAS DE DIAS DA SEMANA ---
         _render_com_pct(df_hist_idx, "📊 Índice de Sazonalidade (DIAS) — Histórico Completo", _cor_idx)
-        st.write("")
-        _render_com_pct(df_periodo_idx, f"📊 Índice de Sazonalidade (DIAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", _cor_idx)
-        st.write("")
-        _render(df_comparativo, "📈 Comparativo (DIAS) — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
-
-        st.markdown("---")
-
-        # --- TABELAS DE DIAS ÚTEIS ---
-        _render_com_pct(df_hist_diautil_idx, "📊 Índice de Sazonalidade (DIAS ÚTEIS) — Histórico Completo", _cor_idx)
-        st.write("")
-        _render_com_pct(df_periodo_diautil_idx, f"📊 Índice de Sazonalidade (DIAS ÚTEIS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", _cor_idx)
-        st.write("")
-        _render(df_comp_diautil, "📈 Comparativo (DIAS ÚTEIS) — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
+        st.markdown(legenda_dias, unsafe_allow_html=True)
+        
+        _render_com_pct(df_periodo_idx, f"📊 Índice de Sazonalidade (DIAS) — Período", _cor_idx)
+        st.markdown(legenda_dias, unsafe_allow_html=True)
+        
+        _render(df_comparativo, "📈 Comparativo (DIAS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
+        st.markdown(legenda_comp, unsafe_allow_html=True)
 
         st.markdown("---")
 
         # --- TABELAS DE HORAS ---
         _render_com_pct(df_hist_hora_idx, "🕒 Índice de Sazonalidade (HORAS) — Histórico Completo", _cor_hora_idx)
-        st.write("")
-        _render_com_pct(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", _cor_hora_idx)
-        st.write("")
-        _render(df_comp_hora, "📈 Comparativo (HORAS) — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
+        st.markdown(legenda_horas, unsafe_allow_html=True)
+        
+        _render_com_pct(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período", _cor_hora_idx)
+        st.markdown(legenda_horas, unsafe_allow_html=True)
+        
+        _render(df_comp_hora, "📈 Comparativo (HORAS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
+        st.markdown(legenda_comp, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # --- TABELAS DE DIAS ÚTEIS ---
+        _render_com_pct(df_hist_diautil_idx, "📊 Índice de Sazonalidade (DIAS ÚTEIS) — Histórico Completo", _cor_idx)
+        st.markdown(legenda_dias, unsafe_allow_html=True)
+        
+        _render_com_pct(df_periodo_diautil_idx, f"📊 Índice de Sazonalidade (DIAS ÚTEIS) — Período", _cor_idx)
+        st.markdown(legenda_dias, unsafe_allow_html=True)
+        
+        _render(df_comp_diautil, "📈 Comparativo (DIAS ÚTEIS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
+        st.markdown(legenda_comp, unsafe_allow_html=True)
         
 # ==========================================
 # ABA COMPRAS
