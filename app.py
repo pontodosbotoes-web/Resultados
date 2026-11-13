@@ -731,6 +731,7 @@ def calcular_indices_sazonalidade_hora(df):
     if not df_idx.empty:
         df_idx.index = [f"{h:02d}:00" for h in df_idx.index]
         df_idx.index.name = "Hora"
+        df_idx = df_idx[df_idx["Total"] > 0]  # ← NOVO: remove horas sem movimento
     return df_idx
 
 def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_hora, df_periodo_hora, df_comp_hora, data_ini, data_fim, h_ini, h_fim):
@@ -1074,3 +1075,519 @@ with tab_sazonalidade:
         _render(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", formatar_indice, _cor_idx)
         st.write("")
         _render(df_comp_hora, "📈 Comparativo (HORAS) — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
+        
+# ==========================================
+# ABA COMPRAS
+# ==========================================
+with tab_compras:
+    try:
+        lista_fornecedores = carregar_fornecedores()
+    except Exception:
+        lista_fornecedores = []
+
+    if "dt_ini_compras" not in st.session_state: st.session_state["dt_ini_compras"] = date(hoje.year, 1, 1)
+    if "dt_fim_compras" not in st.session_state: st.session_state["dt_fim_compras"] = date(hoje.year, 12, 31)
+    if "filial_compras" not in st.session_state: st.session_state["filial_compras"] = "Todas"
+    if "fornecedor_compras" not in st.session_state: st.session_state["fornecedor_compras"] = "Todos"
+    if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
+        st.session_state["fornecedor_compras"] = "Todos"
+
+    c1, c2, c3, c4, c_acoes = st.columns([1, 1, 1.2, 1.5, 2.5], vertical_alignment="bottom")
+    data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
+    data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
+    filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
+    fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
+
+    with c_acoes:
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            btn_compras = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_compras")
+        with col_b2:
+            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_compras, key="btn_limpar_compras")
+        with col_b3:
+            pdf_bytes_comp = st.session_state.get("pdf_bytes_comp")
+            if pdf_bytes_comp:
+                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_comp, file_name=f"Acompanhamento Gerencial - Compras {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_compras")
+            else:
+                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_compras_disabled")
+
+    _foi_primeira_carga_compras = "df_compras" not in st.session_state
+    if _foi_primeira_carga_compras or btn_compras:
+        filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
+        try:
+            with st.spinner("Carregando dados de compras..."):
+                df_compras = buscar_compras(data_ini_c.strftime("%Y-%m-%d"), data_fim_c.strftime("%Y-%m-%d"), filial_cod_c)
+                if not df_compras.empty:
+                    if fornecedor_sel != "Todos":
+                        df_compras = df_compras[df_compras["Fornecedor"] == fornecedor_sel]
+                    if not df_compras.empty:
+                        df_compras['Mes_Nome'] = df_compras['Mes'].map({1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'})
+                        st.session_state["df_compras"] = df_compras
+                        st.session_state["pdf_bytes_comp"] = gerar_pdf_compras(df_compras, data_ini_c, data_fim_c)
+                    else:
+                        st.session_state["df_compras"] = df_compras
+                        st.session_state["pdf_bytes_comp"] = None
+                else:
+                    st.session_state["df_compras"] = df_compras
+                    st.session_state["pdf_bytes_comp"] = None
+        except Exception as e:
+            st.error(f"Erro ao carregar compras: {e}")
+            st.stop()
+
+    if _foi_primeira_carga_compras: st.rerun()
+
+    df_compras = st.session_state.get("df_compras", pd.DataFrame())
+    if df_compras.empty:
+        st.info("Nenhuma compra encontrada para o período/filtros.")
+    else:
+        tot_val_geral = df_compras["Valor"].sum()
+        df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento", ascending=True)
+        meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+        cards_data = [("💰 Total Comprado", tot_val_geral, "#3b82f6", "")]
+        cores_depto = ["#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#0ea5e9", "#f97316", "#ef4444", "#14b8a6"]
+        for i, row in df_tot_depto.iterrows():
+            cor = cores_depto[i % len(cores_depto)]
+            pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
+            pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
+            cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor, pct_html))
+        for i in range(0, len(cards_data), 5):
+            chunk = cards_data[i:i+5]
+            cols = st.columns(5)
+            for j, (nome, valor, cor, pct_html) in enumerate(chunk):
+                with cols[j]:
+                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor};"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
+        st.write("")
+        if not df_tot_depto.empty:
+            deptos_nomes = df_tot_depto['Departamento'].tolist()
+            sub_tabs = st.tabs(deptos_nomes)
+            for sub_tab, (_, row) in zip(sub_tabs, df_tot_depto.iterrows()):
+                with sub_tab:
+                    depto = row['Departamento']
+                    df_d = df_compras[df_compras["Departamento"] == depto]
+                    df_pivot = df_d.pivot_table(index=['Fornecedor'], columns='Mes_Nome', values='Valor', aggfunc='sum')
+                    for m in meses_colunas:
+                        if m not in df_pivot.columns: df_pivot[m] = 0.0
+                    df_pivot = df_pivot[meses_colunas]
+                    df_pivot['Total'] = df_pivot.sum(axis=1)
+                    df_pivot = df_pivot.fillna(0).sort_index(ascending=True)
+                    linha_total = df_pivot.sum().to_frame().T
+                    linha_total.index = ['TOTAL']
+                    df_final = pd.concat([df_pivot, linha_total])
+                    def fmt_br(x):
+                        if pd.isna(x) or x == 0: return "-"
+                        return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    def highlight_total(row):
+                        if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
+                        return [''] * len(row)
+                    st.dataframe(df_final.style.format(fmt_br).apply(highlight_total, axis=1), use_container_width=True)
+
+# ==========================================
+# ABA TRANSFERÊNCIAS
+# ==========================================
+with tab_transferencias:
+    if "dt_ini_transf" not in st.session_state: st.session_state["dt_ini_transf"] = date(hoje.year, 1, 1)
+    if "dt_fim_transf" not in st.session_state: st.session_state["dt_fim_transf"] = date(hoje.year, 12, 31)
+    if "filial_origem_transf" not in st.session_state: st.session_state["filial_origem_transf"] = "Todas"
+
+    c1, c2, c3, c_acoes = st.columns([1, 1, 1.2, 2.5], vertical_alignment="bottom")
+    data_ini_tr = c1.date_input("De:", key="dt_ini_transf", format="DD/MM/YYYY")
+    data_fim_tr = c2.date_input("Até:", key="dt_fim_transf", format="DD/MM/YYYY")
+    filial_tr_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_origem_transf")
+
+    with c_acoes:
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            btn_transf = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_transf")
+        with col_b2:
+            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_transferencias, key="btn_limpar_transf")
+        with col_b3:
+            pdf_bytes_tr = st.session_state.get("pdf_bytes_transf")
+            if pdf_bytes_tr:
+                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_tr, file_name=f"Acompanhamento Gerencial - Transferencias {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_transf")
+            else:
+                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_transf_disabled")
+
+    _foi_primeira_carga_transf = "df_transf" not in st.session_state
+    if _foi_primeira_carga_transf or btn_transf:
+        filial_cod_tr = "" if filial_tr_sel == "Todas" else filiais_inv[filial_tr_sel]
+        try:
+            with st.spinner("Carregando dados de transferências..."):
+                df_transf = buscar_transferencias(data_ini_tr.strftime("%Y-%m-%d"), data_fim_tr.strftime("%Y-%m-%d"), filial_cod_tr)
+                if not df_transf.empty:
+                    df_transf["FilialOrigem"] = pd.to_numeric(df_transf["FilialOrigem"], errors="coerce").fillna(0).astype(int)
+                    df_transf["FilialDestino"] = pd.to_numeric(df_transf["FilialDestino"], errors="coerce").fillna(0).astype(int)
+                    df_transf["Mes"] = pd.to_numeric(df_transf["Mes"], errors="coerce").fillna(0).astype(int)
+                    df_transf['Mes_Nome'] = df_transf['Mes'].map({1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'})
+                    st.session_state["df_transf"] = df_transf
+                    st.session_state["pdf_bytes_transf"] = gerar_pdf_transferencias(df_transf, data_ini_tr, data_fim_tr)
+                else:
+                    st.session_state["df_transf"] = df_transf
+                    st.session_state["pdf_bytes_transf"] = None
+        except Exception as e:
+            st.error(f"Erro ao carregar transferências: {e}")
+            st.stop()
+
+    if _foi_primeira_carga_transf: st.rerun()
+
+    df_transf = st.session_state.get("df_transf", pd.DataFrame())
+    if df_transf.empty:
+        st.info("Nenhuma transferência encontrada para o período/filtros.")
+    else:
+        df_entradas_all = df_transf[df_transf["TipoDado"] == "ENTRADA"].copy()
+        df_saidas_all = df_transf[df_transf["TipoDado"] == "SAIDA"].copy()
+
+        meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+        filiais_card = sorted(set(
+            df_entradas_all["FilialDestino"].unique().tolist()
+            + df_saidas_all["FilialOrigem"].unique().tolist()
+        ))
+
+        def fmt_saldo_card(v):
+            if v > 0:
+                return f"+ {formatar_moeda(v)}"
+            elif v < 0:
+                return f"- {formatar_moeda(abs(v))}"
+            else:
+                return formatar_moeda(0)
+
+        cards_data = []
+        for filial in filiais_card:
+            ent_v = df_entradas_all[df_entradas_all["FilialDestino"] == filial]["Valor"].sum()
+            sai_v = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]["Valor"].sum()
+            saldo_v = ent_v - sai_v
+            nome = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
+            cor = "#10b981" if saldo_v >= 0 else "#ef4444"
+            cards_data.append((f"💰 Saldo {nome}", saldo_v, cor))
+
+        for i in range(0, len(cards_data), 5):
+            chunk = cards_data[i:i+5]
+            cols = st.columns(5)
+            for j, (nome, valor, cor) in enumerate(chunk):
+                with cols[j]:
+                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor};"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
+
+        st.write("")
+
+        filiais_envolvidas = sorted(set(
+            df_entradas_all["FilialDestino"].unique().tolist()
+            + df_saidas_all["FilialOrigem"].unique().tolist()
+        ))
+
+        if filiais_envolvidas:
+            nomes_tabs = [NOMES_FILIAIS.get(int(f), f"Filial {f}") for f in filiais_envolvidas]
+            sub_tabs = st.tabs(nomes_tabs)
+
+            for sub_tab, filial in zip(sub_tabs, filiais_envolvidas):
+                with sub_tab:
+                    nome_filial = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
+
+                    st.markdown(f"### 📥 ENTRADAS em {nome_filial}")
+                    df_ent = df_entradas_all[df_entradas_all["FilialDestino"] == filial]
+                    if df_ent.empty:
+                        st.info("Nenhuma entrada no período.")
+                    else:
+                        df_pivot_e = df_ent.pivot_table(index="FilialOrigem", columns='Mes_Nome', values='Valor', aggfunc='sum')
+                        for m in meses_colunas:
+                            if m not in df_pivot_e.columns: df_pivot_e[m] = 0.0
+                        df_pivot_e = df_pivot_e[meses_colunas]
+                        df_pivot_e['Total'] = df_pivot_e.sum(axis=1)
+                        df_pivot_e = df_pivot_e.fillna(0).sort_index()
+                        linha_total_e = df_pivot_e.sum().to_frame().T
+                        linha_total_e.index = ['TOTAL']
+                        df_final_e = pd.concat([df_pivot_e, linha_total_e])
+                        df_display_e = df_final_e.copy()
+                        df_display_e.index = ["TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") for i in df_display_e.index]
+                        df_display_e.index.name = "Filial Origem"
+                        def fmt_br_e(x):
+                            if pd.isna(x) or x == 0: return "-"
+                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        def hl_e(row):
+                            if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
+                            return [''] * len(row)
+                        st.dataframe(df_display_e.style.format(fmt_br_e).apply(hl_e, axis=1), use_container_width=True)
+
+                    st.write("")
+
+                    st.markdown(f"### 📤 SAÍDAS de {nome_filial}")
+                    df_sai = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]
+                    if df_sai.empty:
+                        st.info("Nenhuma saída no período.")
+                    else:
+                        df_pivot_s = df_sai.pivot_table(index="FilialDestino", columns='Mes_Nome', values='Valor', aggfunc='sum')
+                        for m in meses_colunas:
+                            if m not in df_pivot_s.columns: df_pivot_s[m] = 0.0
+                        df_pivot_s = df_pivot_s[meses_colunas]
+                        df_pivot_s['Total'] = df_pivot_s.sum(axis=1)
+                        df_pivot_s = df_pivot_s.fillna(0).sort_index()
+                        linha_total_s = df_pivot_s.sum().to_frame().T
+                        linha_total_s.index = ['TOTAL']
+                        df_final_s = pd.concat([df_pivot_s, linha_total_s])
+                        df_display_s = df_final_s.copy()
+                        df_display_s.index = ["TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") for i in df_display_s.index]
+                        df_display_s.index.name = "Filial Destino"
+                        def fmt_br_s(x):
+                            if pd.isna(x) or x == 0: return "-"
+                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        def hl_s(row):
+                            if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
+                            return [''] * len(row)
+                        st.dataframe(df_display_s.style.format(fmt_br_s).apply(hl_s, axis=1), use_container_width=True)
+
+                    st.write("")
+
+                    st.markdown(f"### 💰 SALDO em {nome_filial} (Entradas − Saídas)")
+
+                    tot_ent_mes = {m: (df_ent[df_ent["Mes_Nome"] == m]["Valor"].sum() if not df_ent.empty else 0.0) for m in meses_colunas}
+                    tot_sai_mes = {m: (df_sai[df_sai["Mes_Nome"] == m]["Valor"].sum() if not df_sai.empty else 0.0) for m in meses_colunas}
+
+                    tot_ent_ano = sum(tot_ent_mes.values())
+                    tot_sai_ano = sum(tot_sai_mes.values())
+                    saldo_ano = tot_ent_ano - tot_sai_ano
+
+                    saldo_dict = {
+                        "📥 Total Entradas": {**tot_ent_mes, "Total": tot_ent_ano},
+                        "📤 Total Saídas": {**tot_sai_mes, "Total": tot_sai_ano},
+                        "💰 Saldo": {**{m: tot_ent_mes[m] - tot_sai_mes[m] for m in meses_colunas}, "Total": saldo_ano},
+                    }
+                    df_saldo = pd.DataFrame(saldo_dict).T
+                    df_saldo = df_saldo[meses_colunas + ["Total"]]
+                    df_saldo.index.name = "Descrição"
+
+                    def fmt_br_saldo(x):
+                        if pd.isna(x) or x == 0: return "-"
+                        return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+                    def hl_saldo(row):
+                        base = [''] * len(row)
+                        if row.name == "💰 Saldo":
+                            base = [
+                                'font-weight: bold; background: #f0fdf4; color: ' + ('#dc2626' if (isinstance(v, (int, float)) and v < 0) else '#16a34a')
+                                for v in row.values
+                            ]
+                        elif row.name == "📥 Total Entradas":
+                            base = ['color: #16a34a; font-weight: 600;'] * len(row)
+                        elif row.name == "📤 Total Saídas":
+                            base = ['color: #dc2626; font-weight: 600;'] * len(row)
+                        return base
+
+                    st.dataframe(
+                        df_saldo.style.format(fmt_br_saldo).apply(hl_saldo, axis=1),
+                        use_container_width=True
+                    )
+
+# ==========================================
+# ABA TRIBUTOS
+# ==========================================
+with tab_tributos:
+    if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
+    if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
+
+    c1, c2, c_acoes = st.columns([1, 1, 2.5], vertical_alignment="bottom")
+    data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
+    data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
+
+    with c_acoes:
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            btn_atualizar_trib = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_trib")
+        with col_b2:
+            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos, key="btn_limpar_trib")
+        with col_b3:
+            pdf_bytes_t = st.session_state.get("pdf_bytes_trib")
+            if pdf_bytes_t:
+                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_t, file_name=f"Acompanhamento Gerencial - Tributos {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_trib")
+            else:
+                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_trib_disabled")
+
+    _foi_primeira_carga_trib = "df_trib" not in st.session_state
+    if _foi_primeira_carga_trib or btn_atualizar_trib:
+        try:
+            with st.spinner("Carregando dados tributários..."):
+                df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
+                if not df_trib.empty:
+                    df_trib["CodFilial"] = pd.to_numeric(df_trib["CodFilial"], errors="coerce").fillna(0).astype(int)
+                    cols_numeric = ["VendasBruto", "VendasLiquidoDesconto", "ICMS_Vendas", "DevolucaoVendas", "TransfEnvTotal", "TransfEnvTrib", "TransfEnvNaoTrib", "ICMS_TransfEnv", "ComprasTotal", "ComprasTrib", "ComprasNaoTrib", "ICMS_Compras", "TransfRecTotal", "TransfRecTrib", "TransfRecNaoTrib", "ICMS_TransfRec", "TributosAntecipados"]
+                    for c in cols_numeric:
+                        df_trib[c] = pd.to_numeric(df_trib[c], errors="coerce").fillna(0)
+                    tem_movimento = ((df_trib["VendasBruto"] > 0) | (df_trib["ComprasTotal"] > 0) | (df_trib["TransfEnvTotal"] > 0) | (df_trib["TransfRecTotal"] > 0) | (df_trib["TributosAntecipados"] != 0))
+                    df_trib = df_trib[tem_movimento].copy()
+                    if not df_trib.empty:
+                        df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
+                        df_trib["tributoVendasIntegral"] = df_trib["ICMS_Vendas"]
+                        df_trib["pctVendasEfetivo"] = (df_trib["ICMS_Vendas"] / df_trib["VendasBruto"] * 100).fillna(0)
+                        df_trib["tributoVendasAdicional"] = 0.0
+                        df_trib["pctAdicional"] = 0.0
+                        df_trib["icmsTransfEnv"] = df_trib["ICMS_TransfEnv"]
+                        df_trib["pctTransfEnvEfetivo"] = (df_trib["ICMS_TransfEnv"] / df_trib["TransfEnvTotal"] * 100).fillna(0)
+                        mask_atacado = df_trib["CodFilial"] == 5
+                        df_trib.loc[mask_atacado, "tributoVendasIntegral"] = df_trib.loc[mask_atacado, "VendasBruto"] * 0.071
+                        df_trib.loc[mask_atacado, "pctVendasEfetivo"] = 7.10
+                        mask_adic = mask_atacado & (df_trib["vendasLiquido"] < 400000.0)
+                        df_trib.loc[mask_adic, "tributoVendasAdicional"] = df_trib.loc[mask_adic, "vendasLiquido"] * 0.049
+                        df_trib.loc[mask_adic, "pctAdicional"] = 4.90
+                        df_trib.loc[mask_atacado, "icmsTransfEnv"] = df_trib.loc[mask_atacado, "TransfEnvTrib"] * 0.071
+                        df_trib.loc[mask_atacado, "pctTransfEnvEfetivo"] = 7.10
+                        df_trib.loc[mask_atacado, "ICMS_Compras"] = 0.0
+                        df_trib.loc[mask_atacado, "ICMS_TransfRec"] = 0.0
+                        df_trib.loc[mask_atacado, "ComprasTrib"] = 0.0
+                        df_trib.loc[mask_atacado, "TransfRecTrib"] = 0.0
+                        df_trib.loc[mask_atacado, "ComprasNaoTrib"] = df_trib.loc[mask_atacado, "ComprasTotal"]
+                        df_trib.loc[mask_atacado, "TransfRecNaoTrib"] = df_trib.loc[mask_atacado, "TransfRecTotal"]
+                        mask_srb = df_trib["CodFilial"] == 4
+                        df_trib.loc[mask_srb, "tributoVendasIntegral"] = df_trib.loc[mask_srb, "VendasBruto"] * 0.143
+                        df_trib.loc[mask_srb, "pctVendasEfetivo"] = 14.30
+                        df_trib.loc[mask_srb, "icmsTransfEnv"] = 0.0
+                        df_trib.loc[mask_srb, "pctTransfEnvEfetivo"] = 0.0
+                        df_trib.loc[mask_srb, "ICMS_Compras"] = 0.0
+                        df_trib.loc[mask_srb, "ICMS_TransfRec"] = 0.0
+                        df_trib.loc[mask_srb, "TransfEnvTrib"] = 0.0
+                        df_trib.loc[mask_srb, "TransfEnvNaoTrib"] = df_trib.loc[mask_srb, "TransfEnvTotal"]
+                        df_trib.loc[mask_srb, "ComprasTrib"] = 0.0
+                        df_trib.loc[mask_srb, "TransfRecTrib"] = 0.0
+                        df_trib.loc[mask_srb, "ComprasNaoTrib"] = df_trib.loc[mask_srb, "ComprasTotal"]
+                        df_trib.loc[mask_srb, "TransfRecNaoTrib"] = df_trib.loc[mask_srb, "TransfRecTotal"]
+                        df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
+                        df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
+                        df_trib["totalSaidasNaoTrib"] = df_trib["TransfEnvNaoTrib"]
+                        df_trib["totalEntradas"] = df_trib["ComprasTotal"] + df_trib["TransfRecTotal"] + df_trib["TributosAntecipados"]
+                        df_trib["totalEntradasTrib"] = df_trib["ComprasTrib"] + df_trib["TransfRecTrib"] + df_trib["TributosAntecipados"]
+                        df_trib["totalEntradasNaoTrib"] = df_trib["ComprasNaoTrib"] + df_trib["TransfRecNaoTrib"]
+                        df_trib["debitoICMS"] = df_trib["tributoVendasIntegral"] + df_trib["tributoVendasAdicional"] + df_trib["icmsTransfEnv"]
+                        df_trib["creditoICMS"] = df_trib["ICMS_Compras"] + df_trib["ICMS_TransfRec"] + df_trib["TributosAntecipados"]
+                        df_trib["resultado"] = df_trib["creditoICMS"] - df_trib["debitoICMS"]
+                        atacado = df_trib[df_trib["CodFilial"] == 5]
+                        pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
+                        srb = df_trib[df_trib["CodFilial"] == 4]
+                        colunas = pd.concat([atacado, pb, srb])
+                        rows_saidas = [
+                            ("Valor Vendas Bruto", "VendasBruto", {}),
+                            ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
+                            ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
+                            ("Tributo Vendas Integral", "tributoVendasIntegral", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"}),
+                            ("Tributo Vendas Adicional", "tributoVendasAdicional", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"}),
+                            ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
+                            ("Tributo Transferências Enviadas", "icmsTransfEnv", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"}),
+                            ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
+                            ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
+                            ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                            ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
+                        ]
+                        rows_entradas = [
+                            ("Valor Compras", "ComprasTotal", {}),
+                            ("Tributo Compras", "ICMS_Compras", {}),
+                            ("Valor Transferências Recebidas", "TransfRecTotal", {}),
+                            ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
+                            ("Tributos Antecipados", "TributosAntecipados", {}),
+                            ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
+                            ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
+                            ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                            ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
+                        ]
+                        rows_resultado = [("Resultado", "resultado", {"bold": True, "cls": "resultado"})]
+                        pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
+                        st.session_state["pdf_bytes_trib"] = pdf_bytes
+                        st.session_state["df_trib"] = df_trib
+                    else:
+                        st.session_state["df_trib"] = df_trib
+                        st.session_state["pdf_bytes_trib"] = None
+                else:
+                    st.session_state["df_trib"] = df_trib
+                    st.session_state["pdf_bytes_trib"] = None
+        except Exception as e:
+            st.error(f"Erro ao carregar tributos: {e}")
+            st.stop()
+
+    if _foi_primeira_carga_trib: st.rerun()
+
+    df_trib = st.session_state.get("df_trib", pd.DataFrame())
+    if df_trib.empty:
+        st.info("Nenhum dado encontrado para o período.")
+    else:
+        atacado = df_trib[df_trib["CodFilial"] == 5]
+        pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
+        srb = df_trib[df_trib["CodFilial"] == 4]
+        colunas = pd.concat([atacado, pb, srb])
+        rows_saidas = [
+            ("Valor Vendas Bruto", "VendasBruto", {}),
+            ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
+            ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
+            ("Tributo Vendas Integral", "tributoVendasIntegral", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"}),
+            ("Tributo Vendas Adicional", "tributoVendasAdicional", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"}),
+            ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
+            ("Tributo Transferências Enviadas", "icmsTransfEnv", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"}),
+            ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
+            ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
+            ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+            ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
+        ]
+        rows_entradas = [
+            ("Valor Compras", "ComprasTotal", {}),
+            ("Tributo Compras", "ICMS_Compras", {}),
+            ("Valor Transferências Recebidas", "TransfRecTotal", {}),
+            ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
+            ("Tributos Antecipados", "TributosAntecipados", {}),
+            ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
+            ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
+            ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+            ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
+        ]
+        rows_resultado = [("Resultado", "resultado", {"bold": True, "cls": "resultado"})]
+
+        saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
+        saldo_pb = pb["resultado"].sum() if not pb.empty else 0
+        saldo_srb = srb["resultado"].sum() if not srb.empty else 0
+        saldo_cons = saldo_atacado + saldo_pb + saldo_srb
+
+        c_cards = st.columns(4)
+        def render_card_trib(col, title, val):
+            cor = "#16a34a" if val >= 0 else "#dc2626"
+            with col:
+                st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor};"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
+        render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
+        render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
+        render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
+        render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
+
+        st.write("")
+
+        def build_trib_table(rows_list):
+            html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
+            html += '<thead><tr><th style="text-align:left;">Operação</th>'
+            for _, f in colunas.iterrows():
+                html += f'<th style="text-align:right;">{f["NomeFilial"]}</th>'
+            html += '<th style="text-align:right;">📊 Total</th></tr></thead><tbody>'
+            for label, key, opts in rows_list:
+                cls = opts.get("cls", "")
+                bold = opts.get("bold", False)
+                label_fmt = f"<strong>{label}</strong>" if bold else label
+                html += f'<tr class="{cls}"><td style="text-align:left; padding-left:8px;">{label_fmt}</td>'
+                total = 0
+                for _, f in colunas.iterrows():
+                    val = f[key] if key else 0
+                    total += val
+                    if "fmt" in opts:
+                        val_str = opts["fmt"](val, f)
+                    else:
+                        val_str = formatar_numero(val)
+                    if key == "resultado":
+                        val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
+                    html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
+                if key == "resultado":
+                    total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
+                else:
+                    total_str = formatar_numero(total)
+                html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
+            html += '</tbody></table></div>'
+            return html
+
+        tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
+        with tab_saidas:
+            st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
+        with tab_entradas:
+            st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
+        with tab_resultado:
+            st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
