@@ -1113,17 +1113,44 @@ with tab_sazonalidade:
             styled = styled.set_properties(subset=[df_str.index.name], **{'text-align': 'left'})
             st.dataframe(styled, use_container_width=True)
 
-        _render(df_hist_idx, "📊 Índice de Sazonalidade (DIAS) — Histórico Completo", formatar_indice, _cor_idx)
+        # Função atualizada para maior segurança com o Pandas
+        def _render_com_pct(df_idx, titulo, cor_func):
+            st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
+            if df_idx.empty:
+                st.info("Sem dados para o período.")
+                return
+            
+            df_display = df_idx.copy()
+
+            def fmt_with_pct(val, total):
+                if pd.isna(val) or val == 0: return "-"
+                pct = ((val / total) - 1) * 100 if total > 0 else 0
+                return f"{val:.4f} ({pct:+.2f}%)".replace(".", ",")
+
+            for col in df_display.columns:
+                if col != "Total":
+                    df_display[col] = df_display.apply(lambda row: fmt_with_pct(row[col], row["Total"]), axis=1)
+                else:
+                    df_display[col] = df_display[col].apply(lambda x: f"{x:.4f}".replace(".", ",") if not pd.isna(x) else "-")
+
+            def apply_colors(row):
+                return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
+
+            styled = df_display.style.apply(apply_colors, axis=1)
+            st.dataframe(styled, use_container_width=True)
+
+        # Chamadas atualizadas:
+        _render_com_pct(df_hist_idx, "📊 Índice de Sazonalidade (DIAS) — Histórico Completo", _cor_idx)
         st.write("")
-        _render(df_periodo_idx, f"📊 Índice de Sazonalidade (DIAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", formatar_indice, _cor_idx)
+        _render_com_pct(df_periodo_idx, f"📊 Índice de Sazonalidade (DIAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", _cor_idx)
         st.write("")
         _render(df_comparativo, "📈 Comparativo (DIAS) — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
 
         st.markdown("---") # Linha divisória visual
 
-        _render(df_hist_hora_idx, "🕒 Índice de Sazonalidade (HORAS) — Histórico Completo", formatar_indice, _cor_idx)
+        _render_com_pct(df_hist_hora_idx, "🕒 Índice de Sazonalidade (HORAS) — Histórico Completo", _cor_idx)
         st.write("")
-        _render(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", formatar_indice, _cor_idx)
+        _render_com_pct(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período ({data_ini_saz.strftime('%d/%m/%Y')} a {data_fim_saz.strftime('%d/%m/%Y')})", _cor_idx)
         st.write("")
         _render(df_comp_hora, "📈 Comparativo (HORAS) — Período vs. Histórico (variação %)", formatar_variacao_pct, _cor_comp)
         
