@@ -167,6 +167,12 @@ st.markdown("""
             flex: 1 !important;
             min-width: 0 !important;
         }
+        
+        /* Alinha os botões de ação com os inputs, ignorando a altura do label */
+        div[data-testid="stHorizontalBlock"] > div:last-child {
+            align-self: flex-end;
+            padding-bottom: 2px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
