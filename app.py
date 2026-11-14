@@ -24,72 +24,96 @@ st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_ic
 
 st.markdown("""
     <style>
+        /* Reset e Layout Base */
         #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;}
-        .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 100% !important; background-color: #f8fafc; }
+        .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; max-width: 100% !important; background-color: #F3F4F6; }
         
-        .titulo-pagina { font-size: 32px; font-weight: 900; text-align: center; color: #1e293b; padding-bottom: 15px; margin-bottom: 15px; letter-spacing: -0.5px; }
-        .tema-titulo { font-size: 22px; font-weight: 800; color: #1e293b; margin-top: 25px; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; }
+        /* Títulos */
+        .titulo-pagina { font-size: 28px; font-weight: 800; text-align: center; color: #111827; padding-bottom: 10px; margin-bottom: 25px; letter-spacing: -0.5px; }
+        .tema-titulo { font-size: 18px; font-weight: 700; color: #374151; margin-top: 20px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #E5E7EB; }
         
+        /* Cards (Design Premium) */
         .card-item { 
-            border-radius: 12px; padding: 18px 20px 12px 20px; height: 100%; display: flex; flex-direction: column; 
-            justify-content: space-between; transition: all 0.3s ease; margin-bottom: 15px; background: #ffffff;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border-radius: 12px; 
+            padding: 20px; 
+            height: 100%; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            transition: all 0.2s ease-in-out; 
+            margin-bottom: 10px; 
+            background: #FFFFFF;
+            border: 1px solid #E5E7EB;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
         }
-        .card-item:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
-        .card-label { font-size: 14px; font-weight: 700; color: #64748b; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: 0.5px;}
-        .card-value { font-size: 26px; font-weight: 900; color: #0f172a; line-height: 1.2; }
+        .card-item:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); 
+            border-color: #D1D5DB;
+        }
+        .card-label { font-size: 12px; font-weight: 700; color: #6B7280; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: 0.05em;}
+        .card-value { font-size: 26px; font-weight: 800; color: #111827; line-height: 1.2; font-variant-numeric: tabular-nums; }
         
-        .pct-participacao { font-size: 14px; font-weight: 700; color: #d97706; margin-left: 5px; }
-        .pct-positiva { font-size: 14px; font-weight: 700; color: #16a34a; margin-left: 5px; }
-        .pct-negativa { font-size: 14px; font-weight: 700; color: #dc2626; margin-left: 5px; }
+        /* Porcentagens */
+        .pct-participacao { font-size: 13px; font-weight: 700; color: #D97706; margin-left: 4px; }
+        .pct-positiva { font-size: 13px; font-weight: 700; color: #059669; margin-left: 4px; }
+        .pct-negativa { font-size: 13px; font-weight: 700; color: #DC2626; margin-left: 4px; }
         
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
 
+        /* Botões do Topo */
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"], div[data-testid="stButton"] button[kind="primary"] {
-            background-color: #10b981 !important; color: #ffffff !important; border: none !important;
-            transition: all 0.2s; height: 45px !important; border-radius: 8px !important; font-weight: 700 !important; font-size: 15px !important;
+            background-color: #4F46E5 !important; color: #ffffff !important; border: none !important;
+            transition: all 0.2s; height: 44px !important; border-radius: 8px !important; font-weight: 600 !important; font-size: 14px !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]:hover, div[data-testid="stButton"] button[kind="primary"]:hover {
-            background-color: #059669 !important; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4) !important;
+            background-color: #4338CA !important; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3) !important;
         }
+        
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"], div[data-testid="stButton"] button {
-            background-color: #ef4444 !important; color: #ffffff !important; border: none !important;
-            transition: all 0.2s; height: 45px !important; border-radius: 8px !important; font-weight: 700 !important; font-size: 15px !important;
+            background-color: #EF4444 !important; color: #ffffff !important; border: none !important;
+            transition: all 0.2s; height: 44px !important; border-radius: 8px !important; font-weight: 600 !important; font-size: 14px !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"]:hover, div[data-testid="stButton"] button:hover {
-            background-color: #dc2626 !important; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4) !important;
+            background-color: #DC2626 !important; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3) !important;
         }
+        
         div[data-testid="stDownloadButton"] button {
-            background-color: #3b82f6 !important; color: #ffffff !important; border: none !important;
-            transition: all 0.2s; height: 45px !important; border-radius: 8px !important; font-weight: 700 !important; font-size: 15px !important;
+            background-color: #3B82F6 !important; color: #ffffff !important; border: none !important;
+            transition: all 0.2s; height: 44px !important; border-radius: 8px !important; font-weight: 600 !important; font-size: 14px !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         div[data-testid="stDownloadButton"] button:hover {
-            background-color: #2563eb !important; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important;
+            background-color: #2563EB !important; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3) !important;
         }
 
-        .tabela-wrapper { overflow-x: auto; margin: 15px 0 30px 0; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-        .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 15px; background: #ffffff; }
-        .tributos-tabela th { background: #f1f5f9; color: #334155; padding: 14px 15px; border-bottom: 2px solid #e2e8f0; font-weight: 800; white-space: nowrap; text-transform: uppercase; font-size: 13px; letter-spacing: 0.5px; }
-        .tributos-tabela td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; color: #475569; font-weight: 500; }
-        .tributos-tabela td:first-child { text-align: left !important; font-weight: 700; color: #1e293b; }
-        .tributos-tabela td:not(:first-child) { text-align: right !important; font-variant-numeric: tabular-nums; }
-        .tributos-tabela tr:hover td { background: #f8fafc; }
+        /* Tabelas HTML (Tributos) */
+        .tabela-wrapper { overflow-x: auto; margin: 10px 0 25px 0; border-radius: 8px; border: 1px solid #E5E7EB; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.05); }
+        .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 14px; background: #FFFFFF; }
+        .tributos-tabela th { background: #F9FAFB; color: #4B5563; padding: 12px 16px; border-bottom: 1px solid #E5E7EB; font-weight: 700; white-space: nowrap; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
+        .tributos-tabela td { padding: 10px 16px; border-bottom: 1px solid #F3F4F6; color: #374151; font-weight: 500; font-variant-numeric: tabular-nums; }
+        .tributos-tabela td:first-child { text-align: left !important; font-weight: 600; color: #111827; }
+        .tributos-tabela td:not(:first-child) { text-align: right !important; }
+        .tributos-tabela tr:hover td { background: #F9FAFB; }
         
-        .tributos-tabela .total-entrada td { color: #15803d; font-weight: 800; background: #f0fdf4; border-top: 2px solid #86efac; }
-        .tributos-tabela .subtotal-entrada td { color: #166534; font-weight: 700; background: #f0fdf4; }
-        .tributos-tabela .total-saida td { color: #b91c1c; font-weight: 800; background: #fef2f2; border-top: 2px solid #fca5a5; }
-        .tributos-tabela .subtotal-saida td { color: #991b1b; font-weight: 700; background: #fef2f2; }
-        .tributos-tabela .debito td { color: #dc2626; font-weight: 800; background: #fee2e2; border-top: 2px solid #ef4444; }
-        .tributos-tabela .credito td { color: #16a34a; font-weight: 800; background: #dcfce7; border-top: 2px solid #22c55e; }
-        .tributos-tabela .resultado td { font-weight: 900; font-size: 17px; border-top: 3px double #3b82f6; border-bottom: 3px double #3b82f6; padding-top: 16px; padding-bottom: 16px; }
-        .tributos-tabela .resultado td:first-child { color: #2563eb; }
-        .tributos-tabela .devolucao td { color: #dc2626; font-style: italic; }
-        .tributos-tabela .nao-tributada td { color: #64748b; font-style: italic; background: #f8fafc; }
-        .tributos-tabela .bloco-fim td { border-bottom: 3px solid #3b82f6 !important; }
-        /* Legenda de Cores */
-        .legenda-container { display: flex; gap: 15px; font-size: 12px; color: #475569; margin-top: -5px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; }
-        .legenda-item { display: flex; align-items: center; gap: 6px; font-weight: 500; }
-        .legenda-cor { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.1); }
+        /* Cores de Status Tabelas */
+        .tributos-tabela .total-entrada td { color: #047857; font-weight: 700; background: #ECFDF5; border-top: 2px solid #A7F3D0; }
+        .tributos-tabela .subtotal-entrada td { color: #065F46; font-weight: 600; background: #F0FDF4; }
+        .tributos-tabela .total-saida td { color: #B91C1C; font-weight: 700; background: #FEF2F2; border-top: 2px solid #FECACA; }
+        .tributos-tabela .subtotal-saida td { color: #991B1B; font-weight: 600; background: #FEF2F2; }
+        .tributos-tabela .debito td { color: #DC2626; font-weight: 700; background: #FEE2E2; border-top: 2px solid #EF4444; }
+        .tributos-tabela .credito td { color: #059669; font-weight: 700; background: #D1FAE5; border-top: 2px solid #10B981; }
+        .tributos-tabela .resultado td { font-weight: 800; font-size: 16px; border-top: 3px double #4F46E5; border-bottom: 3px double #4F46E5; padding-top: 14px; padding-bottom: 14px; }
+        .tributos-tabela .resultado td:first-child { color: #4F46E5; }
+        .tributos-tabela .devolucao td { color: #DC2626; font-style: italic; }
+        .tributos-tabela .nao-tributada td { color: #6B7280; font-style: italic; background: #F9FAFB; }
+        
+        /* Legendas Sazonalidade */
+        .legenda-container { display: flex; gap: 12px; font-size: 12px; color: #4B5563; margin-top: -10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; background: #FFFFFF; padding: 10px 14px; border-radius: 8px; border: 1px solid #E5E7EB; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.02); }
+        .legenda-item { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+        .legenda-cor { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.1); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -1306,7 +1330,7 @@ with tab_compras:
             cols = st.columns(5)
             for j, (nome, valor, cor, pct_html) in enumerate(chunk):
                 with cols[j]:
-                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor};"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
         st.write("")
         if not df_tot_depto.empty:
             deptos_nomes = df_tot_depto['Departamento'].tolist()
@@ -1417,7 +1441,7 @@ with tab_transferencias:
             cols = st.columns(5)
             for j, (nome, valor, cor) in enumerate(chunk):
                 with cols[j]:
-                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor};"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
 
         st.write("")
 
@@ -1696,7 +1720,7 @@ with tab_tributos:
         def render_card_trib(col, title, val):
             cor = "#16a34a" if val >= 0 else "#dc2626"
             with col:
-                st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor};"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
         render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
         render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
         render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
