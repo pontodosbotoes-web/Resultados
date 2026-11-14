@@ -143,21 +143,29 @@ st.markdown("""
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
-            gap: 8px !important;
+            gap: 6px !important;
         }
         
-        /* Remove a margem inferior do rótulo para alinhar com o input */
+        /* Impede que o texto do label quebre no meio e força ele a não encolher */
         div[data-testid="stWidgetLabel"] {
             margin-bottom: 0px !important;
-            display: flex;
-            align-items: center;
+            white-space: nowrap !important;
+            flex-shrink: 0 !important;
         }
         
-        /* Deixa o texto do rótulo um pouco mais escuro e justo ao lado do campo */
         div[data-testid="stWidgetLabel"] p {
             margin-bottom: 0px !important;
             color: #374151 !important;
             font-size: 13px !important;
+            font-weight: 600 !important;
+        }
+
+        /* Garante que o campo de seleção ocupe o espaço restante sem estourar */
+        div[data-testid="stDateInput"] > div,
+        div[data-testid="stTimeInput"] > div,
+        div[data-testid="stSelectbox"] > div {
+            flex: 1 !important;
+            min-width: 0 !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -931,7 +939,7 @@ with tab_visao:
     if "filial_visao" not in st.session_state: st.session_state["filial_visao"] = "Todas"
 
     with st.container(border=True):
-        c1, c2, c3, c4, c5, c_acoes = st.columns([1, 1, 1, 1, 1.2, 2.5], vertical_alignment="bottom")
+        c1, c2, c3, c4, c5, c_acoes = st.columns([1.2, 1.2, 1, 1, 1.2, 2.5], vertical_alignment="bottom")
         data_ini = c1.date_input("De:", key="dt_ini_visao", format="DD/MM/YYYY")
         data_fim = c2.date_input("Até:", key="dt_fim_visao", format="DD/MM/YYYY")
         h_ini = c3.time_input("Hora:", key="h_ini_visao")
@@ -1079,7 +1087,7 @@ with tab_sazonalidade:
     if "h_fim_saz" not in st.session_state: st.session_state["h_fim_saz"] = datetime.strptime("20:59", "%H:%M").time()
 
     with st.container(border=True):
-        c1, c2, c3, c4, c_acoes = st.columns([1, 1, 1, 1, 2.5], vertical_alignment="bottom")
+        c1, c2, c3, c4, c_acoes = st.columns([1.2, 1.2, 1, 1, 2.5], vertical_alignment="bottom")
         data_ini_saz = c1.date_input("De:", key="dt_ini_saz", format="DD/MM/YYYY")
         data_fim_saz = c2.date_input("Até:", key="dt_fim_saz", format="DD/MM/YYYY")
         h_ini_saz = c3.time_input("Hora:", key="h_ini_saz")
@@ -1314,7 +1322,7 @@ with tab_compras:
         st.session_state["fornecedor_compras"] = "Todos"
 
     with st.container(border=True):
-        c1, c2, c3, c4, c_acoes = st.columns([1, 1, 1.2, 1.5, 2.5], vertical_alignment="bottom")
+        c1, c2, c3, c4, c_acoes = st.columns([1.2, 1.2, 1.2, 1.5, 2.5], vertical_alignment="bottom")
         data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
         data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
         filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
@@ -1413,7 +1421,7 @@ with tab_transferencias:
     if "filial_origem_transf" not in st.session_state: st.session_state["filial_origem_transf"] = "Todas"
 
     with st.container(border=True):
-        c1, c2, c3, c_acoes = st.columns([1, 1, 1.2, 2.5], vertical_alignment="bottom")
+        c1, c2, c3, c_acoes = st.columns([1.2, 1.2, 1.2, 2.5], vertical_alignment="bottom")
         data_ini_tr = c1.date_input("De:", key="dt_ini_transf", format="DD/MM/YYYY")
         data_fim_tr = c2.date_input("Até:", key="dt_fim_transf", format="DD/MM/YYYY")
         filial_tr_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_origem_transf")
