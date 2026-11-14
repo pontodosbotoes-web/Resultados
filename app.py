@@ -133,6 +133,32 @@ st.markdown("""
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
+        
+        /* ==========================================
+           ALINHAMENTO DE FILTROS (LABEL + INPUT NA MESMA LINHA)
+           ========================================== */
+        div[data-testid="stDateInput"], 
+        div[data-testid="stTimeInput"], 
+        div[data-testid="stSelectbox"] {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 8px !important;
+        }
+        
+        /* Remove a margem inferior do rótulo para alinhar com o input */
+        div[data-testid="stWidgetLabel"] {
+            margin-bottom: 0px !important;
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Deixa o texto do rótulo um pouco mais escuro e justo ao lado do campo */
+        div[data-testid="stWidgetLabel"] p {
+            margin-bottom: 0px !important;
+            color: #374151 !important;
+            font-size: 13px !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
