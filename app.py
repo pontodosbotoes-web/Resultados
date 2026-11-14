@@ -114,6 +114,25 @@ st.markdown("""
         .legenda-container { display: flex; gap: 12px; font-size: 12px; color: #4B5563; margin-top: -10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; background: #FFFFFF; padding: 10px 14px; border-radius: 8px; border: 1px solid #E5E7EB; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.02); }
         .legenda-item { display: flex; align-items: center; gap: 6px; font-weight: 600; }
         .legenda-cor { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.1); }
+
+        /* Painel de Filtros (Control Panel) */
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stWidgetLabel"]) {
+            background-color: #FFFFFF;
+            border-radius: 12px;
+            padding: 16px 20px 12px 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+            border: 1px solid #E5E7EB;
+            margin-bottom: 24px;
+        }
+        
+        /* Estilo dos Rótulos (De, Até, Filial...) */
+        div[data-testid="stWidgetLabel"] p {
+            font-size: 11px !important;
+            font-weight: 700 !important;
+            color: #6B7280 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -885,26 +904,27 @@ with tab_visao:
     if "h_fim_visao" not in st.session_state: st.session_state["h_fim_visao"] = datetime.strptime("23:59", "%H:%M").time()
     if "filial_visao" not in st.session_state: st.session_state["filial_visao"] = "Todas"
 
-    c1, c2, c3, c4, c5, c_acoes = st.columns([1, 1, 1, 1, 1.2, 2.5], vertical_alignment="bottom")
-    data_ini = c1.date_input("De:", key="dt_ini_visao", format="DD/MM/YYYY")
-    data_fim = c2.date_input("Até:", key="dt_fim_visao", format="DD/MM/YYYY")
-    h_ini = c3.time_input("Hora:", key="h_ini_visao")
-    h_fim = c4.time_input("Até:", key="h_fim_visao")
-    filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_visao")
+    with st.container(border=True):
+        c1, c2, c3, c4, c5, c_acoes = st.columns([1, 1, 1, 1, 1.2, 2.5], vertical_alignment="bottom")
+        data_ini = c1.date_input("De:", key="dt_ini_visao", format="DD/MM/YYYY")
+        data_fim = c2.date_input("Até:", key="dt_fim_visao", format="DD/MM/YYYY")
+        h_ini = c3.time_input("Hora:", key="h_ini_visao")
+        h_fim = c4.time_input("Até:", key="h_fim_visao")
+        filial_sel = c5.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_visao")
 
-    with c_acoes:
-        col_b1, col_b2, col_b3 = st.columns(3)
-        with col_b1:
-            btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_visao")
-        with col_b2:
-            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_vendas, key="btn_limpar_visao")
-        with col_b3:
-            pdf_bytes_visao = st.session_state.get("pdf_bytes_vendas")
-            if pdf_bytes_visao:
-                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_visao, file_name=f"Acompanhamento Gerencial - Vendas {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_vendas")
-            else:
-                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_vendas_disabled")
+        with c_acoes:
+            col_b1, col_b2, col_b3 = st.columns(3)
+            with col_b1:
+                btn_atualizar = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_visao")
+            with col_b2:
+                st.button("🧹 Limpar", use_container_width=True, on_click=limpar_vendas, key="btn_limpar_visao")
+            with col_b3:
+                pdf_bytes_visao = st.session_state.get("pdf_bytes_vendas")
+                if pdf_bytes_visao:
+                    ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                    st.download_button(label="📄 Gerar PDF", data=pdf_bytes_visao, file_name=f"Acompanhamento Gerencial - Vendas {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_vendas")
+                else:
+                    st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_vendas_disabled")
 
     _foi_primeira_carga_visao = "df_vendas" not in st.session_state
     if _foi_primeira_carga_visao or btn_atualizar:
@@ -1032,25 +1052,26 @@ with tab_sazonalidade:
     if "h_ini_saz" not in st.session_state: st.session_state["h_ini_saz"] = datetime.strptime("08:00", "%H:%M").time()
     if "h_fim_saz" not in st.session_state: st.session_state["h_fim_saz"] = datetime.strptime("20:59", "%H:%M").time()
 
-    c1, c2, c3, c4, c_acoes = st.columns([1, 1, 1, 1, 2.5], vertical_alignment="bottom")
-    data_ini_saz = c1.date_input("De:", key="dt_ini_saz", format="DD/MM/YYYY")
-    data_fim_saz = c2.date_input("Até:", key="dt_fim_saz", format="DD/MM/YYYY")
-    h_ini_saz = c3.time_input("Hora:", key="h_ini_saz")
-    h_fim_saz = c4.time_input("Até:", key="h_fim_saz")
+    with st.container(border=True):
+        c1, c2, c3, c4, c_acoes = st.columns([1, 1, 1, 1, 2.5], vertical_alignment="bottom")
+        data_ini_saz = c1.date_input("De:", key="dt_ini_saz", format="DD/MM/YYYY")
+        data_fim_saz = c2.date_input("Até:", key="dt_fim_saz", format="DD/MM/YYYY")
+        h_ini_saz = c3.time_input("Hora:", key="h_ini_saz")
+        h_fim_saz = c4.time_input("Até:", key="h_fim_saz")
 
-    with c_acoes:
-        col_b1, col_b2, col_b3 = st.columns(3)
-        with col_b1:
-            btn_saz = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_saz")
-        with col_b2:
-            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_sazonalidade, key="btn_limpar_saz")
-        with col_b3:
-            pdf_bytes_saz = st.session_state.get("pdf_bytes_saz")
-            if pdf_bytes_saz:
-                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_saz, file_name=f"Acompanhamento Gerencial - Sazonalidade {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_saz")
-            else:
-                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_saz_disabled")
+        with c_acoes:
+            col_b1, col_b2, col_b3 = st.columns(3)
+            with col_b1:
+                btn_saz = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_saz")
+            with col_b2:
+                st.button("🧹 Limpar", use_container_width=True, on_click=limpar_sazonalidade, key="btn_limpar_saz")
+            with col_b3:
+                pdf_bytes_saz = st.session_state.get("pdf_bytes_saz")
+                if pdf_bytes_saz:
+                    ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                    st.download_button(label="📄 Gerar PDF", data=pdf_bytes_saz, file_name=f"Acompanhamento Gerencial - Sazonalidade {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_saz")
+                else:
+                    st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_saz_disabled")
 
     _foi_primeira_carga_saz = "df_saz_hist" not in st.session_state
     if _foi_primeira_carga_saz or btn_saz:
@@ -1266,25 +1287,26 @@ with tab_compras:
     if st.session_state["fornecedor_compras"] != "Todos" and st.session_state["fornecedor_compras"] not in lista_fornecedores:
         st.session_state["fornecedor_compras"] = "Todos"
 
-    c1, c2, c3, c4, c_acoes = st.columns([1, 1, 1.2, 1.5, 2.5], vertical_alignment="bottom")
-    data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
-    data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
-    filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
-    fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
+    with st.container(border=True):
+        c1, c2, c3, c4, c_acoes = st.columns([1, 1, 1.2, 1.5, 2.5], vertical_alignment="bottom")
+        data_ini_c = c1.date_input("De:", key="dt_ini_compras", format="DD/MM/YYYY")
+        data_fim_c = c2.date_input("Até:", key="dt_fim_compras", format="DD/MM/YYYY")
+        filial_c_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_compras")
+        fornecedor_sel = c4.selectbox("Fornecedor:", ["Todos"] + lista_fornecedores, key="fornecedor_compras")
 
-    with c_acoes:
-        col_b1, col_b2, col_b3 = st.columns(3)
-        with col_b1:
-            btn_compras = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_compras")
-        with col_b2:
-            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_compras, key="btn_limpar_compras")
-        with col_b3:
-            pdf_bytes_comp = st.session_state.get("pdf_bytes_comp")
-            if pdf_bytes_comp:
-                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_comp, file_name=f"Acompanhamento Gerencial - Compras {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_compras")
-            else:
-                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_compras_disabled")
+        with c_acoes:
+            col_b1, col_b2, col_b3 = st.columns(3)
+            with col_b1:
+                btn_compras = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_compras")
+            with col_b2:
+                st.button("🧹 Limpar", use_container_width=True, on_click=limpar_compras, key="btn_limpar_compras")
+            with col_b3:
+                pdf_bytes_comp = st.session_state.get("pdf_bytes_comp")
+                if pdf_bytes_comp:
+                    ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                    st.download_button(label="📄 Gerar PDF", data=pdf_bytes_comp, file_name=f"Acompanhamento Gerencial - Compras {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_compras")
+                else:
+                    st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_compras_disabled")
 
     _foi_primeira_carga_compras = "df_compras" not in st.session_state
     if _foi_primeira_carga_compras or btn_compras:
@@ -1364,24 +1386,25 @@ with tab_transferencias:
     if "dt_fim_transf" not in st.session_state: st.session_state["dt_fim_transf"] = date(hoje.year, 12, 31)
     if "filial_origem_transf" not in st.session_state: st.session_state["filial_origem_transf"] = "Todas"
 
-    c1, c2, c3, c_acoes = st.columns([1, 1, 1.2, 2.5], vertical_alignment="bottom")
-    data_ini_tr = c1.date_input("De:", key="dt_ini_transf", format="DD/MM/YYYY")
-    data_fim_tr = c2.date_input("Até:", key="dt_fim_transf", format="DD/MM/YYYY")
-    filial_tr_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_origem_transf")
+    with st.container(border=True):
+        c1, c2, c3, c_acoes = st.columns([1, 1, 1.2, 2.5], vertical_alignment="bottom")
+        data_ini_tr = c1.date_input("De:", key="dt_ini_transf", format="DD/MM/YYYY")
+        data_fim_tr = c2.date_input("Até:", key="dt_fim_transf", format="DD/MM/YYYY")
+        filial_tr_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_origem_transf")
 
-    with c_acoes:
-        col_b1, col_b2, col_b3 = st.columns(3)
-        with col_b1:
-            btn_transf = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_transf")
-        with col_b2:
-            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_transferencias, key="btn_limpar_transf")
-        with col_b3:
-            pdf_bytes_tr = st.session_state.get("pdf_bytes_transf")
-            if pdf_bytes_tr:
-                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_tr, file_name=f"Acompanhamento Gerencial - Transferencias {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_transf")
-            else:
-                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_transf_disabled")
+        with c_acoes:
+            col_b1, col_b2, col_b3 = st.columns(3)
+            with col_b1:
+                btn_transf = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_transf")
+            with col_b2:
+                st.button("🧹 Limpar", use_container_width=True, on_click=limpar_transferencias, key="btn_limpar_transf")
+            with col_b3:
+                pdf_bytes_tr = st.session_state.get("pdf_bytes_transf")
+                if pdf_bytes_tr:
+                    ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                    st.download_button(label="📄 Gerar PDF", data=pdf_bytes_tr, file_name=f"Acompanhamento Gerencial - Transferencias {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_transf")
+                else:
+                    st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_transf_disabled")
 
     _foi_primeira_carga_transf = "df_transf" not in st.session_state
     if _foi_primeira_carga_transf or btn_transf:
@@ -1559,23 +1582,24 @@ with tab_tributos:
     if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
-    c1, c2, c_acoes = st.columns([1, 1, 2.5], vertical_alignment="bottom")
-    data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
-    data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
+    with st.container(border=True):
+        c1, c2, c_acoes = st.columns([1, 1, 2.5], vertical_alignment="bottom")
+        data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
+        data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
 
-    with c_acoes:
-        col_b1, col_b2, col_b3 = st.columns(3)
-        with col_b1:
-            btn_atualizar_trib = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_trib")
-        with col_b2:
-            st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos, key="btn_limpar_trib")
-        with col_b3:
-            pdf_bytes_t = st.session_state.get("pdf_bytes_trib")
-            if pdf_bytes_t:
-                ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                st.download_button(label="📄 Gerar PDF", data=pdf_bytes_t, file_name=f"Acompanhamento Gerencial - Tributos {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_trib")
-            else:
-                st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_trib_disabled")
+        with c_acoes:
+            col_b1, col_b2, col_b3 = st.columns(3)
+            with col_b1:
+                btn_atualizar_trib = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_trib")
+            with col_b2:
+                st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos, key="btn_limpar_trib")
+            with col_b3:
+                pdf_bytes_t = st.session_state.get("pdf_bytes_trib")
+                if pdf_bytes_t:
+                    ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
+                    st.download_button(label="📄 Gerar PDF", data=pdf_bytes_t, file_name=f"Acompanhamento Gerencial - Tributos {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_trib")
+                else:
+                    st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_trib_disabled")
 
     _foi_primeira_carga_trib = "df_trib" not in st.session_state
     if _foi_primeira_carga_trib or btn_atualizar_trib:
