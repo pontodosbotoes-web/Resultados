@@ -1223,7 +1223,32 @@ with tab_sazonalidade:
             if df_idx.empty:
                 st.info("Sem dados para o período.")
                 return
-            styled = df_idx.style.format(fmt_func).map(cor_func)
+                
+            df_display = df_idx.copy()
+            
+            # Calcula o melhor e o pior resultado de cada filial (ignorando a coluna Total)
+            max_vals = df_idx.drop(columns=["Total"], errors="ignore").max()
+            min_vals = df_idx.drop(columns=["Total"], errors="ignore").min()
+
+            def fmt_val(val, row_name, col_name):
+                if pd.isna(val): return "-"
+                txt = fmt_func(val)
+                
+                # Adiciona os emojis de melhor e pior
+                if col_name in max_vals and col_name in min_vals:
+                    if val == max_vals[col_name]:
+                        txt += " 🏆"
+                    elif val == min_vals[col_name]:
+                        txt += " 🍍"
+                return txt
+
+            for col in df_display.columns:
+                df_display[col] = df_display.apply(lambda row: fmt_val(row[col], row.name, col), axis=1)
+
+            def apply_colors(row):
+                return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
+
+            styled = df_display.style.apply(apply_colors, axis=1)
             styled = styled.set_properties(**{'text-align': 'right'})
             st.dataframe(styled, use_container_width=True)
             
@@ -1234,15 +1259,27 @@ with tab_sazonalidade:
                 return
             
             df_display = df_idx.copy()
+            
+            # Calcula o melhor e o pior resultado de cada filial (ignorando a coluna Total)
+            max_vals = df_idx.drop(columns=["Total"], errors="ignore").max()
+            min_vals = df_idx.drop(columns=["Total"], errors="ignore").min()
 
-            def fmt_with_pct(val, total):
+            def fmt_with_pct(val, total, row_name, col_name):
                 if pd.isna(val) or val == 0: return "-"
                 pct = ((val / total) - 1) * 100 if total > 0 else 0
-                return f"{val:.4f} ({pct:+.2f}%)".replace(".", ",")
+                txt = f"{val:.4f} ({pct:+.2f}%)".replace(".", ",")
+                
+                # Adiciona os emojis de melhor e pior
+                if col_name in max_vals and col_name in min_vals:
+                    if val == max_vals[col_name]:
+                        txt += " 🏆"
+                    elif val == min_vals[col_name]:
+                        txt += " 🍍"
+                return txt
 
             for col in df_display.columns:
                 if col != "Total":
-                    df_display[col] = df_display.apply(lambda row: fmt_with_pct(row[col], row["Total"]), axis=1)
+                    df_display[col] = df_display.apply(lambda row: fmt_with_pct(row[col], row["Total"], row.name, col), axis=1)
                 else:
                     df_display[col] = df_display[col].apply(lambda x: f"{x:.4f}".replace(".", ",") if not pd.isna(x) else "-")
 
