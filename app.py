@@ -831,8 +831,9 @@ def calcular_indices_sazonalidade_hora(df):
     return df_idx
     
 def calcular_indices_sazonalidade_diautil(df):
-    # Usa 21 como multiplicador base (média de dias úteis no mês)
-    df_idx = _calc_idx_generic(df, "DiaUtil", range(1, 24), 21)
+    # Usa 26 como multiplicador base (média de dias úteis seg-sáb no mês)
+    # O range vai até 28 porque um mês pode ter até 27 dias úteis.
+    df_idx = _calc_idx_generic(df, "DiaUtil", range(1, 28), 26)
     if not df_idx.empty:
         df_idx.index = [f"{d}º Dia" for d in df_idx.index]
         df_idx.index.name = "Dia Útil"
