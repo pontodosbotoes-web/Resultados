@@ -1118,13 +1118,17 @@ with tab_sazonalidade:
     if _foi_primeira_carga_saz or btn_saz:
         try:
             with st.spinner("Carregando dados de sazonalidade..."):
-                df_hist = buscar_sazonalidade("1900-01-01", "2100-12-31", h_ini_saz.hour, h_fim_saz.hour, "")
+                # Define o período do histórico: últimos 5 anos até hoje
+                data_hist_ini = (hoje - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
+                data_hist_fim = hoje.strftime("%Y-%m-%d")
+
+                df_hist = buscar_sazonalidade(data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
                 df_periodo = buscar_sazonalidade(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
 
-                df_hist_hora = buscar_sazonalidade_hora("1900-01-01", "2100-12-31", h_ini_saz.hour, h_fim_saz.hour, "")
+                df_hist_hora = buscar_sazonalidade_hora(data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
                 df_periodo_hora = buscar_sazonalidade_hora(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
 
-                df_hist_diautil = buscar_sazonalidade_diautil("1900-01-01", "2100-12-31", "")
+                df_hist_diautil = buscar_sazonalidade_diautil(data_hist_ini, data_hist_fim, "")
                 df_periodo_diautil = buscar_sazonalidade_diautil(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), "")
 
                 df_hist_idx = calcular_indices_sazonalidade(df_hist)
