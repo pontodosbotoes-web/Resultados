@@ -146,7 +146,6 @@ st.markdown("""
             gap: 6px !important;
         }
         
-        /* Impede que o texto do label quebre no meio e força ele a não encolher */
         div[data-testid="stWidgetLabel"] {
             margin-bottom: 0px !important;
             white-space: nowrap !important;
@@ -160,7 +159,6 @@ st.markdown("""
             font-weight: 600 !important;
         }
 
-        /* Garante que o campo de seleção ocupe o espaço restante sem estourar */
         div[data-testid="stDateInput"] > div,
         div[data-testid="stTimeInput"] > div,
         div[data-testid="stSelectbox"] > div {
@@ -168,7 +166,6 @@ st.markdown("""
             min-width: 0 !important;
         }
         
-        /* Alinha os botões de ação com os inputs, ignorando a altura do label */
         div[data-testid="stHorizontalBlock"] > div:last-child {
             align-self: flex-end;
             padding-bottom: 2px;
@@ -224,7 +221,7 @@ def limpar_sazonalidade():
     for k in ["df_saz_hist", "df_saz_periodo", "df_saz_comparativo", 
               "df_saz_hist_hora", "df_saz_periodo_hora", "df_saz_comp_hora", 
               "df_saz_hist_diautil", "df_saz_periodo_diautil", "df_saz_comp_diautil", 
-              "pdf_bytes_saz"]:
+              "pdf_bytes_saz", "saz_hist_hash"]:
         if k in st.session_state: del st.session_state[k]
 
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
@@ -970,8 +967,7 @@ with tab_visao:
                 else:
                     st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_vendas_disabled")
 
-    _foi_primeira_carga_visao = "df_vendas" not in st.session_state
-    if _foi_primeira_carga_visao or btn_atualizar:
+    if btn_atualizar:
         filial_cod = "" if filial_sel == "Todas" else filiais_inv[filial_sel]
         try:
             with st.spinner("Carregando dados..."):
@@ -988,104 +984,106 @@ with tab_visao:
             st.error(f"Erro ao carregar dados de vendas: {e}")
             st.stop()
 
-    if _foi_primeira_carga_visao: st.rerun()
-
-    df_vendas = st.session_state.get("df_vendas", pd.DataFrame())
-    df_depto = st.session_state.get("df_depto_vendas", pd.DataFrame())
-    df_pag = st.session_state.get("df_pag_vendas", pd.DataFrame())
-
-    if df_vendas.empty:
-        st.info("Nenhum dado encontrado para os filtros selecionados.")
+    # RENDERIZAÇÃO
+    if "df_vendas" not in st.session_state:
+        st.info("👋 Clique em '🔄 Atualizar' acima para carregar os dados de vendas.")
     else:
-        labels_h = sorted(df_vendas["Hora"].unique().tolist())
-        tot_vendas = df_vendas["ValorVenda"].sum()
-        tot_trans = df_vendas["QtdVendas"].sum()
-        tot_itens = df_vendas["QtdItens"].sum()
-        temas = [
-            {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#3b82f6", "fmt": "moeda", "pct": "participacao"},
-            {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#10b981", "fmt": "inteiro", "pct": "participacao"},
-            {"id": "ticket", "titulo": "Ticket Médio", "icone": "🎫", "total": (tot_vendas / tot_trans if tot_trans else 0), "col": "Ticket", "cor": "#f59e0b", "fmt": "moeda", "pct": "variacao"},
-            {"id": "itens", "titulo": "Itens", "icone": "📦", "total": tot_itens, "col": "QtdItens", "cor": "#8b5cf6", "fmt": "decimal", "pct": "participacao"},
-            {"id": "itens_venda", "titulo": "Itens por Venda (R$/item)", "icone": "💰", "total": (tot_vendas / tot_itens if tot_itens else 0), "col": "ItensVenda", "cor": "#14b8a6", "fmt": "moeda", "pct": "variacao"},
-            {"id": "itens_trans", "titulo": "Itens por Transação", "icone": "📊", "total": (tot_itens / tot_trans if tot_trans else 0), "col": "ItensTrans", "cor": "#ec4899", "fmt": "decimal", "pct": "variacao"},
-        ]
-        for t in temas:
-            itens_filial = []
-            for cod, nome in NOMES_FILIAIS.items():
-                df_f = df_vendas[df_vendas["CodFilial"] == cod]
-                v_vendas = df_f["ValorVenda"].sum(); v_trans = df_f["QtdVendas"].sum(); v_itens = df_f["QtdItens"].sum()
-                if t["col"] == "ValorVenda": val = v_vendas
-                elif t["col"] == "QtdVendas": val = v_trans
-                elif t["col"] == "QtdItens": val = v_itens
-                elif t["col"] == "Ticket": val = (v_vendas / v_trans if v_trans else 0)
-                elif t["col"] == "ItensVenda": val = (v_vendas / v_itens if v_itens else 0)
-                elif t["col"] == "ItensTrans": val = (v_itens / v_trans if v_trans else 0)
-                h_list = []
+        df_vendas = st.session_state.get("df_vendas", pd.DataFrame())
+        df_depto = st.session_state.get("df_depto_vendas", pd.DataFrame())
+        df_pag = st.session_state.get("df_pag_vendas", pd.DataFrame())
+
+        if df_vendas.empty:
+            st.info("Nenhum dado encontrado para os filtros selecionados.")
+        else:
+            labels_h = sorted(df_vendas["Hora"].unique().tolist())
+            tot_vendas = df_vendas["ValorVenda"].sum()
+            tot_trans = df_vendas["QtdVendas"].sum()
+            tot_itens = df_vendas["QtdItens"].sum()
+            temas = [
+                {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#3b82f6", "fmt": "moeda", "pct": "participacao"},
+                {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#10b981", "fmt": "inteiro", "pct": "participacao"},
+                {"id": "ticket", "titulo": "Ticket Médio", "icone": "🎫", "total": (tot_vendas / tot_trans if tot_trans else 0), "col": "Ticket", "cor": "#f59e0b", "fmt": "moeda", "pct": "variacao"},
+                {"id": "itens", "titulo": "Itens", "icone": "📦", "total": tot_itens, "col": "QtdItens", "cor": "#8b5cf6", "fmt": "decimal", "pct": "participacao"},
+                {"id": "itens_venda", "titulo": "Itens por Venda (R$/item)", "icone": "💰", "total": (tot_vendas / tot_itens if tot_itens else 0), "col": "ItensVenda", "cor": "#14b8a6", "fmt": "moeda", "pct": "variacao"},
+                {"id": "itens_trans", "titulo": "Itens por Transação", "icone": "📊", "total": (tot_itens / tot_trans if tot_trans else 0), "col": "ItensTrans", "cor": "#ec4899", "fmt": "decimal", "pct": "variacao"},
+            ]
+            for t in temas:
+                itens_filial = []
+                for cod, nome in NOMES_FILIAIS.items():
+                    df_f = df_vendas[df_vendas["CodFilial"] == cod]
+                    v_vendas = df_f["ValorVenda"].sum(); v_trans = df_f["QtdVendas"].sum(); v_itens = df_f["QtdItens"].sum()
+                    if t["col"] == "ValorVenda": val = v_vendas
+                    elif t["col"] == "QtdVendas": val = v_trans
+                    elif t["col"] == "QtdItens": val = v_itens
+                    elif t["col"] == "Ticket": val = (v_vendas / v_trans if v_trans else 0)
+                    elif t["col"] == "ItensVenda": val = (v_vendas / v_itens if v_itens else 0)
+                    elif t["col"] == "ItensTrans": val = (v_itens / v_trans if v_trans else 0)
+                    h_list = []
+                    for h in labels_h:
+                        df_fh = df_f[df_f["Hora"] == h]
+                        h_vendas = df_fh["ValorVenda"].sum(); h_trans = df_fh["QtdVendas"].sum(); h_itens = df_fh["QtdItens"].sum()
+                        if t["col"] == "ValorVenda": hv = h_vendas
+                        elif t["col"] == "QtdVendas": hv = h_trans
+                        elif t["col"] == "QtdItens": hv = h_itens
+                        elif t["col"] == "Ticket": hv = (h_vendas / h_trans if h_trans else 0)
+                        elif t["col"] == "ItensVenda": hv = (h_vendas / h_itens if h_itens else 0)
+                        elif t["col"] == "ItensTrans": hv = (h_itens / h_trans if h_trans else 0)
+                        h_list.append(hv)
+                    itens_filial.append({"nome": nome, "valor": val, "horas": h_list})
+                cons_horas = []
                 for h in labels_h:
-                    df_fh = df_f[df_f["Hora"] == h]
-                    h_vendas = df_fh["ValorVenda"].sum(); h_trans = df_fh["QtdVendas"].sum(); h_itens = df_fh["QtdItens"].sum()
-                    if t["col"] == "ValorVenda": hv = h_vendas
-                    elif t["col"] == "QtdVendas": hv = h_trans
-                    elif t["col"] == "QtdItens": hv = h_itens
-                    elif t["col"] == "Ticket": hv = (h_vendas / h_trans if h_trans else 0)
-                    elif t["col"] == "ItensVenda": hv = (h_vendas / h_itens if h_itens else 0)
-                    elif t["col"] == "ItensTrans": hv = (h_itens / h_trans if h_trans else 0)
-                    h_list.append(hv)
-                itens_filial.append({"nome": nome, "valor": val, "horas": h_list})
-            cons_horas = []
-            for h in labels_h:
-                df_h = df_vendas[df_vendas["Hora"] == h]
-                h_v = df_h["ValorVenda"].sum(); h_t = df_h["QtdVendas"].sum(); h_i = df_h["QtdItens"].sum()
-                if t["col"] == "ValorVenda": hv = h_v
-                elif t["col"] == "QtdVendas": hv = h_t
-                elif t["col"] == "QtdItens": hv = h_i
-                elif t["col"] == "Ticket": hv = (h_v / h_t if h_t else 0)
-                elif t["col"] == "ItensVenda": hv = (h_v / h_i if h_i else 0)
-                elif t["col"] == "ItensTrans": hv = (h_i / h_t if h_t else 0)
-                cons_horas.append(hv)
-            dados_tema = {"total": t["total"], "porFilial": itens_filial, "labelsHoras": labels_h, "horasConsolidado": cons_horas}
-            renderizar_tema(t["titulo"], t["icone"], dados_tema, t["col"], t["cor"], t["pct"], t["fmt"], "porFilial", is_filial=True)
+                    df_h = df_vendas[df_vendas["Hora"] == h]
+                    h_v = df_h["ValorVenda"].sum(); h_t = df_h["QtdVendas"].sum(); h_i = df_h["QtdItens"].sum()
+                    if t["col"] == "ValorVenda": hv = h_v
+                    elif t["col"] == "QtdVendas": hv = h_t
+                    elif t["col"] == "QtdItens": hv = h_i
+                    elif t["col"] == "Ticket": hv = (h_v / h_t if h_t else 0)
+                    elif t["col"] == "ItensVenda": hv = (h_v / h_i if h_i else 0)
+                    elif t["col"] == "ItensTrans": hv = (h_i / h_t if h_t else 0)
+                    cons_horas.append(hv)
+                dados_tema = {"total": t["total"], "porFilial": itens_filial, "labelsHoras": labels_h, "horasConsolidado": cons_horas}
+                renderizar_tema(t["titulo"], t["icone"], dados_tema, t["col"], t["cor"], t["pct"], t["fmt"], "porFilial", is_filial=True)
 
-        if not df_depto.empty:
-            labels_depto = sorted(df_depto["Hora"].unique().tolist())
-            tot_depto = df_depto["ValorVenda"].sum()
-            itens_depto = []
-            for depto_nome in df_depto["NomeDepto"].unique():
-                df_d = df_depto[df_depto["NomeDepto"] == depto_nome]
-                val = df_d["ValorVenda"].sum()
-                horas = [df_d[df_d["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
-                itens_depto.append({"nome": depto_nome, "valor": val, "horas": horas})
-            itens_depto = sorted(itens_depto, key=lambda x: x["valor"], reverse=True)
-            cons_horas_d = [df_depto[df_depto["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
-            dados_d = {"total": tot_depto, "departamentos": itens_depto, "labelsHoras": labels_depto, "horasConsolidado": cons_horas_d}
-            renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#0ea5e9", "participacao", "moeda", "departamentos", is_filial=False)
+            if not df_depto.empty:
+                labels_depto = sorted(df_depto["Hora"].unique().tolist())
+                tot_depto = df_depto["ValorVenda"].sum()
+                itens_depto = []
+                for depto_nome in df_depto["NomeDepto"].unique():
+                    df_d = df_depto[df_depto["NomeDepto"] == depto_nome]
+                    val = df_d["ValorVenda"].sum()
+                    horas = [df_d[df_d["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
+                    itens_depto.append({"nome": depto_nome, "valor": val, "horas": horas})
+                itens_depto = sorted(itens_depto, key=lambda x: x["valor"], reverse=True)
+                cons_horas_d = [df_depto[df_depto["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
+                dados_d = {"total": tot_depto, "departamentos": itens_depto, "labelsHoras": labels_depto, "horasConsolidado": cons_horas_d}
+                renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#0ea5e9", "participacao", "moeda", "departamentos", is_filial=False)
 
-        if not df_pag.empty:
-            labels_pag = sorted(df_pag["Hora"].unique().tolist())
-            tot_pag = df_pag["Valor"].sum()
-            itens_pag = []
-            for form in df_pag["Denominacao"].unique():
-                df_p = df_pag[df_pag["Denominacao"] == form]
-                val = df_p["Valor"].sum()
-                horas = [df_p[df_p["Hora"] == h]["Valor"].sum() for h in labels_pag]
-                itens_pag.append({"nome": form, "valor": val, "horas": horas})
-            itens_pag = sorted(itens_pag, key=lambda x: x["valor"], reverse=True)
-            cons_horas_p = [df_pag[df_pag["Hora"] == h]["Valor"].sum() for h in labels_pag]
-            dados_p = {"total": tot_pag, "porForma": itens_pag, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_p}
-            renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#f97316", "participacao", "moeda", "porForma", is_filial=False)
+            if not df_pag.empty:
+                labels_pag = sorted(df_pag["Hora"].unique().tolist())
+                tot_pag = df_pag["Valor"].sum()
+                itens_pag = []
+                for form in df_pag["Denominacao"].unique():
+                    df_p = df_pag[df_pag["Denominacao"] == form]
+                    val = df_p["Valor"].sum()
+                    horas = [df_p[df_p["Hora"] == h]["Valor"].sum() for h in labels_pag]
+                    itens_pag.append({"nome": form, "valor": val, "horas": horas})
+                itens_pag = sorted(itens_pag, key=lambda x: x["valor"], reverse=True)
+                cons_horas_p = [df_pag[df_pag["Hora"] == h]["Valor"].sum() for h in labels_pag]
+                dados_p = {"total": tot_pag, "porForma": itens_pag, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_p}
+                renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#f97316", "participacao", "moeda", "porForma", is_filial=False)
 
-            df_pag_port = df_pag.dropna(subset=["NomePortador"])
-            if not df_pag_port.empty:
-                itens_port = []
-                for port in df_pag_port["NomePortador"].unique():
-                    df_pt = df_pag_port[df_pag_port["NomePortador"] == port]
-                    val = df_pt["Valor"].sum()
-                    horas = [df_pt[df_pt["Hora"] == h]["Valor"].sum() for h in labels_pag]
-                    itens_port.append({"nome": port, "valor": val, "horas": horas})
-                itens_port = sorted(itens_port, key=lambda x: x["valor"], reverse=True)
-                cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
-                dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
-                renderizar_tema("Portador", "👤", dados_pt, "Valor", "#ef4444", "participacao", "moeda", "porPortador", is_filial=False)
+                df_pag_port = df_pag.dropna(subset=["NomePortador"])
+                if not df_pag_port.empty:
+                    itens_port = []
+                    for port in df_pag_port["NomePortador"].unique():
+                        df_pt = df_pag_port[df_pag_port["NomePortador"] == port]
+                        val = df_pt["Valor"].sum()
+                        horas = [df_pt[df_pt["Hora"] == h]["Valor"].sum() for h in labels_pag]
+                        itens_port.append({"nome": port, "valor": val, "horas": horas})
+                    itens_port = sorted(itens_port, key=lambda x: x["valor"], reverse=True)
+                    cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
+                    dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
+                    renderizar_tema("Portador", "👤", dados_pt, "Valor", "#ef4444", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
 # ABA SAZONALIDADE
@@ -1117,47 +1115,41 @@ with tab_sazonalidade:
                 else:
                     st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_saz_disabled")
 
-    # 1. Verifica se o filtro de hora mudou. Se mudou, o histórico precisa ser recalculado.
-    hist_hash = f"{h_ini_saz.hour}_{h_fim_saz.hour}"
-    _recalcular_hist = st.session_state.get("saz_hist_hash") != hist_hash or "df_saz_hist" not in st.session_state
-    
-    if _recalcular_hist:
+    # OTIMIZAÇÃO MÁXIMA: Só carrega se clicar em Atualizar
+    if btn_saz:
         try:
-            with st.spinner("Carregando histórico (últimos 5 anos)..."):
+            with st.spinner("Carregando dados de sazonalidade..."):
                 data_hist_ini = (hoje - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
                 data_hist_fim = hoje.strftime("%Y-%m-%d")
 
-                df_hist = buscar_sazonalidade(data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
-                df_hist_hora = buscar_sazonalidade_hora(data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
-                df_hist_diautil = buscar_sazonalidade_diautil(data_hist_ini, data_hist_fim, "")
+                # 1. Verifica se o filtro de hora mudou. Se mudou, o histórico precisa ser recalculado.
+                hist_hash = f"{h_ini_saz.hour}_{h_fim_saz.hour}"
+                _recalcular_hist = st.session_state.get("saz_hist_hash") != hist_hash or "df_saz_hist" not in st.session_state
 
-                st.session_state["df_saz_hist"] = calcular_indices_sazonalidade(df_hist)
-                st.session_state["df_saz_hist_hora"] = calcular_indices_sazonalidade_hora(df_hist_hora)
-                st.session_state["df_saz_hist_diautil"] = calcular_indices_sazonalidade_diautil(df_hist_diautil)
-                st.session_state["saz_hist_hash"] = hist_hash
-                st.session_state["pdf_bytes_saz"] = None # Força atualização do PDF
-        except Exception as e:
-            st.error(f"Erro ao carregar histórico de sazonalidade: {e}")
-            st.stop()
+                if _recalcular_hist:
+                    df_hist = buscar_sazonalidade(data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
+                    df_hist_hora = buscar_sazonalidade_hora(data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
+                    df_hist_diautil = buscar_sazonalidade_diautil(data_hist_ini, data_hist_fim, "")
 
-    # 2. Carrega o Período (se for a primeira carga ou se clicar em Atualizar)
-    _foi_primeira_carga_saz = "df_saz_periodo" not in st.session_state
-    if _foi_primeira_carga_saz or btn_saz:
-        try:
-            with st.spinner("Carregando período selecionado..."):
+                    st.session_state["df_saz_hist"] = calcular_indices_sazonalidade(df_hist)
+                    st.session_state["df_saz_hist_hora"] = calcular_indices_sazonalidade_hora(df_hist_hora)
+                    st.session_state["df_saz_hist_diautil"] = calcular_indices_sazonalidade_diautil(df_hist_diautil)
+                    st.session_state["saz_hist_hash"] = hist_hash
+                    
+                # 2. Busca o período
                 df_periodo = buscar_sazonalidade(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
                 df_periodo_hora = buscar_sazonalidade_hora(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
                 df_periodo_diautil = buscar_sazonalidade_diautil(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), "")
+
+                df_hist_idx = st.session_state["df_saz_hist"]
+                df_hist_hora_idx = st.session_state["df_saz_hist_hora"]
+                df_hist_diautil_idx = st.session_state["df_saz_hist_diautil"]
 
                 df_periodo_idx = calcular_indices_sazonalidade(df_periodo)
                 df_periodo_hora_idx = calcular_indices_sazonalidade_hora(df_periodo_hora)
                 df_periodo_diautil_idx = calcular_indices_sazonalidade_diautil(df_periodo_diautil)
 
-                # Busca os históricos direto da memória
-                df_hist_idx = st.session_state["df_saz_hist"]
-                df_hist_hora_idx = st.session_state["df_saz_hist_hora"]
-                df_hist_diautil_idx = st.session_state["df_saz_hist_diautil"]
-
+                # 3. Gera os comparativos
                 if not df_hist_idx.empty and not df_periodo_idx.empty:
                     df_comparativo = ((df_periodo_idx / df_hist_idx) - 1) * 100
                     df_comparativo = df_comparativo.replace([float("inf"), -float("inf")], None).round(2)
@@ -1183,7 +1175,6 @@ with tab_sazonalidade:
                 st.session_state["df_saz_periodo_diautil"] = df_periodo_diautil_idx
                 st.session_state["df_saz_comp_diautil"] = df_comp_diautil
 
-                # Gera o PDF (usando o histórico da memória)
                 if not df_hist_idx.empty and not df_periodo_idx.empty:
                     st.session_state["pdf_bytes_saz"] = gerar_pdf_sazonalidade(
                         df_hist_idx, df_periodo_idx, df_comparativo, 
@@ -1194,183 +1185,165 @@ with tab_sazonalidade:
                 else:
                     st.session_state["pdf_bytes_saz"] = None
         except Exception as e:
-            st.error(f"Erro ao carregar período de sazonalidade: {e}")
+            st.error(f"Erro ao carregar sazonalidade: {e}")
             st.stop()
 
-    if _foi_primeira_carga_saz: st.rerun()
-
-    df_hist_idx = st.session_state.get("df_saz_hist", pd.DataFrame())
-    df_periodo_idx = st.session_state.get("df_saz_periodo", pd.DataFrame())
-    df_comparativo = st.session_state.get("df_saz_comparativo", pd.DataFrame())
-    df_hist_hora_idx = st.session_state.get("df_saz_hist_hora", pd.DataFrame())
-    df_periodo_hora_idx = st.session_state.get("df_saz_periodo_hora", pd.DataFrame())
-    df_comp_hora = st.session_state.get("df_saz_comp_hora", pd.DataFrame())
-    df_hist_diautil_idx = st.session_state.get("df_saz_hist_diautil", pd.DataFrame())
-    df_periodo_diautil_idx = st.session_state.get("df_saz_periodo_diautil", pd.DataFrame())
-    df_comp_diautil = st.session_state.get("df_saz_comp_diautil", pd.DataFrame())
-
-    if df_hist_idx.empty and df_periodo_idx.empty:
-        st.info("Nenhum dado de vendas encontrado.")
+    # RENDERIZAÇÃO
+    if "df_saz_hist" not in st.session_state:
+        st.info("👋 Clique em '🔄 Atualizar' acima para carregar a sazonalidade.")
     else:
-        def _cor_idx(v):
-            if pd.isna(v): return ""
-            if v > 1.05: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
-            if v > 1.025: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
-            if v >= 0.975: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"
-            if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
-            return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
+        df_hist_idx = st.session_state.get("df_saz_hist", pd.DataFrame())
+        df_periodo_idx = st.session_state.get("df_saz_periodo", pd.DataFrame())
+        df_comparativo = st.session_state.get("df_saz_comparativo", pd.DataFrame())
+        df_hist_hora_idx = st.session_state.get("df_saz_hist_hora", pd.DataFrame())
+        df_periodo_hora_idx = st.session_state.get("df_saz_periodo_hora", pd.DataFrame())
+        df_comp_hora = st.session_state.get("df_saz_comp_hora", pd.DataFrame())
+        df_hist_diautil_idx = st.session_state.get("df_saz_hist_diautil", pd.DataFrame())
+        df_periodo_diautil_idx = st.session_state.get("df_saz_periodo_diautil", pd.DataFrame())
+        df_comp_diautil = st.session_state.get("df_saz_comp_diautil", pd.DataFrame())
 
-        def _cor_hora_idx(v):
-            if pd.isna(v): return ""
-            if v >= 3.00: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
-            if v >= 2.00: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
-            if v >= 1.00: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"
-            if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
-            return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
+        if df_hist_idx.empty and df_periodo_idx.empty:
+            st.info("Nenhum dado de vendas encontrado.")
+        else:
+            def _cor_idx(v):
+                if pd.isna(v): return ""
+                if v > 1.05: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
+                if v > 1.025: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
+                if v >= 0.975: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"
+                if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
+                return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
 
-        def _cor_comp(v):
-            if pd.isna(v): return ""
-            if v >= 5.0: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
-            if v >= 2.5: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
-            if v > -2.5: return "background-color: #f1f5f9; color: #475569; font-weight: 600;"
-            if v > -5.0: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
-            return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
+            def _cor_hora_idx(v):
+                if pd.isna(v): return ""
+                if v >= 3.00: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
+                if v >= 2.00: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
+                if v >= 1.00: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"
+                if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
+                return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
 
-        def _render(df_idx, titulo, fmt_func, cor_func):
-            st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
-            if df_idx.empty:
-                st.info("Sem dados para o período.")
-                return
+            def _cor_comp(v):
+                if pd.isna(v): return ""
+                if v >= 5.0: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
+                if v >= 2.5: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
+                if v > -2.5: return "background-color: #f1f5f9; color: #475569; font-weight: 600;"
+                if v > -5.0: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
+                return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
+
+            def _render(df_idx, titulo, fmt_func, cor_func):
+                st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
+                if df_idx.empty:
+                    st.info("Sem dados para o período.")
+                    return
+                    
+                df_display = df_idx.copy()
+                max_vals = df_idx.drop(columns=["Total"], errors="ignore").max()
+                min_vals = df_idx.drop(columns=["Total"], errors="ignore").min()
+
+                def fmt_val(val, row_name, col_name):
+                    if pd.isna(val): return "-"
+                    txt = fmt_func(val)
+                    if col_name in max_vals and col_name in min_vals:
+                        if val == max_vals[col_name]:
+                            txt += " 🏆"
+                        elif val == min_vals[col_name]:
+                            txt += " 🍍"
+                    return txt
+
+                for col in df_display.columns:
+                    df_display[col] = df_display.apply(lambda row: fmt_val(row[col], row.name, col), axis=1)
+
+                def apply_colors(row):
+                    return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
+
+                styled = df_display.style.apply(apply_colors, axis=1)
+                styled = styled.set_properties(**{'text-align': 'right'})
+                st.dataframe(styled, use_container_width=True)
                 
-            df_display = df_idx.copy()
-            
-            # Calcula o melhor e o pior resultado de cada filial (ignorando a coluna Total)
-            max_vals = df_idx.drop(columns=["Total"], errors="ignore").max()
-            min_vals = df_idx.drop(columns=["Total"], errors="ignore").min()
-
-            def fmt_val(val, row_name, col_name):
-                if pd.isna(val): return "-"
-                txt = fmt_func(val)
+            def _render_com_pct(df_idx, titulo, cor_func):
+                st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
+                if df_idx.empty:
+                    st.info("Sem dados para o período.")
+                    return
                 
-                # Adiciona os emojis de melhor e pior
-                if col_name in max_vals and col_name in min_vals:
-                    if val == max_vals[col_name]:
-                        txt += " 🏆"
-                    elif val == min_vals[col_name]:
-                        txt += " 🍍"
-                return txt
+                df_display = df_idx.copy()
+                max_vals = df_idx.drop(columns=["Total"], errors="ignore").max()
+                min_vals = df_idx.drop(columns=["Total"], errors="ignore").min()
 
-            for col in df_display.columns:
-                df_display[col] = df_display.apply(lambda row: fmt_val(row[col], row.name, col), axis=1)
+                def fmt_with_pct(val, total, row_name, col_name):
+                    if pd.isna(val) or val == 0: return "-"
+                    pct = ((val / total) - 1) * 100 if total > 0 else 0
+                    txt = f"{val:.4f} ({pct:+.2f}%)".replace(".", ",")
+                    if col_name in max_vals and col_name in min_vals:
+                        if val == max_vals[col_name]:
+                            txt += " 🏆"
+                        elif val == min_vals[col_name]:
+                            txt += " 🍍"
+                    return txt
 
-            def apply_colors(row):
-                return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
+                for col in df_display.columns:
+                    if col != "Total":
+                        df_display[col] = df_display.apply(lambda row: fmt_with_pct(row[col], row["Total"], row.name, col), axis=1)
+                    else:
+                        df_display[col] = df_display[col].apply(lambda x: f"{x:.4f}".replace(".", ",") if not pd.isna(x) else "-")
 
-            styled = df_display.style.apply(apply_colors, axis=1)
-            styled = styled.set_properties(**{'text-align': 'right'})
-            st.dataframe(styled, use_container_width=True)
-            
-        def _render_com_pct(df_idx, titulo, cor_func):
-            st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
-            if df_idx.empty:
-                st.info("Sem dados para o período.")
-                return
-            
-            df_display = df_idx.copy()
-            
-            # Calcula o melhor e o pior resultado de cada filial (ignorando a coluna Total)
-            max_vals = df_idx.drop(columns=["Total"], errors="ignore").max()
-            min_vals = df_idx.drop(columns=["Total"], errors="ignore").min()
+                def apply_colors(row):
+                    return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
 
-            def fmt_with_pct(val, total, row_name, col_name):
-                if pd.isna(val) or val == 0: return "-"
-                pct = ((val / total) - 1) * 100 if total > 0 else 0
-                txt = f"{val:.4f} ({pct:+.2f}%)".replace(".", ",")
-                
-                # Adiciona os emojis de melhor e pior
-                if col_name in max_vals and col_name in min_vals:
-                    if val == max_vals[col_name]:
-                        txt += " 🏆"
-                    elif val == min_vals[col_name]:
-                        txt += " 🍍"
-                return txt
+                styled = df_display.style.apply(apply_colors, axis=1)
+                styled = styled.set_properties(**{'text-align': 'right'})
+                st.dataframe(styled, use_container_width=True)
 
-            for col in df_display.columns:
-                if col != "Total":
-                    df_display[col] = df_display.apply(lambda row: fmt_with_pct(row[col], row["Total"], row.name, col), axis=1)
-                else:
-                    df_display[col] = df_display[col].apply(lambda x: f"{x:.4f}".replace(".", ",") if not pd.isna(x) else "-")
+            legenda_dias = '''
+            <div class="legenda-container">
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > 1,05 (Melhor)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 1,025 a 1,05 (Crescendo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fef3c7;"></div> 0,975 a 1,025 (Normal)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 0,975 (Regredindo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < 0,95 (Pior)</div>
+            </div>
+            '''
+            legenda_horas = '''
+            <div class="legenda-container">
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > 3,00 (Melhor)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 2,00 a 3,00 (Crescendo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fef3c7;"></div> 1,00 a 2,00 (Normal)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 1,00 (Regredindo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < 0,95 (Pior)</div>
+            </div>
+            '''
+            legenda_comp = '''
+            <div class="legenda-container">
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > +5,0% (Melhor)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> +2,5% a +5,0% (Crescendo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#f1f5f9;"></div> -2,5% a +2,5% (Normal)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> -5,0% a -2,5% (Regredindo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < -5,0% (Pior)</div>
+            </div>
+            '''
 
-            def apply_colors(row):
-                return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
+            _render_com_pct(df_hist_idx, "📊 Índice de Sazonalidade (DIAS) — Histórico Completo", _cor_idx)
+            st.markdown(legenda_dias, unsafe_allow_html=True)
+            _render_com_pct(df_periodo_idx, f"📊 Índice de Sazonalidade (DIAS) — Período", _cor_idx)
+            st.markdown(legenda_dias, unsafe_allow_html=True)
+            _render(df_comparativo, "📈 Comparativo (DIAS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
+            st.markdown(legenda_comp, unsafe_allow_html=True)
+            st.markdown("---")
 
-            styled = df_display.style.apply(apply_colors, axis=1)
-            styled = styled.set_properties(**{'text-align': 'right'})
-            st.dataframe(styled, use_container_width=True)
+            _render_com_pct(df_hist_hora_idx, "🕒 Índice de Sazonalidade (HORAS) — Histórico Completo", _cor_hora_idx)
+            st.markdown(legenda_horas, unsafe_allow_html=True)
+            _render_com_pct(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período", _cor_hora_idx)
+            st.markdown(legenda_horas, unsafe_allow_html=True)
+            _render(df_comp_hora, "📈 Comparativo (HORAS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
+            st.markdown(legenda_comp, unsafe_allow_html=True)
+            st.markdown("---")
 
-        # DEFINIÇÃO DAS LEGENDAS HTML
-        legenda_dias = '''
-        <div class="legenda-container">
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > 1,05 (Melhor)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 1,025 a 1,05 (Crescendo)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fef3c7;"></div> 0,975 a 1,025 (Normal)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 0,975 (Regredindo)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < 0,95 (Pior)</div>
-        </div>
-        '''
-        legenda_horas = '''
-        <div class="legenda-container">
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > 3,00 (Melhor)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 2,00 a 3,00 (Crescendo)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fef3c7;"></div> 1,00 a 2,00 (Normal)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 1,00 (Regredindo)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < 0,95 (Pior)</div>
-        </div>
-        '''
-        legenda_comp = '''
-        <div class="legenda-container">
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > +5,0% (Melhor)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> +2,5% a +5,0% (Crescendo)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#f1f5f9;"></div> -2,5% a +2,5% (Normal)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> -5,0% a -2,5% (Regredindo)</div>
-            <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < -5,0% (Pior)</div>
-        </div>
-        '''
+            _render_com_pct(df_hist_diautil_idx, "📊 Índice de Sazonalidade (DIAS ÚTEIS) — Histórico Completo", _cor_idx)
+            st.markdown(legenda_dias, unsafe_allow_html=True)
+            _render_com_pct(df_periodo_diautil_idx, f"📊 Índice de Sazonalidade (DIAS ÚTEIS) — Período", _cor_idx)
+            st.markdown(legenda_dias, unsafe_allow_html=True)
+            _render(df_comp_diautil, "📈 Comparativo (DIAS ÚTEIS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
+            st.markdown(legenda_comp, unsafe_allow_html=True)
 
-        # --- TABELAS DE DIAS DA SEMANA ---
-        _render_com_pct(df_hist_idx, "📊 Índice de Sazonalidade (DIAS) — Histórico Completo", _cor_idx)
-        st.markdown(legenda_dias, unsafe_allow_html=True)
-        
-        _render_com_pct(df_periodo_idx, f"📊 Índice de Sazonalidade (DIAS) — Período", _cor_idx)
-        st.markdown(legenda_dias, unsafe_allow_html=True)
-        
-        _render(df_comparativo, "📈 Comparativo (DIAS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
-        st.markdown(legenda_comp, unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # --- TABELAS DE HORAS ---
-        _render_com_pct(df_hist_hora_idx, "🕒 Índice de Sazonalidade (HORAS) — Histórico Completo", _cor_hora_idx)
-        st.markdown(legenda_horas, unsafe_allow_html=True)
-        
-        _render_com_pct(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período", _cor_hora_idx)
-        st.markdown(legenda_horas, unsafe_allow_html=True)
-        
-        _render(df_comp_hora, "📈 Comparativo (HORAS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
-        st.markdown(legenda_comp, unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # --- TABELAS DE DIAS ÚTEIS ---
-        _render_com_pct(df_hist_diautil_idx, "📊 Índice de Sazonalidade (DIAS ÚTEIS) — Histórico Completo", _cor_idx)
-        st.markdown(legenda_dias, unsafe_allow_html=True)
-        
-        _render_com_pct(df_periodo_diautil_idx, f"📊 Índice de Sazonalidade (DIAS ÚTEIS) — Período", _cor_idx)
-        st.markdown(legenda_dias, unsafe_allow_html=True)
-        
-        _render(df_comp_diautil, "📈 Comparativo (DIAS ÚTEIS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
-        st.markdown(legenda_comp, unsafe_allow_html=True)
-        
 # ==========================================
 # ABA COMPRAS
 # ==========================================
@@ -1408,8 +1381,7 @@ with tab_compras:
                 else:
                     st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_compras_disabled")
 
-    _foi_primeira_carga_compras = "df_compras" not in st.session_state
-    if _foi_primeira_carga_compras or btn_compras:
+    if btn_compras:
         filial_cod_c = "" if filial_c_sel == "Todas" else filiais_inv[filial_c_sel]
         try:
             with st.spinner("Carregando dados de compras..."):
@@ -1431,52 +1403,54 @@ with tab_compras:
             st.error(f"Erro ao carregar compras: {e}")
             st.stop()
 
-    if _foi_primeira_carga_compras: st.rerun()
-
-    df_compras = st.session_state.get("df_compras", pd.DataFrame())
-    if df_compras.empty:
-        st.info("Nenhuma compra encontrada para o período/filtros.")
+    # RENDERIZAÇÃO
+    if "df_compras" not in st.session_state:
+        st.info("👋 Clique em '🔄 Atualizar' acima para carregar as compras.")
     else:
-        tot_val_geral = df_compras["Valor"].sum()
-        df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento", ascending=True)
-        meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-        cards_data = [("💰 Total Comprado", tot_val_geral, "#3b82f6", "")]
-        cores_depto = ["#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#0ea5e9", "#f97316", "#ef4444", "#14b8a6"]
-        for i, row in df_tot_depto.iterrows():
-            cor = cores_depto[i % len(cores_depto)]
-            pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
-            pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
-            cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor, pct_html))
-        for i in range(0, len(cards_data), 5):
-            chunk = cards_data[i:i+5]
-            cols = st.columns(5)
-            for j, (nome, valor, cor, pct_html) in enumerate(chunk):
-                with cols[j]:
-                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
-        st.write("")
-        if not df_tot_depto.empty:
-            deptos_nomes = df_tot_depto['Departamento'].tolist()
-            sub_tabs = st.tabs(deptos_nomes)
-            for sub_tab, (_, row) in zip(sub_tabs, df_tot_depto.iterrows()):
-                with sub_tab:
-                    depto = row['Departamento']
-                    df_d = df_compras[df_compras["Departamento"] == depto]
-                    df_pivot = df_d.pivot_table(index=['Fornecedor'], columns='Mes_Nome', values='Valor', aggfunc='sum')
-                    for m in meses_colunas:
-                        if m not in df_pivot.columns: df_pivot[m] = 0.0
-                    df_pivot = df_pivot[meses_colunas]
-                    df_pivot['Total'] = df_pivot.sum(axis=1)
-                    df_pivot = df_pivot.fillna(0).sort_index(ascending=True)
-                    linha_total = df_pivot.sum().to_frame().T
-                    linha_total.index = ['TOTAL']
-                    df_final = pd.concat([df_pivot, linha_total])
-                    def fmt_br(x):
-                        if pd.isna(x) or x == 0: return "-"
-                        return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    def highlight_total(row):
-                        if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
-                        return [''] * len(row)
-                    st.dataframe(df_final.style.format(fmt_br).apply(highlight_total, axis=1), use_container_width=True)
+        df_compras = st.session_state.get("df_compras", pd.DataFrame())
+        if df_compras.empty:
+            st.info("Nenhuma compra encontrada para o período/filtros.")
+        else:
+            tot_val_geral = df_compras["Valor"].sum()
+            df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento", ascending=True)
+            meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+            cards_data = [("💰 Total Comprado", tot_val_geral, "#3b82f6", "")]
+            cores_depto = ["#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#0ea5e9", "#f97316", "#ef4444", "#14b8a6"]
+            for i, row in df_tot_depto.iterrows():
+                cor = cores_depto[i % len(cores_depto)]
+                pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
+                pct_html = f'<span class="pct-participacao">({pct:.1f}%)</span>'
+                cards_data.append((f"📂 {row['Departamento']}", row["Valor"], cor, pct_html))
+            for i in range(0, len(cards_data), 5):
+                chunk = cards_data[i:i+5]
+                cols = st.columns(5)
+                for j, (nome, valor, cor, pct_html) in enumerate(chunk):
+                    with cols[j]:
+                        st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
+            st.write("")
+            if not df_tot_depto.empty:
+                deptos_nomes = df_tot_depto['Departamento'].tolist()
+                sub_tabs = st.tabs(deptos_nomes)
+                for sub_tab, (_, row) in zip(sub_tabs, df_tot_depto.iterrows()):
+                    with sub_tab:
+                        depto = row['Departamento']
+                        df_d = df_compras[df_compras["Departamento"] == depto]
+                        df_pivot = df_d.pivot_table(index=['Fornecedor'], columns='Mes_Nome', values='Valor', aggfunc='sum')
+                        for m in meses_colunas:
+                            if m not in df_pivot.columns: df_pivot[m] = 0.0
+                        df_pivot = df_pivot[meses_colunas]
+                        df_pivot['Total'] = df_pivot.sum(axis=1)
+                        df_pivot = df_pivot.fillna(0).sort_index(ascending=True)
+                        linha_total = df_pivot.sum().to_frame().T
+                        linha_total.index = ['TOTAL']
+                        df_final = pd.concat([df_pivot, linha_total])
+                        def fmt_br(x):
+                            if pd.isna(x) or x == 0: return "-"
+                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        def highlight_total(row):
+                            if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
+                            return [''] * len(row)
+                        st.dataframe(df_final.style.format(fmt_br).apply(highlight_total, axis=1), use_container_width=True)
 
 # ==========================================
 # ABA TRANSFERÊNCIAS
@@ -1506,8 +1480,7 @@ with tab_transferencias:
                 else:
                     st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_transf_disabled")
 
-    _foi_primeira_carga_transf = "df_transf" not in st.session_state
-    if _foi_primeira_carga_transf or btn_transf:
+    if btn_transf:
         filial_cod_tr = "" if filial_tr_sel == "Todas" else filiais_inv[filial_tr_sel]
         try:
             with st.spinner("Carregando dados de transferências..."):
@@ -1526,154 +1499,156 @@ with tab_transferencias:
             st.error(f"Erro ao carregar transferências: {e}")
             st.stop()
 
-    if _foi_primeira_carga_transf: st.rerun()
-
-    df_transf = st.session_state.get("df_transf", pd.DataFrame())
-    if df_transf.empty:
-        st.info("Nenhuma transferência encontrada para o período/filtros.")
+    # RENDERIZAÇÃO
+    if "df_transf" not in st.session_state:
+        st.info("👋 Clique em '🔄 Atualizar' acima para carregar as transferências.")
     else:
-        df_entradas_all = df_transf[df_transf["TipoDado"] == "ENTRADA"].copy()
-        df_saidas_all = df_transf[df_transf["TipoDado"] == "SAIDA"].copy()
+        df_transf = st.session_state.get("df_transf", pd.DataFrame())
+        if df_transf.empty:
+            st.info("Nenhuma transferência encontrada para o período/filtros.")
+        else:
+            df_entradas_all = df_transf[df_transf["TipoDado"] == "ENTRADA"].copy()
+            df_saidas_all = df_transf[df_transf["TipoDado"] == "SAIDA"].copy()
 
-        meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+            meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-        filiais_card = sorted(set(
-            df_entradas_all["FilialDestino"].unique().tolist()
-            + df_saidas_all["FilialOrigem"].unique().tolist()
-        ))
+            filiais_card = sorted(set(
+                df_entradas_all["FilialDestino"].unique().tolist()
+                + df_saidas_all["FilialOrigem"].unique().tolist()
+            ))
 
-        def fmt_saldo_card(v):
-            if v > 0:
-                return f"+ {formatar_moeda(v)}"
-            elif v < 0:
-                return f"- {formatar_moeda(abs(v))}"
-            else:
-                return formatar_moeda(0)
+            def fmt_saldo_card(v):
+                if v > 0:
+                    return f"+ {formatar_moeda(v)}"
+                elif v < 0:
+                    return f"- {formatar_moeda(abs(v))}"
+                else:
+                    return formatar_moeda(0)
 
-        cards_data = []
-        for filial in filiais_card:
-            ent_v = df_entradas_all[df_entradas_all["FilialDestino"] == filial]["Valor"].sum()
-            sai_v = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]["Valor"].sum()
-            saldo_v = ent_v - sai_v
-            nome = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
-            cor = "#10b981" if saldo_v >= 0 else "#ef4444"
-            cards_data.append((f"💰 Saldo {nome}", saldo_v, cor))
+            cards_data = []
+            for filial in filiais_card:
+                ent_v = df_entradas_all[df_entradas_all["FilialDestino"] == filial]["Valor"].sum()
+                sai_v = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]["Valor"].sum()
+                saldo_v = ent_v - sai_v
+                nome = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
+                cor = "#10b981" if saldo_v >= 0 else "#ef4444"
+                cards_data.append((f"💰 Saldo {nome}", saldo_v, cor))
 
-        for i in range(0, len(cards_data), 5):
-            chunk = cards_data[i:i+5]
-            cols = st.columns(5)
-            for j, (nome, valor, cor) in enumerate(chunk):
-                with cols[j]:
-                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
+            for i in range(0, len(cards_data), 5):
+                chunk = cards_data[i:i+5]
+                cols = st.columns(5)
+                for j, (nome, valor, cor) in enumerate(chunk):
+                    with cols[j]:
+                        st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
 
-        st.write("")
+            st.write("")
 
-        filiais_envolvidas = sorted(set(
-            df_entradas_all["FilialDestino"].unique().tolist()
-            + df_saidas_all["FilialOrigem"].unique().tolist()
-        ))
+            filiais_envolvidas = sorted(set(
+                df_entradas_all["FilialDestino"].unique().tolist()
+                + df_saidas_all["FilialOrigem"].unique().tolist()
+            ))
 
-        if filiais_envolvidas:
-            nomes_tabs = [NOMES_FILIAIS.get(int(f), f"Filial {f}") for f in filiais_envolvidas]
-            sub_tabs = st.tabs(nomes_tabs)
+            if filiais_envolvidas:
+                nomes_tabs = [NOMES_FILIAIS.get(int(f), f"Filial {f}") for f in filiais_envolvidas]
+                sub_tabs = st.tabs(nomes_tabs)
 
-            for sub_tab, filial in zip(sub_tabs, filiais_envolvidas):
-                with sub_tab:
-                    nome_filial = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
+                for sub_tab, filial in zip(sub_tabs, filiais_envolvidas):
+                    with sub_tab:
+                        nome_filial = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
 
-                    st.markdown(f"### 📥 ENTRADAS em {nome_filial}")
-                    df_ent = df_entradas_all[df_entradas_all["FilialDestino"] == filial]
-                    if df_ent.empty:
-                        st.info("Nenhuma entrada no período.")
-                    else:
-                        df_pivot_e = df_ent.pivot_table(index="FilialOrigem", columns='Mes_Nome', values='Valor', aggfunc='sum')
-                        for m in meses_colunas:
-                            if m not in df_pivot_e.columns: df_pivot_e[m] = 0.0
-                        df_pivot_e = df_pivot_e[meses_colunas]
-                        df_pivot_e['Total'] = df_pivot_e.sum(axis=1)
-                        df_pivot_e = df_pivot_e.fillna(0).sort_index()
-                        linha_total_e = df_pivot_e.sum().to_frame().T
-                        linha_total_e.index = ['TOTAL']
-                        df_final_e = pd.concat([df_pivot_e, linha_total_e])
-                        df_display_e = df_final_e.copy()
-                        df_display_e.index = ["TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") for i in df_display_e.index]
-                        df_display_e.index.name = "Filial Origem"
-                        def fmt_br_e(x):
+                        st.markdown(f"### 📥 ENTRADAS em {nome_filial}")
+                        df_ent = df_entradas_all[df_entradas_all["FilialDestino"] == filial]
+                        if df_ent.empty:
+                            st.info("Nenhuma entrada no período.")
+                        else:
+                            df_pivot_e = df_ent.pivot_table(index="FilialOrigem", columns='Mes_Nome', values='Valor', aggfunc='sum')
+                            for m in meses_colunas:
+                                if m not in df_pivot_e.columns: df_pivot_e[m] = 0.0
+                            df_pivot_e = df_pivot_e[meses_colunas]
+                            df_pivot_e['Total'] = df_pivot_e.sum(axis=1)
+                            df_pivot_e = df_pivot_e.fillna(0).sort_index()
+                            linha_total_e = df_pivot_e.sum().to_frame().T
+                            linha_total_e.index = ['TOTAL']
+                            df_final_e = pd.concat([df_pivot_e, linha_total_e])
+                            df_display_e = df_final_e.copy()
+                            df_display_e.index = ["TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") for i in df_display_e.index]
+                            df_display_e.index.name = "Filial Origem"
+                            def fmt_br_e(x):
+                                if pd.isna(x) or x == 0: return "-"
+                                return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                            def hl_e(row):
+                                if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
+                                return [''] * len(row)
+                            st.dataframe(df_display_e.style.format(fmt_br_e).apply(hl_e, axis=1), use_container_width=True)
+
+                        st.write("")
+
+                        st.markdown(f"### 📤 SAÍDAS de {nome_filial}")
+                        df_sai = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]
+                        if df_sai.empty:
+                            st.info("Nenhuma saída no período.")
+                        else:
+                            df_pivot_s = df_sai.pivot_table(index="FilialDestino", columns='Mes_Nome', values='Valor', aggfunc='sum')
+                            for m in meses_colunas:
+                                if m not in df_pivot_s.columns: df_pivot_s[m] = 0.0
+                            df_pivot_s = df_pivot_s[meses_colunas]
+                            df_pivot_s['Total'] = df_pivot_s.sum(axis=1)
+                            df_pivot_s = df_pivot_s.fillna(0).sort_index()
+                            linha_total_s = df_pivot_s.sum().to_frame().T
+                            linha_total_s.index = ['TOTAL']
+                            df_final_s = pd.concat([df_pivot_s, linha_total_s])
+                            df_display_s = df_final_s.copy()
+                            df_display_s.index = ["TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") for i in df_display_s.index]
+                            df_display_s.index.name = "Filial Destino"
+                            def fmt_br_s(x):
+                                if pd.isna(x) or x == 0: return "-"
+                                return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                            def hl_s(row):
+                                if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
+                                return [''] * len(row)
+                            st.dataframe(df_display_s.style.format(fmt_br_s).apply(hl_s, axis=1), use_container_width=True)
+
+                        st.write("")
+
+                        st.markdown(f"### 💰 SALDO em {nome_filial} (Entradas − Saídas)")
+
+                        tot_ent_mes = {m: (df_ent[df_ent["Mes_Nome"] == m]["Valor"].sum() if not df_ent.empty else 0.0) for m in meses_colunas}
+                        tot_sai_mes = {m: (df_sai[df_sai["Mes_Nome"] == m]["Valor"].sum() if not df_sai.empty else 0.0) for m in meses_colunas}
+
+                        tot_ent_ano = sum(tot_ent_mes.values())
+                        tot_sai_ano = sum(tot_sai_mes.values())
+                        saldo_ano = tot_ent_ano - tot_sai_ano
+
+                        saldo_dict = {
+                            "📥 Total Entradas": {**tot_ent_mes, "Total": tot_ent_ano},
+                            "📤 Total Saídas": {**tot_sai_mes, "Total": tot_sai_ano},
+                            "💰 Saldo": {**{m: tot_ent_mes[m] - tot_sai_mes[m] for m in meses_colunas}, "Total": saldo_ano},
+                        }
+                        df_saldo = pd.DataFrame(saldo_dict).T
+                        df_saldo = df_saldo[meses_colunas + ["Total"]]
+                        df_saldo.index.name = "Descrição"
+
+                        def fmt_br_saldo(x):
                             if pd.isna(x) or x == 0: return "-"
                             return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                        def hl_e(row):
-                            if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
-                            return [''] * len(row)
-                        st.dataframe(df_display_e.style.format(fmt_br_e).apply(hl_e, axis=1), use_container_width=True)
 
-                    st.write("")
+                        def hl_saldo(row):
+                            base = [''] * len(row)
+                            if row.name == "💰 Saldo":
+                                base = [
+                                    'font-weight: bold; background: #f0fdf4; color: ' + ('#dc2626' if (isinstance(v, (int, float)) and v < 0) else '#16a34a')
+                                    for v in row.values
+                                ]
+                            elif row.name == "📥 Total Entradas":
+                                base = ['color: #16a34a; font-weight: 600;'] * len(row)
+                            elif row.name == "📤 Total Saídas":
+                                base = ['color: #dc2626; font-weight: 600;'] * len(row)
+                            return base
 
-                    st.markdown(f"### 📤 SAÍDAS de {nome_filial}")
-                    df_sai = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]
-                    if df_sai.empty:
-                        st.info("Nenhuma saída no período.")
-                    else:
-                        df_pivot_s = df_sai.pivot_table(index="FilialDestino", columns='Mes_Nome', values='Valor', aggfunc='sum')
-                        for m in meses_colunas:
-                            if m not in df_pivot_s.columns: df_pivot_s[m] = 0.0
-                        df_pivot_s = df_pivot_s[meses_colunas]
-                        df_pivot_s['Total'] = df_pivot_s.sum(axis=1)
-                        df_pivot_s = df_pivot_s.fillna(0).sort_index()
-                        linha_total_s = df_pivot_s.sum().to_frame().T
-                        linha_total_s.index = ['TOTAL']
-                        df_final_s = pd.concat([df_pivot_s, linha_total_s])
-                        df_display_s = df_final_s.copy()
-                        df_display_s.index = ["TOTAL" if i == "TOTAL" else NOMES_FILIAIS.get(int(i), f"Filial {i}") for i in df_display_s.index]
-                        df_display_s.index.name = "Filial Destino"
-                        def fmt_br_s(x):
-                            if pd.isna(x) or x == 0: return "-"
-                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                        def hl_s(row):
-                            if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
-                            return [''] * len(row)
-                        st.dataframe(df_display_s.style.format(fmt_br_s).apply(hl_s, axis=1), use_container_width=True)
-
-                    st.write("")
-
-                    st.markdown(f"### 💰 SALDO em {nome_filial} (Entradas − Saídas)")
-
-                    tot_ent_mes = {m: (df_ent[df_ent["Mes_Nome"] == m]["Valor"].sum() if not df_ent.empty else 0.0) for m in meses_colunas}
-                    tot_sai_mes = {m: (df_sai[df_sai["Mes_Nome"] == m]["Valor"].sum() if not df_sai.empty else 0.0) for m in meses_colunas}
-
-                    tot_ent_ano = sum(tot_ent_mes.values())
-                    tot_sai_ano = sum(tot_sai_mes.values())
-                    saldo_ano = tot_ent_ano - tot_sai_ano
-
-                    saldo_dict = {
-                        "📥 Total Entradas": {**tot_ent_mes, "Total": tot_ent_ano},
-                        "📤 Total Saídas": {**tot_sai_mes, "Total": tot_sai_ano},
-                        "💰 Saldo": {**{m: tot_ent_mes[m] - tot_sai_mes[m] for m in meses_colunas}, "Total": saldo_ano},
-                    }
-                    df_saldo = pd.DataFrame(saldo_dict).T
-                    df_saldo = df_saldo[meses_colunas + ["Total"]]
-                    df_saldo.index.name = "Descrição"
-
-                    def fmt_br_saldo(x):
-                        if pd.isna(x) or x == 0: return "-"
-                        return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-                    def hl_saldo(row):
-                        base = [''] * len(row)
-                        if row.name == "💰 Saldo":
-                            base = [
-                                'font-weight: bold; background: #f0fdf4; color: ' + ('#dc2626' if (isinstance(v, (int, float)) and v < 0) else '#16a34a')
-                                for v in row.values
-                            ]
-                        elif row.name == "📥 Total Entradas":
-                            base = ['color: #16a34a; font-weight: 600;'] * len(row)
-                        elif row.name == "📤 Total Saídas":
-                            base = ['color: #dc2626; font-weight: 600;'] * len(row)
-                        return base
-
-                    st.dataframe(
-                        df_saldo.style.format(fmt_br_saldo).apply(hl_saldo, axis=1),
-                        use_container_width=True
-                    )
+                        st.dataframe(
+                            df_saldo.style.format(fmt_br_saldo).apply(hl_saldo, axis=1),
+                            use_container_width=True
+                        )
 
 # ==========================================
 # ABA TRIBUTOS
@@ -1683,7 +1658,7 @@ with tab_tributos:
     if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
 
     with st.container(border=True):
-        c1, c2, c_acoes = st.columns([1, 1, 2.5], vertical_alignment="bottom")
+        c1, c2, c_acoes = st.columns([1.2, 1.2, 2.5], vertical_alignment="bottom")
         data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
         data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
 
@@ -1701,8 +1676,7 @@ with tab_tributos:
                 else:
                     st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_trib_disabled")
 
-    _foi_primeira_carga_trib = "df_trib" not in st.session_state
-    if _foi_primeira_carga_trib or btn_atualizar_trib:
+    if btn_atualizar_trib:
         try:
             with st.spinner("Carregando dados tributários..."):
                 df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
@@ -1799,93 +1773,95 @@ with tab_tributos:
             st.error(f"Erro ao carregar tributos: {e}")
             st.stop()
 
-    if _foi_primeira_carga_trib: st.rerun()
-
-    df_trib = st.session_state.get("df_trib", pd.DataFrame())
-    if df_trib.empty:
-        st.info("Nenhum dado encontrado para o período.")
+    # RENDERIZAÇÃO
+    if "df_trib" not in st.session_state:
+        st.info("👋 Clique em '🔄 Atualizar' acima para carregar os dados tributários.")
     else:
-        atacado = df_trib[df_trib["CodFilial"] == 5]
-        pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
-        srb = df_trib[df_trib["CodFilial"] == 4]
-        colunas = pd.concat([atacado, pb, srb])
-        rows_saidas = [
-            ("Valor Vendas Bruto", "VendasBruto", {}),
-            ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
-            ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
-            ("Tributo Vendas Integral", "tributoVendasIntegral", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"}),
-            ("Tributo Vendas Adicional", "tributoVendasAdicional", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"}),
-            ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
-            ("Tributo Transferências Enviadas", "icmsTransfEnv", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"}),
-            ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
-            ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
-            ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-            ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
-        ]
-        rows_entradas = [
-            ("Valor Compras", "ComprasTotal", {}),
-            ("Tributo Compras", "ICMS_Compras", {}),
-            ("Valor Transferências Recebidas", "TransfRecTotal", {}),
-            ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
-            ("Tributos Antecipados", "TributosAntecipados", {}),
-            ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
-            ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
-            ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-            ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
-        ]
-        rows_resultado = [("Resultado", "resultado", {"bold": True, "cls": "resultado"})]
+        df_trib = st.session_state.get("df_trib", pd.DataFrame())
+        if df_trib.empty:
+            st.info("Nenhum dado encontrado para o período.")
+        else:
+            atacado = df_trib[df_trib["CodFilial"] == 5]
+            pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
+            srb = df_trib[df_trib["CodFilial"] == 4]
+            colunas = pd.concat([atacado, pb, srb])
+            rows_saidas = [
+                ("Valor Vendas Bruto", "VendasBruto", {}),
+                ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
+                ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
+                ("Tributo Vendas Integral", "tributoVendasIntegral", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"}),
+                ("Tributo Vendas Adicional", "tributoVendasAdicional", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"}),
+                ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
+                ("Tributo Transferências Enviadas", "icmsTransfEnv", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"}),
+                ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
+                ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
+                ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
+            ]
+            rows_entradas = [
+                ("Valor Compras", "ComprasTotal", {}),
+                ("Tributo Compras", "ICMS_Compras", {}),
+                ("Valor Transferências Recebidas", "TransfRecTotal", {}),
+                ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
+                ("Tributos Antecipados", "TributosAntecipados", {}),
+                ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
+                ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
+                ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
+                ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
+            ]
+            rows_resultado = [("Resultado", "resultado", {"bold": True, "cls": "resultado"})]
 
-        saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
-        saldo_pb = pb["resultado"].sum() if not pb.empty else 0
-        saldo_srb = srb["resultado"].sum() if not srb.empty else 0
-        saldo_cons = saldo_atacado + saldo_pb + saldo_srb
+            saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
+            saldo_pb = pb["resultado"].sum() if not pb.empty else 0
+            saldo_srb = srb["resultado"].sum() if not srb.empty else 0
+            saldo_cons = saldo_atacado + saldo_pb + saldo_srb
 
-        c_cards = st.columns(4)
-        def render_card_trib(col, title, val):
-            cor = "#16a34a" if val >= 0 else "#dc2626"
-            with col:
-                st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
-        render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
-        render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
-        render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
-        render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
+            c_cards = st.columns(4)
+            def render_card_trib(col, title, val):
+                cor = "#16a34a" if val >= 0 else "#dc2626"
+                with col:
+                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
+            render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
+            render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
+            render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
+            render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
 
-        st.write("")
+            st.write("")
 
-        def build_trib_table(rows_list):
-            html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
-            html += '<thead><tr><th style="text-align:left;">Operação</th>'
-            for _, f in colunas.iterrows():
-                html += f'<th style="text-align:right;">{f["NomeFilial"]}</th>'
-            html += '<th style="text-align:right;">📊 Total</th></tr></thead><tbody>'
-            for label, key, opts in rows_list:
-                cls = opts.get("cls", "")
-                bold = opts.get("bold", False)
-                label_fmt = f"<strong>{label}</strong>" if bold else label
-                html += f'<tr class="{cls}"><td style="text-align:left; padding-left:8px;">{label_fmt}</td>'
-                total = 0
+            def build_trib_table(rows_list):
+                html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
+                html += '<thead><tr><th style="text-align:left;">Operação</th>'
                 for _, f in colunas.iterrows():
-                    val = f[key] if key else 0
-                    total += val
-                    if "fmt" in opts:
-                        val_str = opts["fmt"](val, f)
-                    else:
-                        val_str = formatar_numero(val)
+                    html += f'<th style="text-align:right;">{f["NomeFilial"]}</th>'
+                html += '<th style="text-align:right;">📊 Total</th></tr></thead><tbody>'
+                for label, key, opts in rows_list:
+                    cls = opts.get("cls", "")
+                    bold = opts.get("bold", False)
+                    label_fmt = f"<strong>{label}</strong>" if bold else label
+                    html += f'<tr class="{cls}"><td style="text-align:left; padding-left:8px;">{label_fmt}</td>'
+                    total = 0
+                    for _, f in colunas.iterrows():
+                        val = f[key] if key else 0
+                        total += val
+                        if "fmt" in opts:
+                            val_str = opts["fmt"](val, f)
+                        else:
+                            val_str = formatar_numero(val)
+                        if key == "resultado":
+                            val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
+                        html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
                     if key == "resultado":
-                        val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
-                    html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
-                if key == "resultado":
-                    total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
-                else:
-                    total_str = formatar_numero(total)
-                html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
-            html += '</tbody></table></div>'
-            return html
+                        total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
+                    else:
+                        total_str = formatar_numero(total)
+                    html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
+                html += '</tbody></table></div>'
+                return html
 
-        tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
-        with tab_saidas:
-            st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
-        with tab_entradas:
-            st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
-        with tab_resultado:
-            st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
+            tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
+            with tab_saidas:
+                st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
+            with tab_entradas:
+                st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
+            with tab_resultado:
+                st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
