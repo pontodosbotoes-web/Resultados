@@ -27,42 +27,49 @@ def _executar_query(arquivo_sql, params, filial=None):
     with get_engine().connect() as conn:
         return pd.read_sql(text(sql), conn, params=params)
 
+# === OTIMIZAÇÃO: Cache em todas as funções de busca (TTL de 1 hora) ===
+
+@st.cache_data(ttl=3600)
 def buscar_vendas(data_inicio, data_fim, hora_inicio, hora_fim, filial):
     params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
     return _executar_query("visao_vendas.sql", params, filial)
 
+@st.cache_data(ttl=3600)
 def buscar_departamentos(data_inicio, data_fim, hora_inicio, hora_fim, filial):
     params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
     return _executar_query("visao_departamentos.sql", params, filial)
 
+@st.cache_data(ttl=3600)
 def buscar_pagamentos(data_inicio, data_fim, hora_inicio, hora_fim, filial):
     params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
     return _executar_query("visao_pagamentos.sql", params, filial)
 
+@st.cache_data(ttl=3600)
 def buscar_compras(data_inicio, data_fim, filial):
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
     return _executar_query("visao_compras.sql", params, filial)
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def buscar_sazonalidade(data_inicio, data_fim, hora_inicio, hora_fim, filial=""):
     params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
     return _executar_query("visao_sazonalidade.sql", params, filial)
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def buscar_sazonalidade_hora(data_inicio, data_fim, hora_inicio, hora_fim, filial=""):
     params = {"data_inicio": data_inicio, "data_fim": data_fim, "hora_inicio": hora_inicio, "hora_fim": hora_fim}
     return _executar_query("visao_sazonalidade_hora.sql", params, filial)
-    
-@st.cache_data(ttl=600)
+
+@st.cache_data(ttl=3600)
 def buscar_sazonalidade_diautil(data_inicio, data_fim, filial=""):
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
     return _executar_query("visao_sazonalidade_diautil.sql", params, filial)
 
+@st.cache_data(ttl=3600)
 def buscar_transferencias(data_inicio, data_fim, filial):
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
     return _executar_query("visao_transferencias.sql", params, filial)
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def buscar_tributos(data_inicio, data_fim):
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
     return _executar_query("visao_tributos.sql", params, None)
