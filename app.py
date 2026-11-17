@@ -815,6 +815,7 @@ def _calc_idx_generic(df, col_name, index_range, multiplier):
     df_idx = df_idx.rename(columns=nomes)
     return df_idx
 
+@st.cache_data
 def calcular_indices_sazonalidade(df):
     df_idx = _calc_idx_generic(df, "DiaSemana", range(1, 7), 6)
     if not df_idx.empty:
@@ -822,6 +823,7 @@ def calcular_indices_sazonalidade(df):
         df_idx.index.name = "Dia da Semana"
     return df_idx
 
+@st.cache_data
 def calcular_indices_sazonalidade_hora(df):
     df_idx = _calc_idx_generic(df, "Hora", range(0, 24), 24)
     if not df_idx.empty:
@@ -829,7 +831,8 @@ def calcular_indices_sazonalidade_hora(df):
         df_idx.index.name = "Hora"
         df_idx = df_idx[df_idx["Total"] > 0]  # ← NOVO: remove horas sem movimento
     return df_idx
-    
+
+@st.cache_data    
 def calcular_indices_sazonalidade_diautil(df):
     # Usa 26 como multiplicador base (média de dias úteis seg-sáb no mês)
     # O range vai até 28 porque um mês pode ter até 27 dias úteis.
@@ -1114,29 +1117,46 @@ with tab_sazonalidade:
                 else:
                     st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_saz_disabled")
 
-    _foi_primeira_carga_saz = "df_saz_hist" not in st.session_state
-    if _foi_primeira_carga_saz or btn_saz:
+    # 1. Verifica se o filtro de hora mudou. Se mudou, o histórico precisa ser recalculado.
+    hist_hash = f"{h_ini_saz.hour}_{h_fim_saz.hour}"
+    _recalcular_hist = st.session_state.get("saz_hist_hash") != hist_hash or "df_saz_hist" not in st.session_state
+    
+    if _recalcular_hist:
         try:
-            with st.spinner("Carregando dados de sazonalidade..."):
-                # Define o período do histórico: últimos 5 anos até hoje
+            with st.spinner("Carregando histórico (últimos 5 anos)..."):
                 data_hist_ini = (hoje - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
                 data_hist_fim = hoje.strftime("%Y-%m-%d")
 
                 df_hist = buscar_sazonalidade(data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
-                df_periodo = buscar_sazonalidade(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
-
                 df_hist_hora = buscar_sazonalidade_hora(data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
-                df_periodo_hora = buscar_sazonalidade_hora(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
-
                 df_hist_diautil = buscar_sazonalidade_diautil(data_hist_ini, data_hist_fim, "")
+
+                st.session_state["df_saz_hist"] = calcular_indices_sazonalidade(df_hist)
+                st.session_state["df_saz_hist_hora"] = calcular_indices_sazonalidade_hora(df_hist_hora)
+                st.session_state["df_saz_hist_diautil"] = calcular_indices_sazonalidade_diautil(df_hist_diautil)
+                st.session_state["saz_hist_hash"] = hist_hash
+                st.session_state["pdf_bytes_saz"] = None # Força atualização do PDF
+        except Exception as e:
+            st.error(f"Erro ao carregar histórico de sazonalidade: {e}")
+            st.stop()
+
+    # 2. Carrega o Período (se for a primeira carga ou se clicar em Atualizar)
+    _foi_primeira_carga_saz = "df_saz_periodo" not in st.session_state
+    if _foi_primeira_carga_saz or btn_saz:
+        try:
+            with st.spinner("Carregando período selecionado..."):
+                df_periodo = buscar_sazonalidade(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
+                df_periodo_hora = buscar_sazonalidade_hora(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
                 df_periodo_diautil = buscar_sazonalidade_diautil(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), "")
 
-                df_hist_idx = calcular_indices_sazonalidade(df_hist)
                 df_periodo_idx = calcular_indices_sazonalidade(df_periodo)
-                df_hist_hora_idx = calcular_indices_sazonalidade_hora(df_hist_hora)
                 df_periodo_hora_idx = calcular_indices_sazonalidade_hora(df_periodo_hora)
-                df_hist_diautil_idx = calcular_indices_sazonalidade_diautil(df_hist_diautil)
                 df_periodo_diautil_idx = calcular_indices_sazonalidade_diautil(df_periodo_diautil)
+
+                # Busca os históricos direto da memória
+                df_hist_idx = st.session_state["df_saz_hist"]
+                df_hist_hora_idx = st.session_state["df_saz_hist_hora"]
+                df_hist_diautil_idx = st.session_state["df_saz_hist_diautil"]
 
                 if not df_hist_idx.empty and not df_periodo_idx.empty:
                     df_comparativo = ((df_periodo_idx / df_hist_idx) - 1) * 100
@@ -1156,16 +1176,14 @@ with tab_sazonalidade:
                 else:
                     df_comp_diautil = pd.DataFrame()
 
-                st.session_state["df_saz_hist"] = df_hist_idx
                 st.session_state["df_saz_periodo"] = df_periodo_idx
                 st.session_state["df_saz_comparativo"] = df_comparativo
-                st.session_state["df_saz_hist_hora"] = df_hist_hora_idx
                 st.session_state["df_saz_periodo_hora"] = df_periodo_hora_idx
                 st.session_state["df_saz_comp_hora"] = df_comp_hora
-                st.session_state["df_saz_hist_diautil"] = df_hist_diautil_idx
                 st.session_state["df_saz_periodo_diautil"] = df_periodo_diautil_idx
                 st.session_state["df_saz_comp_diautil"] = df_comp_diautil
 
+                # Gera o PDF (usando o histórico da memória)
                 if not df_hist_idx.empty and not df_periodo_idx.empty:
                     st.session_state["pdf_bytes_saz"] = gerar_pdf_sazonalidade(
                         df_hist_idx, df_periodo_idx, df_comparativo, 
@@ -1176,7 +1194,7 @@ with tab_sazonalidade:
                 else:
                     st.session_state["pdf_bytes_saz"] = None
         except Exception as e:
-            st.error(f"Erro ao carregar sazonalidade: {e}")
+            st.error(f"Erro ao carregar período de sazonalidade: {e}")
             st.stop()
 
     if _foi_primeira_carga_saz: st.rerun()
