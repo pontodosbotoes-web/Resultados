@@ -24,15 +24,15 @@ st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_ic
 
 st.markdown("""
     <style>
-        /* Reset e Layout Base */
+        /* Reset e Layout Base (Dark Premium) */
         #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;}
-        .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; max-width: 100% !important; background-color: #F3F4F6; }
+        .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; max-width: 100% !important; background-color: #0D1117; }
         
         /* Títulos */
-        .titulo-pagina { font-size: 28px; font-weight: 800; text-align: center; color: #111827; padding-bottom: 10px; margin-bottom: 25px; letter-spacing: -0.5px; }
-        .tema-titulo { font-size: 18px; font-weight: 700; color: #374151; margin-top: 20px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #E5E7EB; }
+        .titulo-pagina { font-size: 28px; font-weight: 800; text-align: center; color: #F8FAFC; padding-bottom: 10px; margin-bottom: 25px; letter-spacing: -0.5px; }
+        .tema-titulo { font-size: 18px; font-weight: 700; color: #C9D1D9; margin-top: 20px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #30363D; }
         
-        /* Cards (Design Premium) */
+        /* Cards (Design Dark Premium) */
         .card-item { 
             border-radius: 12px; 
             padding: 20px; 
@@ -42,86 +42,83 @@ st.markdown("""
             justify-content: space-between; 
             transition: all 0.2s ease-in-out; 
             margin-bottom: 10px; 
-            background: #FFFFFF;
-            border: 1px solid #E5E7EB;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+            background: #161B22;
+            border: 1px solid #30363D;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
         }
         .card-item:hover { 
             transform: translateY(-2px);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); 
-            border-color: #D1D5DB;
+            box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.5); 
+            border-color: #58A6FF;
         }
-        .card-label { font-size: 12px; font-weight: 700; color: #6B7280; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: 0.05em;}
-        .card-value { font-size: 26px; font-weight: 800; color: #111827; line-height: 1.2; font-variant-numeric: tabular-nums; }
+        .card-label { font-size: 12px; font-weight: 700; color: #8B949E; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: 0.05em;}
+        .card-value { font-size: 26px; font-weight: 800; color: #F8FAFC; line-height: 1.2; font-variant-numeric: tabular-nums; }
         
         /* Porcentagens */
-        .pct-participacao { font-size: 13px; font-weight: 700; color: #D97706; margin-left: 4px; }
-        .pct-positiva { font-size: 13px; font-weight: 700; color: #059669; margin-left: 4px; }
-        .pct-negativa { font-size: 13px; font-weight: 700; color: #DC2626; margin-left: 4px; }
+        .pct-participacao { font-size: 13px; font-weight: 700; color: #D29922; margin-left: 4px; }
+        .pct-positiva { font-size: 13px; font-weight: 700; color: #3FB950; margin-left: 4px; }
+        .pct-negativa { font-size: 13px; font-weight: 700; color: #F85149; margin-left: 4px; }
         
         div[data-testid="stFormSubmitButton"] > button { width: 100% !important; }
 
         /* Botões do Topo */
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"], div[data-testid="stButton"] button[kind="primary"] {
-            background-color: #4F46E5 !important; color: #ffffff !important; border: none !important;
+            background-color: #238636 !important; color: #ffffff !important; border: 1px solid #2EA043 !important;
             transition: all 0.2s; height: 44px !important; border-radius: 8px !important; font-weight: 600 !important; font-size: 14px !important;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         div[data-testid="stFormSubmitButton"] button[kind="primaryFormSubmit"]:hover, div[data-testid="stButton"] button[kind="primary"]:hover {
-            background-color: #4338CA !important; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3) !important;
+            background-color: #2EA043 !important; box-shadow: 0 0 10px rgba(46, 160, 67, 0.4) !important;
         }
         
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"], div[data-testid="stButton"] button {
-            background-color: #EF4444 !important; color: #ffffff !important; border: none !important;
+            background-color: #DA3633 !important; color: #ffffff !important; border: 1px solid #F85149 !important;
             transition: all 0.2s; height: 44px !important; border-radius: 8px !important; font-weight: 600 !important; font-size: 14px !important;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         div[data-testid="stFormSubmitButton"] button[kind="secondaryFormSubmit"]:hover, div[data-testid="stButton"] button:hover {
-            background-color: #DC2626 !important; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3) !important;
+            background-color: #F85149 !important; box-shadow: 0 0 10px rgba(248, 81, 73, 0.4) !important;
         }
         
         div[data-testid="stDownloadButton"] button {
-            background-color: #3B82F6 !important; color: #ffffff !important; border: none !important;
+            background-color: #1F6FEB !important; color: #ffffff !important; border: 1px solid #388BFD !important;
             transition: all 0.2s; height: 44px !important; border-radius: 8px !important; font-weight: 600 !important; font-size: 14px !important;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         div[data-testid="stDownloadButton"] button:hover {
-            background-color: #2563EB !important; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3) !important;
+            background-color: #388BFD !important; box-shadow: 0 0 10px rgba(56, 139, 253, 0.4) !important;
         }
 
         /* Tabelas HTML (Tributos) */
-        .tabela-wrapper { overflow-x: auto; margin: 10px 0 25px 0; border-radius: 8px; border: 1px solid #E5E7EB; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.05); }
-        .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 14px; background: #FFFFFF; }
-        .tributos-tabela th { background: #F9FAFB; color: #4B5563; padding: 12px 16px; border-bottom: 1px solid #E5E7EB; font-weight: 700; white-space: nowrap; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
-        .tributos-tabela td { padding: 10px 16px; border-bottom: 1px solid #F3F4F6; color: #374151; font-weight: 500; font-variant-numeric: tabular-nums; }
-        .tributos-tabela td:first-child { text-align: left !important; font-weight: 600; color: #111827; }
+        .tabela-wrapper { overflow-x: auto; margin: 10px 0 25px 0; border-radius: 8px; border: 1px solid #30363D; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); }
+        .tributos-tabela { width: 100%; border-collapse: collapse; font-size: 14px; background: #0D1117; }
+        .tributos-tabela th { background: #161B22; color: #C9D1D9; padding: 12px 16px; border-bottom: 1px solid #30363D; font-weight: 700; white-space: nowrap; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
+        .tributos-tabela td { padding: 10px 16px; border-bottom: 1px solid #21262D; color: #C9D1D9; font-weight: 500; font-variant-numeric: tabular-nums; }
+        .tributos-tabela td:first-child { text-align: left !important; font-weight: 600; color: #F8FAFC; }
         .tributos-tabela td:not(:first-child) { text-align: right !important; }
-        .tributos-tabela tr:hover td { background: #F9FAFB; }
+        .tributos-tabela tr:hover td { background: #1C2128; }
         
         /* Cores de Status Tabelas */
-        .tributos-tabela .total-entrada td { color: #047857; font-weight: 700; background: #ECFDF5; border-top: 2px solid #A7F3D0; }
-        .tributos-tabela .subtotal-entrada td { color: #065F46; font-weight: 600; background: #F0FDF4; }
-        .tributos-tabela .total-saida td { color: #B91C1C; font-weight: 700; background: #FEF2F2; border-top: 2px solid #FECACA; }
-        .tributos-tabela .subtotal-saida td { color: #991B1B; font-weight: 600; background: #FEF2F2; }
-        .tributos-tabela .debito td { color: #DC2626; font-weight: 700; background: #FEE2E2; border-top: 2px solid #EF4444; }
-        .tributos-tabela .credito td { color: #059669; font-weight: 700; background: #D1FAE5; border-top: 2px solid #10B981; }
-        .tributos-tabela .resultado td { font-weight: 800; font-size: 16px; border-top: 3px double #4F46E5; border-bottom: 3px double #4F46E5; padding-top: 14px; padding-bottom: 14px; }
-        .tributos-tabela .resultado td:first-child { color: #4F46E5; }
-        .tributos-tabela .devolucao td { color: #DC2626; font-style: italic; }
-        .tributos-tabela .nao-tributada td { color: #6B7280; font-style: italic; background: #F9FAFB; }
+        .tributos-tabela .total-entrada td { color: #3FB950; font-weight: 700; background: rgba(63, 185, 80, 0.1); border-top: 2px solid #3FB950; }
+        .tributos-tabela .subtotal-entrada td { color: #56D364; font-weight: 600; background: rgba(63, 185, 80, 0.05); }
+        .tributos-tabela .total-saida td { color: #F85149; font-weight: 700; background: rgba(248, 81, 73, 0.1); border-top: 2px solid #F85149; }
+        .tributos-tabela .subtotal-saida td { color: #FF7B72; font-weight: 600; background: rgba(248, 81, 73, 0.05); }
+        .tributos-tabela .debito td { color: #F85149; font-weight: 700; background: rgba(248, 81, 73, 0.15); border-top: 2px solid #F85149; }
+        .tributos-tabela .credito td { color: #3FB950; font-weight: 700; background: rgba(63, 185, 80, 0.15); border-top: 2px solid #3FB950; }
+        .tributos-tabela .resultado td { font-weight: 800; font-size: 16px; border-top: 3px double #58A6FF; border-bottom: 3px double #58A6FF; padding-top: 14px; padding-bottom: 14px; }
+        .tributos-tabela .resultado td:first-child { color: #58A6FF; }
+        .tributos-tabela .devolucao td { color: #F85149; font-style: italic; }
+        .tributos-tabela .nao-tributada td { color: #8B949E; font-style: italic; background: rgba(139, 148, 158, 0.05); }
         
         /* Legendas Sazonalidade */
-        .legenda-container { display: flex; gap: 12px; font-size: 12px; color: #4B5563; margin-top: -10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; background: #FFFFFF; padding: 10px 14px; border-radius: 8px; border: 1px solid #E5E7EB; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.02); }
+        .legenda-container { display: flex; gap: 12px; font-size: 12px; color: #C9D1D9; margin-top: -10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; background: #161B22; padding: 10px 14px; border-radius: 8px; border: 1px solid #30363D; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.2); }
         .legenda-item { display: flex; align-items: center; gap: 6px; font-weight: 600; }
-        .legenda-cor { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.1); }
+        .legenda-cor { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.1); }
 
         /* Painel de Filtros (Control Panel) */
         div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stWidgetLabel"]) {
-            background-color: #FFFFFF;
+            background-color: #161B22;
             border-radius: 12px;
             padding: 16px 20px 12px 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
-            border: 1px solid #E5E7EB;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+            border: 1px solid #30363D;
             margin-bottom: 24px;
         }
         
@@ -129,7 +126,7 @@ st.markdown("""
         div[data-testid="stWidgetLabel"] p {
             font-size: 11px !important;
             font-weight: 700 !important;
-            color: #6B7280 !important;
+            color: #8B949E !important;
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
@@ -154,7 +151,7 @@ st.markdown("""
         
         div[data-testid="stWidgetLabel"] p {
             margin-bottom: 0px !important;
-            color: #374151 !important;
+            color: #C9D1D9 !important;
             font-size: 13px !important;
             font-weight: 600 !important;
         }
@@ -256,7 +253,7 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
     cor_transparente = f"rgba({r}, {g}, {b}, 0.3)"
     cores_barras = []
     for v in df_hora[col_valor]:
-        if v == max_val and max_val > 0: cores_barras.append(cor_hex)
+        if v == max_val and max_val > 0: cores_barras.append("#F8FAFC")
         else: cores_barras.append(cor_transparente)
     fig = go.Figure()
     fig.add_trace(go.Bar(x=df_hora["Hora"], y=df_hora[col_valor], marker_color=cores_barras, customdata=custom_data, hovertemplate=hover_tpl))
@@ -331,7 +328,7 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
 
 
 # ==========================================
-# PDF
+# PDF (Mantido claro para impressão)
 # ==========================================
 class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
@@ -1000,12 +997,12 @@ with tab_visao:
             tot_trans = df_vendas["QtdVendas"].sum()
             tot_itens = df_vendas["QtdItens"].sum()
             temas = [
-                {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#3b82f6", "fmt": "moeda", "pct": "participacao"},
-                {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#10b981", "fmt": "inteiro", "pct": "participacao"},
-                {"id": "ticket", "titulo": "Ticket Médio", "icone": "🎫", "total": (tot_vendas / tot_trans if tot_trans else 0), "col": "Ticket", "cor": "#f59e0b", "fmt": "moeda", "pct": "variacao"},
-                {"id": "itens", "titulo": "Itens", "icone": "📦", "total": tot_itens, "col": "QtdItens", "cor": "#8b5cf6", "fmt": "decimal", "pct": "participacao"},
-                {"id": "itens_venda", "titulo": "Itens por Venda (R$/item)", "icone": "💰", "total": (tot_vendas / tot_itens if tot_itens else 0), "col": "ItensVenda", "cor": "#14b8a6", "fmt": "moeda", "pct": "variacao"},
-                {"id": "itens_trans", "titulo": "Itens por Transação", "icone": "📊", "total": (tot_itens / tot_trans if tot_trans else 0), "col": "ItensTrans", "cor": "#ec4899", "fmt": "decimal", "pct": "variacao"},
+                {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#58A6FF", "fmt": "moeda", "pct": "participacao"},
+                {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#3FB950", "fmt": "inteiro", "pct": "participacao"},
+                {"id": "ticket", "titulo": "Ticket Médio", "icone": "🎫", "total": (tot_vendas / tot_trans if tot_trans else 0), "col": "Ticket", "cor": "#D29922", "fmt": "moeda", "pct": "variacao"},
+                {"id": "itens", "titulo": "Itens", "icone": "📦", "total": tot_itens, "col": "QtdItens", "cor": "#A371F7", "fmt": "decimal", "pct": "participacao"},
+                {"id": "itens_venda", "titulo": "Itens por Venda (R$/item)", "icone": "💰", "total": (tot_vendas / tot_itens if tot_itens else 0), "col": "ItensVenda", "cor": "#2DD4BF", "fmt": "moeda", "pct": "variacao"},
+                {"id": "itens_trans", "titulo": "Itens por Transação", "icone": "📊", "total": (tot_itens / tot_trans if tot_trans else 0), "col": "ItensTrans", "cor": "#F472B6", "fmt": "decimal", "pct": "variacao"},
             ]
             for t in temas:
                 itens_filial = []
@@ -1056,7 +1053,7 @@ with tab_visao:
                 itens_depto = sorted(itens_depto, key=lambda x: x["valor"], reverse=True)
                 cons_horas_d = [df_depto[df_depto["Hora"] == h]["ValorVenda"].sum() for h in labels_depto]
                 dados_d = {"total": tot_depto, "departamentos": itens_depto, "labelsHoras": labels_depto, "horasConsolidado": cons_horas_d}
-                renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#0ea5e9", "participacao", "moeda", "departamentos", is_filial=False)
+                renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#38BDF8", "participacao", "moeda", "departamentos", is_filial=False)
 
             if not df_pag.empty:
                 labels_pag = sorted(df_pag["Hora"].unique().tolist())
@@ -1070,7 +1067,7 @@ with tab_visao:
                 itens_pag = sorted(itens_pag, key=lambda x: x["valor"], reverse=True)
                 cons_horas_p = [df_pag[df_pag["Hora"] == h]["Valor"].sum() for h in labels_pag]
                 dados_p = {"total": tot_pag, "porForma": itens_pag, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_p}
-                renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#f97316", "participacao", "moeda", "porForma", is_filial=False)
+                renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#F0883E", "participacao", "moeda", "porForma", is_filial=False)
 
                 df_pag_port = df_pag.dropna(subset=["NomePortador"])
                 if not df_pag_port.empty:
@@ -1083,7 +1080,7 @@ with tab_visao:
                     itens_port = sorted(itens_port, key=lambda x: x["valor"], reverse=True)
                     cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
                     dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
-                    renderizar_tema("Portador", "👤", dados_pt, "Valor", "#ef4444", "participacao", "moeda", "porPortador", is_filial=False)
+                    renderizar_tema("Portador", "👤", dados_pt, "Valor", "#F97583", "participacao", "moeda", "porPortador", is_filial=False)
 
 # ==========================================
 # ABA SAZONALIDADE
@@ -1207,27 +1204,27 @@ with tab_sazonalidade:
         else:
             def _cor_idx(v):
                 if pd.isna(v): return ""
-                if v > 1.05: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
-                if v > 1.025: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
-                if v >= 0.975: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"
-                if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
-                return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
+                if v > 1.05: return "background-color: rgba(63, 185, 80, 0.25); color: #56D364; font-weight: 700;"
+                if v > 1.025: return "background-color: rgba(63, 185, 80, 0.15); color: #3FB950; font-weight: 700;"
+                if v >= 0.975: return "background-color: rgba(210, 153, 34, 0.15); color: #D29922; font-weight: 700;"
+                if v >= 0.95: return "background-color: rgba(248, 81, 73, 0.15); color: #F85149; font-weight: 700;"
+                return "background-color: rgba(248, 81, 73, 0.25); color: #FF7B72; font-weight: 700;"
 
             def _cor_hora_idx(v):
                 if pd.isna(v): return ""
-                if v >= 3.00: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
-                if v >= 2.00: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
-                if v >= 1.00: return "background-color: #fef3c7; color: #b45309; font-weight: 700;"
-                if v >= 0.95: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
-                return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
+                if v >= 3.00: return "background-color: rgba(63, 185, 80, 0.25); color: #56D364; font-weight: 700;"
+                if v >= 2.00: return "background-color: rgba(63, 185, 80, 0.15); color: #3FB950; font-weight: 700;"
+                if v >= 1.00: return "background-color: rgba(210, 153, 34, 0.15); color: #D29922; font-weight: 700;"
+                if v >= 0.95: return "background-color: rgba(248, 81, 73, 0.15); color: #F85149; font-weight: 700;"
+                return "background-color: rgba(248, 81, 73, 0.25); color: #FF7B72; font-weight: 700;"
 
             def _cor_comp(v):
                 if pd.isna(v): return ""
-                if v >= 5.0: return "background-color: #bbf7d0; color: #166534; font-weight: 700;"
-                if v >= 2.5: return "background-color: #dcfce7; color: #15803d; font-weight: 700;"
-                if v > -2.5: return "background-color: #f1f5f9; color: #475569; font-weight: 600;"
-                if v > -5.0: return "background-color: #fee2e2; color: #b91c1c; font-weight: 700;"
-                return "background-color: #fecaca; color: #991b1b; font-weight: 700;"
+                if v >= 5.0: return "background-color: rgba(63, 185, 80, 0.25); color: #56D364; font-weight: 700;"
+                if v >= 2.5: return "background-color: rgba(63, 185, 80, 0.15); color: #3FB950; font-weight: 700;"
+                if v > -2.5: return "background-color: rgba(139, 148, 158, 0.15); color: #8B949E; font-weight: 600;"
+                if v > -5.0: return "background-color: rgba(248, 81, 73, 0.15); color: #F85149; font-weight: 700;"
+                return "background-color: rgba(248, 81, 73, 0.25); color: #FF7B72; font-weight: 700;"
 
             def _render(df_idx, titulo, fmt_func, cor_func):
                 st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
@@ -1295,29 +1292,29 @@ with tab_sazonalidade:
 
             legenda_dias = '''
             <div class="legenda-container">
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > 1,05 (Melhor)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 1,025 a 1,05 (Crescendo)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fef3c7;"></div> 0,975 a 1,025 (Normal)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 0,975 (Regredindo)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < 0,95 (Pior)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(63,185,80,0.25); border-color:#56D364;"></div> > 1,05 (Melhor)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(63,185,80,0.15); border-color:#3FB950;"></div> 1,025 a 1,05 (Crescendo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(210,153,34,0.15); border-color:#D29922;"></div> 0,975 a 1,025 (Normal)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(248,81,73,0.15); border-color:#F85149;"></div> 0,95 a 0,975 (Regredindo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(248,81,73,0.25); border-color:#FF7B72;"></div> < 0,95 (Pior)</div>
             </div>
             '''
             legenda_horas = '''
             <div class="legenda-container">
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > 3,00 (Melhor)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> 2,00 a 3,00 (Crescendo)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fef3c7;"></div> 1,00 a 2,00 (Normal)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> 0,95 a 1,00 (Regredindo)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < 0,95 (Pior)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(63,185,80,0.25); border-color:#56D364;"></div> > 3,00 (Melhor)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(63,185,80,0.15); border-color:#3FB950;"></div> 2,00 a 3,00 (Crescendo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(210,153,34,0.15); border-color:#D29922;"></div> 1,00 a 2,00 (Normal)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(248,81,73,0.15); border-color:#F85149;"></div> 0,95 a 1,00 (Regredindo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(248,81,73,0.25); border-color:#FF7B72;"></div> < 0,95 (Pior)</div>
             </div>
             '''
             legenda_comp = '''
             <div class="legenda-container">
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#bbf7d0;"></div> > +5,0% (Melhor)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#dcfce7;"></div> +2,5% a +5,0% (Crescendo)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#f1f5f9;"></div> -2,5% a +2,5% (Normal)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fee2e2;"></div> -5,0% a -2,5% (Regredindo)</div>
-                <div class="legenda-item"><div class="legenda-cor" style="background-color:#fecaca;"></div> < -5,0% (Pior)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(63,185,80,0.25); border-color:#56D364;"></div> > +5,0% (Melhor)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(63,185,80,0.15); border-color:#3FB950;"></div> +2,5% a +5,0% (Crescendo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(139,148,158,0.15); border-color:#8B949E;"></div> -2,5% a +2,5% (Normal)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(248,81,73,0.15); border-color:#F85149;"></div> -5,0% a -2,5% (Regredindo)</div>
+                <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(248,81,73,0.25); border-color:#FF7B72;"></div> < -5,0% (Pior)</div>
             </div>
             '''
 
@@ -1414,8 +1411,8 @@ with tab_compras:
             tot_val_geral = df_compras["Valor"].sum()
             df_tot_depto = df_compras.groupby("Departamento")["Valor"].sum().reset_index().sort_values("Departamento", ascending=True)
             meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-            cards_data = [("💰 Total Comprado", tot_val_geral, "#3b82f6", "")]
-            cores_depto = ["#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#0ea5e9", "#f97316", "#ef4444", "#14b8a6"]
+            cards_data = [("💰 Total Comprado", tot_val_geral, "#58A6FF", "")]
+            cores_depto = ["#3FB950", "#D29922", "#A371F7", "#F472B6", "#38BDF8", "#F0883E", "#F97583", "#2DD4BF"]
             for i, row in df_tot_depto.iterrows():
                 cor = cores_depto[i % len(cores_depto)]
                 pct = (row["Valor"] / tot_val_geral) * 100 if tot_val_geral > 0 else 0
@@ -1426,7 +1423,7 @@ with tab_compras:
                 cols = st.columns(5)
                 for j, (nome, valor, cor, pct_html) in enumerate(chunk):
                     with cols[j]:
-                        st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
             st.write("")
             if not df_tot_depto.empty:
                 deptos_nomes = df_tot_depto['Departamento'].tolist()
@@ -1448,7 +1445,7 @@ with tab_compras:
                             if pd.isna(x) or x == 0: return "-"
                             return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                         def highlight_total(row):
-                            if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
+                            if row.name == 'TOTAL': return ['font-weight: bold; color: #58A6FF; background-color: rgba(88,166,255,0.1);'] * len(row)
                             return [''] * len(row)
                         st.dataframe(df_final.style.format(fmt_br).apply(highlight_total, axis=1), use_container_width=True)
 
@@ -1531,7 +1528,7 @@ with tab_transferencias:
                 sai_v = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]["Valor"].sum()
                 saldo_v = ent_v - sai_v
                 nome = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
-                cor = "#10b981" if saldo_v >= 0 else "#ef4444"
+                cor = "#3FB950" if saldo_v >= 0 else "#F85149"
                 cards_data.append((f"💰 Saldo {nome}", saldo_v, cor))
 
             for i in range(0, len(cards_data), 5):
@@ -1539,7 +1536,7 @@ with tab_transferencias:
                 cols = st.columns(5)
                 for j, (nome, valor, cor) in enumerate(chunk):
                     with cols[j]:
-                        st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
 
             st.write("")
 
@@ -1577,7 +1574,7 @@ with tab_transferencias:
                                 if pd.isna(x) or x == 0: return "-"
                                 return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                             def hl_e(row):
-                                if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
+                                if row.name == 'TOTAL': return ['font-weight: bold; color: #58A6FF; background-color: rgba(88,166,255,0.1);'] * len(row)
                                 return [''] * len(row)
                             st.dataframe(df_display_e.style.format(fmt_br_e).apply(hl_e, axis=1), use_container_width=True)
 
@@ -1604,7 +1601,7 @@ with tab_transferencias:
                                 if pd.isna(x) or x == 0: return "-"
                                 return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                             def hl_s(row):
-                                if row.name == 'TOTAL': return ['font-weight: bold; color: #2563eb; background-color: #eff6ff;'] * len(row)
+                                if row.name == 'TOTAL': return ['font-weight: bold; color: #58A6FF; background-color: rgba(88,166,255,0.1);'] * len(row)
                                 return [''] * len(row)
                             st.dataframe(df_display_s.style.format(fmt_br_s).apply(hl_s, axis=1), use_container_width=True)
 
@@ -1636,13 +1633,13 @@ with tab_transferencias:
                             base = [''] * len(row)
                             if row.name == "💰 Saldo":
                                 base = [
-                                    'font-weight: bold; background: #f0fdf4; color: ' + ('#dc2626' if (isinstance(v, (int, float)) and v < 0) else '#16a34a')
+                                    'font-weight: bold; background: rgba(63,185,80,0.1); color: ' + ('#F85149' if (isinstance(v, (int, float)) and v < 0) else '#3FB950')
                                     for v in row.values
                                 ]
                             elif row.name == "📥 Total Entradas":
-                                base = ['color: #16a34a; font-weight: 600;'] * len(row)
+                                base = ['color: #3FB950; font-weight: 600;'] * len(row)
                             elif row.name == "📤 Total Saídas":
-                                base = ['color: #dc2626; font-weight: 600;'] * len(row)
+                                base = ['color: #F85149; font-weight: 600;'] * len(row)
                             return base
 
                         st.dataframe(
@@ -1818,9 +1815,9 @@ with tab_tributos:
 
             c_cards = st.columns(4)
             def render_card_trib(col, title, val):
-                cor = "#16a34a" if val >= 0 else "#dc2626"
+                cor = "#3FB950" if val >= 0 else "#F85149"
                 with col:
-                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #FFFFFF;"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
             render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
             render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
             render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
