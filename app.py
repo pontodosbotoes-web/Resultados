@@ -1770,15 +1770,16 @@ with tab_contas_pagar:
             
             df_display = df_cp.sort_values('DTVENCIMENTO').copy()
             
-            # Novas colunas mais gerenciais
-            df_display['Filial'] = df_display['CodFilial'].map(NOMES_FILIAIS)
+            # Mapeamento e Formatação das colunas solicitadas
+            df_display['CodFilial'] = df_display['CodFilial'].map(NOMES_FILIAIS)
             df_display['Vencimento'] = df_display['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
-            df_display['Documento'] = df_display['TipoDoc'].fillna('') + " " + df_display['NUMDOC'].fillna('').astype(str)
-            df_display['Parcela'] = df_display['NumeroParcela'].fillna('').astype(str)
-            df_display['Fornecedor'] = df_display['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 30)
-            df_display['Histórico'] = df_display['HISTORICO'].fillna('').astype(str).str.slice(0, 35)
+            df_display['Emissão'] = df_display['DTEMISSAO'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
+            df_display['Baixa'] = df_display['DTBAIXA'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
+            df_display['Parcela'] = pd.to_numeric(df_display['NumeroParcela'], errors='coerce').fillna(0).astype(int)
+            df_display['Fornecedor'] = df_display['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 35)
             df_display['Valor (R$)'] = df_display['ValorTitulo'].apply(formatar_moeda)
 
+            # Função de coloração baseada no vencimento
             def color_vencimento(row):
                 venc = row['DTVENCIMENTO']
                 if venc < dt_hoje:
@@ -1789,8 +1790,10 @@ with tab_contas_pagar:
 
             styled = df_display.style.apply(color_vencimento, axis=1)
             
-            # Colunas exibidas na tela (reduzidas e sem redundância)
-            cols_visiveis = ['Vencimento', 'Filial', 'Fornecedor', 'Documento', 'Parcela', 'Histórico', 'Valor (R$)']
+            # Colunas que serão exibidas na tela
+            cols_visiveis = ['Vencimento', 'CodFilial', 'Fornecedor', 'Emissão', 'Baixa', 'Parcela', 'Valor (R$)']
+            
+            # Esconde todas as outras colunas (IdCPR, Filial antiga, NumeroParcela, Historico, ValorTitulo, Documento, etc)
             cols_ocultas = [c for c in df_display.columns if c not in cols_visiveis]
             styled_df = styled.hide(axis='columns', subset=cols_ocultas)
             
