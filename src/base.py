@@ -73,3 +73,8 @@ def buscar_transferencias(data_inicio, data_fim, filial):
 def buscar_tributos(data_inicio, data_fim):
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
     return _executar_query("visao_tributos.sql", params, None)
+    
+@st.cache_data(ttl=3600)
+def buscar_contas_pagar(data_inicio, data_fim, filial):
+    params = {"data_inicio": data_inicio, "data_fim": data_fim}
+    return _executar_query("visao_contas_pagar.sql", params, filial)
