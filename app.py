@@ -1716,9 +1716,16 @@ with tab_contas_pagar:
             with st.spinner("Carregando contas a pagar..."):
                 df_cp = buscar_contas_pagar(data_ini_cp.strftime("%Y-%m-%d"), data_fim_cp.strftime("%Y-%m-%d"), filial_cod_cp)
                 if not df_cp.empty:
+                    # Converte a data para objeto de data puro para facilitar as comparações
                     df_cp['DTVENCIMENTO'] = pd.to_datetime(df_cp['DTVENCIMENTO']).dt.date
                     df_cp['DTEMISSAO'] = pd.to_datetime(df_cp['DTEMISSAO']).dt.date
+                    df_cp['DTBAIXA'] = pd.to_datetime(df_cp['DTBAIXA']).dt.date
                     df_cp['ValorTitulo'] = pd.to_numeric(df_cp['ValorTitulo'], errors="coerce").fillna(0)
+                    
+                    # --- CORREÇÃO DO NOME DA FILIAL ---
+                    df_cp['CodFilial'] = pd.to_numeric(df_cp['CodFilial'], errors='coerce').fillna(0).astype(int)
+                    df_cp['Filial'] = df_cp['CodFilial'].map(NOMES_FILIAIS).fillna('Desconhecida')
+
                     st.session_state["df_cp"] = df_cp
                     st.session_state["pdf_bytes_cp"] = gerar_pdf_contas_pagar(df_cp, data_ini_cp, data_fim_cp)
                 else:
@@ -1735,18 +1742,22 @@ with tab_contas_pagar:
         if df_cp.empty:
             st.info("Nenhuma conta a pagar encontrada para o período/filtros.")
         else:
+            # Separação dos Dados
+            df_aberto = df_cp[df_cp['DTBAIXA'].isna()].copy()
+            df_pagos = df_cp[df_cp['DTBAIXA'].notna()].copy()
+
+            # --- CARDS (Calculados com base apenas no que está Em Aberto) ---
             dt_hoje = hoje
             dt_amanha = hoje + timedelta(days=1)
             dt_fim_semana = hoje + timedelta(days=(6 - hoje.weekday()))
             dt_fim_mes = hoje.replace(day=calendar.monthrange(hoje.year, hoje.month)[1])
 
-            total_atrasados = df_cp[df_cp['DTVENCIMENTO'] < dt_hoje]['ValorTitulo'].sum()
-            total_hoje = df_cp[df_cp['DTVENCIMENTO'] == dt_hoje]['ValorTitulo'].sum()
-            total_amanha = df_cp[df_cp['DTVENCIMENTO'] == dt_amanha]['ValorTitulo'].sum()
-            total_semana = df_cp[(df_cp['DTVENCIMENTO'] > dt_amanha) & (df_cp['DTVENCIMENTO'] <= dt_fim_semana)]['ValorTitulo'].sum()
-            total_mes = df_cp[(df_cp['DTVENCIMENTO'] > dt_fim_semana) & (df_cp['DTVENCIMENTO'] <= dt_fim_mes)]['ValorTitulo'].sum()
+            total_atrasados = df_aberto[df_aberto['DTVENCIMENTO'] < dt_hoje]['ValorTitulo'].sum()
+            total_hoje = df_aberto[df_aberto['DTVENCIMENTO'] == dt_hoje]['ValorTitulo'].sum()
+            total_amanha = df_aberto[df_aberto['DTVENCIMENTO'] == dt_amanha]['ValorTitulo'].sum()
+            total_semana = df_aberto[(df_aberto['DTVENCIMENTO'] > dt_amanha) & (df_aberto['DTVENCIMENTO'] <= dt_fim_semana)]['ValorTitulo'].sum()
+            total_mes = df_aberto[(df_aberto['DTVENCIMENTO'] > dt_fim_semana) & (df_aberto['DTVENCIMENTO'] <= dt_fim_mes)]['ValorTitulo'].sum()
             
-            # Renderizar 5 Cards (Cores refinadas e borda no hover dinâmica)
             c_cards = st.columns(5)
             def render_card_cp(col, title, val, cor):
                 with col:
@@ -1757,43 +1768,88 @@ with tab_contas_pagar:
                         </div>
                     ''', unsafe_allow_html=True)
             
-            render_card_cp(c_cards[0], "🔴 ATRASADOS", total_atrasados, "#EF4444")   # Vermelho vivo
-            render_card_cp(c_cards[1], "🟠 VENCE HOJE", total_hoje, "#F97316")        # Laranja intenso
-            render_card_cp(c_cards[2], "🟡 VENCE AMANHÃ", total_amanha, "#F59E0B")    # Âmbar/Dourado
-            render_card_cp(c_cards[3], "🔵 ESTA SEMANA", total_semana, "#3B82F6")     # Azul claro
-            render_card_cp(c_cards[4], "🟢 ESTE MÊS", total_mes, "#10B981")           # Verde esmeralda
+            render_card_cp(c_cards[0], "🔴 ATRASADOS", total_atrasados, "#EF4444")
+            render_card_cp(c_cards[1], "🟠 VENCE HOJE", total_hoje, "#F97316")
+            render_card_cp(c_cards[2], "🟡 VENCE AMANHÃ", total_amanha, "#F59E0B")
+            render_card_cp(c_cards[3], "🔵 ESTA SEMANA", total_semana, "#3B82F6")
+            render_card_cp(c_cards[4], "🟢 ESTE MÊS", total_mes, "#10B981")
 
             st.write("")
 
-            # Tabela de Títulos (Enxuta)
-            st.markdown('<div class="tema-titulo">📋 Títulos a Pagar (Em Aberto)</div>', unsafe_allow_html=True)
+            # --- ABAS DE TÍTULOS ---
+            tab_aberto, tab_pagos = st.tabs(["📋 Títulos a Pagar (Em Aberto)", "✅ Títulos Pagos"])
             
-            df_display = df_cp.sort_values('DTVENCIMENTO').copy()
-            
-            # Formatação e Mapeamento
-            df_display['CodFilial'] = df_display['CodFilial'].map(NOMES_FILIAIS)
-            df_display['Vencimento'] = df_display['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
-            df_display['Emissão'] = df_display['DTEMISSAO'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
-            df_display['Baixa'] = df_display['DTBAIXA'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
-            df_display['Parcela'] = pd.to_numeric(df_display['NumeroParcela'], errors='coerce').fillna(0).astype(int)
-            df_display['Fornecedor'] = df_display['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 35)
-            df_display['Valor (R$)'] = df_display['ValorTitulo'].apply(formatar_moeda)
+            # ABA 1: EM ABERTO
+            with tab_aberto:
+                if df_aberto.empty:
+                    st.info("Nenhum título em aberto no período.")
+                else:
+                    df_disp = df_aberto.sort_values('DTVENCIMENTO').copy()
+                    df_disp['Vencimento'] = df_disp['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
+                    df_disp['Emissão'] = df_disp['DTEMISSAO'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
+                    df_disp['Parcela'] = pd.to_numeric(df_disp['NumeroParcela'], errors='coerce').fillna(0).astype(int)
+                    df_disp['Fornecedor'] = df_disp['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 35)
+                    df_disp['Valor (R$)'] = df_disp['ValorTitulo'].apply(formatar_moeda)
 
-            # Seleciona EXPLICITAMENTE as colunas que vão para a tela + a coluna de data oculta
-            cols_exibir = ['Vencimento', 'CodFilial', 'Fornecedor', 'Emissão', 'Baixa', 'Parcela', 'Valor (R$)', 'DTVENCIMENTO']
-            df_render = df_display[cols_exibir].copy()
+                    # Guarda a data original oculta para o colorir
+                    df_disp['_DTV'] = df_disp['DTVENCIMENTO']
 
-            # Função de coloração baseada no vencimento
-            def color_vencimento(row):
-                venc = row['DTVENCIMENTO']
-                if venc < dt_hoje:
-                    return ['background-color: rgba(218, 54, 51, 0.25); color: #FF7B72; font-weight: bold;'] * len(row)
-                if venc == dt_hoje:
-                    return ['background-color: rgba(248, 81, 73, 0.15); color: #F85149; font-weight: bold;'] * len(row)
-                return [''] * len(row)
+                    def color_venc(row):
+                        venc = row['_DTV']
+                        if venc < dt_hoje:
+                            return ['background-color: rgba(218, 54, 51, 0.25); color: #FF7B72; font-weight: bold;'] * len(row)
+                        if venc == dt_hoje:
+                            return ['background-color: rgba(248, 81, 73, 0.15); color: #F85149; font-weight: bold;'] * len(row)
+                        return [''] * len(row)
 
-            # Aplica o estilo e esconde APENAS a coluna DTVENCIMENTO
-            styled = df_render.style.apply(color_vencimento, axis=1)
-            styled = styled.hide(axis='columns', subset=['DTVENCIMENTO'])
+                    styled = df_disp.style.apply(color_venc, axis=1)
+                    
+                    # Renderiza com column_config ocultando a _DTV e formatando colunas
+                    st.dataframe(
+                        styled,
+                        use_container_width=True,
+                        column_config={
+                            "Vencimento": st.column_config.TextColumn("Vencimento"),
+                            "Filial": st.column_config.TextColumn("Filial"),
+                            "Fornecedor": st.column_config.TextColumn("Fornecedor"),
+                            "Emissão": st.column_config.TextColumn("Emissão"),
+                            "Parcela": st.column_config.NumberColumn("Parcela"),
+                            "Valor (R$)": st.column_config.TextColumn("Valor (R$)"),
+                            "_DTV": None, # <-- Esconde a coluna de controle
+                            "DTVENCIMENTO": None,
+                            "DTEMISSAO": None,
+                            "DTBAIXA": None,
+                            "IdCPR": None, "CodFilial": None, "NUMDOC": None, "CodCliFor": None, "NumeroParcela": None, "HISTORICO": None, "ValorTitulo": None, "TipoDoc": None
+                        }
+                    )
+
+            # ABA 2: PAGOS
+            with tab_pagos:
+                if df_pagos.empty:
+                    st.info("Nenhum título pago no período.")
+                else:
+                    df_disp_p = df_pagos.sort_values('DTBAIXA').copy()
+                    df_disp_p['Vencimento'] = df_disp_p['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
+                    df_disp_p['Emissão'] = df_disp_p['DTEMISSAO'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
+                    df_disp_p['Baixa'] = df_disp_p['DTBAIXA'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
+                    df_disp_p['Parcela'] = pd.to_numeric(df_disp_p['NumeroParcela'], errors='coerce').fillna(0).astype(int)
+                    df_disp_p['Fornecedor'] = df_disp_p['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 35)
+                    df_disp_p['Valor (R$)'] = df_disp_p['ValorTitulo'].apply(formatar_moeda)
+
+                    st.dataframe(
+                        df_disp_p,
+                        use_container_width=True,
+                        column_config={
+                            "Vencimento": st.column_config.TextColumn("Vencimento"),
+                            "Filial": st.column_config.TextColumn("Filial"),
+                            "Fornecedor": st.column_config.TextColumn("Fornecedor"),
+                            "Emissão": st.column_config.TextColumn("Emissão"),
+                            "Baixa": st.column_config.TextColumn("Baixa"),
+                            "Parcela": st.column_config.NumberColumn("Parcela"),
+                            "Valor (R$)": st.column_config.TextColumn("Valor (R$)"),
+                            "DTVENCIMENTO": None, "DTEMISSAO": None, "DTBAIXA": None,
+                            "IdCPR": None, "CodFilial": None, "NUMDOC": None, "CodCliFor": None, "NumeroParcela": None, "HISTORICO": None, "ValorTitulo": None, "TipoDoc": None
+                        }
+                    )
             
             st.dataframe(styled, use_container_width=True)
