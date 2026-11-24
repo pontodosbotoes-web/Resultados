@@ -10,6 +10,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
+import calendar
 
 from src.db import carregar_filiais, carregar_fornecedores
 from src.base import (
@@ -17,7 +18,8 @@ from src.base import (
     buscar_vendas, buscar_departamentos, buscar_pagamentos,
     buscar_sazonalidade, buscar_sazonalidade_hora, buscar_sazonalidade_diautil,
     buscar_compras,
-    buscar_transferencias
+    buscar_transferencias,
+    buscar_contas_pagar
 )
 
 st.set_page_config(page_title="Acompanhamento Gerencial", layout="wide", page_icon="📊")
@@ -131,9 +133,7 @@ st.markdown("""
             letter-spacing: 0.05em;
         }
         
-        /* ==========================================
-           ALINHAMENTO DE FILTROS (LABEL + INPUT NA MESMA LINHA)
-           ========================================== */
+        /* Alinhamento de Filtros */
         div[data-testid="stDateInput"], 
         div[data-testid="stTimeInput"], 
         div[data-testid="stSelectbox"] {
@@ -142,27 +142,23 @@ st.markdown("""
             align-items: center !important;
             gap: 6px !important;
         }
-        
         div[data-testid="stWidgetLabel"] {
             margin-bottom: 0px !important;
             white-space: nowrap !important;
             flex-shrink: 0 !important;
         }
-        
         div[data-testid="stWidgetLabel"] p {
             margin-bottom: 0px !important;
             color: #C9D1D9 !important;
             font-size: 13px !important;
             font-weight: 600 !important;
         }
-
         div[data-testid="stDateInput"] > div,
         div[data-testid="stTimeInput"] > div,
         div[data-testid="stSelectbox"] > div {
             flex: 1 !important;
             min-width: 0 !important;
         }
-        
         div[data-testid="stHorizontalBlock"] > div:last-child {
             align-self: flex-end;
             padding-bottom: 2px;
@@ -221,9 +217,18 @@ def limpar_sazonalidade():
               "pdf_bytes_saz", "saz_hist_hash"]:
         if k in st.session_state: del st.session_state[k]
 
+def limpar_contas_pagar():
+    st.session_state["dt_ini_cp"] = hoje
+    st.session_state["dt_fim_cp"] = hoje + timedelta(days=30)
+    st.session_state["filial_cp"] = "Todas"
+    for k in ["df_cp", "pdf_bytes_cp"]:
+        if k in st.session_state: del st.session_state[k]
+
 st.markdown('<div class="titulo-pagina">📊 Acompanhamento Gerencial</div>', unsafe_allow_html=True)
 
-tab_tributos, tab_visao, tab_sazonalidade, tab_compras, tab_transferencias = st.tabs(["⚖️ Tributos", "💰 Vendas", "📅 Sazonalidade", "🛒 Compras", "🔄 Transferências"])
+tab_tributos, tab_visao, tab_sazonalidade, tab_compras, tab_transferencias, tab_contas_pagar = st.tabs([
+    "⚖️ Tributos", "💰 Vendas", "📅 Sazonalidade", "🛒 Compras", "🔄 Transferências", "💸 Contas Pagar"
+])
 
 def formatar_moeda(v):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -328,7 +333,7 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
 
 
 # ==========================================
-# PDF (Mantido claro para impressão)
+# PDF
 # ==========================================
 class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
@@ -757,6 +762,74 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     buffer.seek(0)
     return buffer
 
+
+def gerar_pdf_contas_pagar(df_cp, data_ini, data_fim):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=portrait(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+    left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
+    right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
+    header_data = [[Paragraph("<b>Acompanhamento Gerencial - Contas a Pagar</b>", left_style), Paragraph(f"Vencimento: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", right_style)]]
+    header_table = Table(header_data, colWidths=[400, 400])
+    header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 15), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
+    elements.append(header_table)
+
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
+    cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
+
+    # Tabela de Títulos
+    headers = ['Vencimento', 'Fornecedor', 'Documento', 'Histórico', 'Valor (R$)']
+    data = [[Paragraph(h, header_style) for h in headers]]
+    
+    df_sorted = df_cp.sort_values('DTVENCIMENTO')
+    total = 0
+    for _, row in df_sorted.iterrows():
+        venc = row['DTVENCIMENTO'].strftime('%d/%m/%Y') if pd.notnull(row['DTVENCIMENTO']) else ''
+        forn = str(row['Fornecedor'])[:30] if pd.notnull(row['Fornecedor']) else ''
+        doc_num = str(row['NUMDOC']) if pd.notnull(row['NUMDOC']) else ''
+        hist = str(row['HISTORICO'])[:40] if pd.notnull(row['HISTORICO']) else ''
+        val = row['ValorTitulo']
+        total += val
+        
+        cells = [
+            Paragraph(venc, cell_left),
+            Paragraph(forn, cell_left),
+            Paragraph(doc_num, cell_left),
+            Paragraph(hist, cell_left),
+            Paragraph(formatar_moeda(val), cell_right)
+        ]
+        data.append(cells)
+    
+    # Linha de Total
+    data.append([
+        Paragraph("<b>TOTAL</b>", cell_left),
+        Paragraph("", cell_left),
+        Paragraph("", cell_left),
+        Paragraph("", cell_left),
+        Paragraph(f"<b>{formatar_moeda(total)}</b>", cell_right)
+    ])
+
+    col_widths = [70, 130, 80, 160, 80]
+    t = Table(data, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#FEF3C7')),
+    ]))
+    elements.append(t)
+
+    doc.build(elements, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer
+
+
 # ==========================================
 # SAZONALIDADE — funções auxiliares
 # ==========================================
@@ -828,13 +901,11 @@ def calcular_indices_sazonalidade_hora(df):
 
 @st.cache_data    
 def calcular_indices_sazonalidade_diautil(df):
-    # Usa 26 como multiplicador base (média de dias úteis seg-sáb no mês)
-    # O range vai até 28 porque um mês pode ter até 27 dias úteis.
     df_idx = _calc_idx_generic(df, "DiaUtil", range(1, 28), 26)
     if not df_idx.empty:
         df_idx.index = [f"{d}º Dia" for d in df_idx.index]
         df_idx.index.name = "Dia Útil"
-        df_idx = df_idx[df_idx["Total"] > 0]  # Remove dias sem movimento
+        df_idx = df_idx[df_idx["Total"] > 0]
     return df_idx
 
 def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_hora, df_periodo_hora, df_comp_hora, df_hist_diautil, df_periodo_diautil, df_comp_diautil, data_ini, data_fim, h_ini, h_fim):
@@ -894,7 +965,6 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
     heading_dia = ParagraphStyle('H_Dia', parent=styles['Heading3'], fontSize=10, spaceBefore=6, spaceAfter=4, textColor=colors.HexColor('#1E293B'))
     heading_hora = ParagraphStyle('H_Hora', parent=styles['Heading3'], fontSize=8, spaceBefore=4, spaceAfter=2, textColor=colors.HexColor('#1E293B'))
 
-    # FOLHA 1: DIAS DA SEMANA
     elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS) — HISTÓRICO COMPLETO</b>", heading_dia))
     elements.append(montar_tabela(df_hist_idx, formatar_indice, com_pct=True))
     elements.append(Spacer(1, 15))
@@ -903,10 +973,7 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
     elements.append(Spacer(1, 15))
     elements.append(Paragraph("<b>COMPARATIVO (DIAS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_dia))
     elements.append(montar_tabela(df_comparativo, formatar_variacao_pct))
-    
     elements.append(PageBreak())
-    
-    # FOLHA 2: HORAS
     elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (HORAS) — HISTÓRICO COMPLETO</b>", heading_hora))
     elements.append(montar_tabela(df_hist_hora, formatar_indice, com_pct=True, is_hora=True))
     elements.append(Spacer(1, 6))
@@ -915,10 +982,7 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
     elements.append(Spacer(1, 6))
     elements.append(Paragraph("<b>COMPARATIVO (HORAS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_hora))
     elements.append(montar_tabela(df_comp_hora, formatar_variacao_pct, is_hora=True))
-
     elements.append(PageBreak())
-
-    # FOLHA 3: DIAS ÚTEIS
     elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS ÚTEIS) — HISTÓRICO COMPLETO</b>", heading_dia))
     elements.append(montar_tabela(df_hist_diautil, formatar_indice, com_pct=True))
     elements.append(Spacer(1, 15))
@@ -927,7 +991,6 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
     elements.append(Spacer(1, 15))
     elements.append(Paragraph("<b>COMPARATIVO (DIAS ÚTEIS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_dia))
     elements.append(montar_tabela(df_comp_diautil, formatar_variacao_pct))
-
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer
@@ -981,7 +1044,6 @@ with tab_visao:
             st.error(f"Erro ao carregar dados de vendas: {e}")
             st.stop()
 
-    # RENDERIZAÇÃO
     if "df_vendas" not in st.session_state:
         st.info("👋 Clique em '🔄 Atualizar' acima para carregar os dados de vendas.")
     else:
@@ -1112,14 +1174,11 @@ with tab_sazonalidade:
                 else:
                     st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_saz_disabled")
 
-    # OTIMIZAÇÃO MÁXIMA: Só carrega se clicar em Atualizar
     if btn_saz:
         try:
             with st.spinner("Carregando dados de sazonalidade..."):
                 data_hist_ini = (hoje - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
                 data_hist_fim = hoje.strftime("%Y-%m-%d")
-
-                # 1. Verifica se o filtro de hora mudou. Se mudou, o histórico precisa ser recalculado.
                 hist_hash = f"{h_ini_saz.hour}_{h_fim_saz.hour}"
                 _recalcular_hist = st.session_state.get("saz_hist_hash") != hist_hash or "df_saz_hist" not in st.session_state
 
@@ -1133,7 +1192,6 @@ with tab_sazonalidade:
                     st.session_state["df_saz_hist_diautil"] = calcular_indices_sazonalidade_diautil(df_hist_diautil)
                     st.session_state["saz_hist_hash"] = hist_hash
                     
-                # 2. Busca o período
                 df_periodo = buscar_sazonalidade(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
                 df_periodo_hora = buscar_sazonalidade_hora(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
                 df_periodo_diautil = buscar_sazonalidade_diautil(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), "")
@@ -1146,7 +1204,6 @@ with tab_sazonalidade:
                 df_periodo_hora_idx = calcular_indices_sazonalidade_hora(df_periodo_hora)
                 df_periodo_diautil_idx = calcular_indices_sazonalidade_diautil(df_periodo_diautil)
 
-                # 3. Gera os comparativos
                 if not df_hist_idx.empty and not df_periodo_idx.empty:
                     df_comparativo = ((df_periodo_idx / df_hist_idx) - 1) * 100
                     df_comparativo = df_comparativo.replace([float("inf"), -float("inf")], None).round(2)
@@ -1185,7 +1242,6 @@ with tab_sazonalidade:
             st.error(f"Erro ao carregar sazonalidade: {e}")
             st.stop()
 
-    # RENDERIZAÇÃO
     if "df_saz_hist" not in st.session_state:
         st.info("👋 Clique em '🔄 Atualizar' acima para carregar a sazonalidade.")
     else:
@@ -1231,7 +1287,6 @@ with tab_sazonalidade:
                 if df_idx.empty:
                     st.info("Sem dados para o período.")
                     return
-                    
                 df_display = df_idx.copy()
                 max_vals = df_idx.drop(columns=["Total"], errors="ignore").max()
                 min_vals = df_idx.drop(columns=["Total"], errors="ignore").min()
@@ -1240,18 +1295,14 @@ with tab_sazonalidade:
                     if pd.isna(val): return "-"
                     txt = fmt_func(val)
                     if col_name in max_vals and col_name in min_vals:
-                        if val == max_vals[col_name]:
-                            txt += " 🏆"
-                        elif val == min_vals[col_name]:
-                            txt += " 🍍"
+                        if val == max_vals[col_name]: txt += " 🏆"
+                        elif val == min_vals[col_name]: txt += " 🍍"
                     return txt
 
                 for col in df_display.columns:
                     df_display[col] = df_display.apply(lambda row: fmt_val(row[col], row.name, col), axis=1)
-
                 def apply_colors(row):
                     return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
-
                 styled = df_display.style.apply(apply_colors, axis=1)
                 styled = styled.set_properties(**{'text-align': 'right'})
                 st.dataframe(styled, use_container_width=True)
@@ -1261,7 +1312,6 @@ with tab_sazonalidade:
                 if df_idx.empty:
                     st.info("Sem dados para o período.")
                     return
-                
                 df_display = df_idx.copy()
                 max_vals = df_idx.drop(columns=["Total"], errors="ignore").max()
                 min_vals = df_idx.drop(columns=["Total"], errors="ignore").min()
@@ -1271,10 +1321,8 @@ with tab_sazonalidade:
                     pct = ((val / total) - 1) * 100 if total > 0 else 0
                     txt = f"{val:.4f} ({pct:+.2f}%)".replace(".", ",")
                     if col_name in max_vals and col_name in min_vals:
-                        if val == max_vals[col_name]:
-                            txt += " 🏆"
-                        elif val == min_vals[col_name]:
-                            txt += " 🍍"
+                        if val == max_vals[col_name]: txt += " 🏆"
+                        elif val == min_vals[col_name]: txt += " 🍍"
                     return txt
 
                 for col in df_display.columns:
@@ -1282,10 +1330,8 @@ with tab_sazonalidade:
                         df_display[col] = df_display.apply(lambda row: fmt_with_pct(row[col], row["Total"], row.name, col), axis=1)
                     else:
                         df_display[col] = df_display[col].apply(lambda x: f"{x:.4f}".replace(".", ",") if not pd.isna(x) else "-")
-
                 def apply_colors(row):
                     return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
-
                 styled = df_display.style.apply(apply_colors, axis=1)
                 styled = styled.set_properties(**{'text-align': 'right'})
                 st.dataframe(styled, use_container_width=True)
@@ -1325,7 +1371,6 @@ with tab_sazonalidade:
             _render(df_comparativo, "📈 Comparativo (DIAS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
             st.markdown(legenda_comp, unsafe_allow_html=True)
             st.markdown("---")
-
             _render_com_pct(df_hist_hora_idx, "🕒 Índice de Sazonalidade (HORAS) — Histórico Completo", _cor_hora_idx)
             st.markdown(legenda_horas, unsafe_allow_html=True)
             _render_com_pct(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período", _cor_hora_idx)
@@ -1333,7 +1378,6 @@ with tab_sazonalidade:
             _render(df_comp_hora, "📈 Comparativo (HORAS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
             st.markdown(legenda_comp, unsafe_allow_html=True)
             st.markdown("---")
-
             _render_com_pct(df_hist_diautil_idx, "📊 Índice de Sazonalidade (DIAS ÚTEIS) — Histórico Completo", _cor_idx)
             st.markdown(legenda_dias, unsafe_allow_html=True)
             _render_com_pct(df_periodo_diautil_idx, f"📊 Índice de Sazonalidade (DIAS ÚTEIS) — Período", _cor_idx)
@@ -1400,7 +1444,6 @@ with tab_compras:
             st.error(f"Erro ao carregar compras: {e}")
             st.stop()
 
-    # RENDERIZAÇÃO
     if "df_compras" not in st.session_state:
         st.info("👋 Clique em '🔄 Atualizar' acima para carregar as compras.")
     else:
@@ -1496,7 +1539,6 @@ with tab_transferencias:
             st.error(f"Erro ao carregar transferências: {e}")
             st.stop()
 
-    # RENDERIZAÇÃO
     if "df_transf" not in st.session_state:
         st.info("👋 Clique em '🔄 Atualizar' acima para carregar as transferências.")
     else:
@@ -1506,7 +1548,6 @@ with tab_transferencias:
         else:
             df_entradas_all = df_transf[df_transf["TipoDado"] == "ENTRADA"].copy()
             df_saidas_all = df_transf[df_transf["TipoDado"] == "SAIDA"].copy()
-
             meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
             filiais_card = sorted(set(
@@ -1515,12 +1556,9 @@ with tab_transferencias:
             ))
 
             def fmt_saldo_card(v):
-                if v > 0:
-                    return f"+ {formatar_moeda(v)}"
-                elif v < 0:
-                    return f"- {formatar_moeda(abs(v))}"
-                else:
-                    return formatar_moeda(0)
+                if v > 0: return f"+ {formatar_moeda(v)}"
+                elif v < 0: return f"- {formatar_moeda(abs(v))}"
+                else: return formatar_moeda(0)
 
             cards_data = []
             for filial in filiais_card:
@@ -1552,7 +1590,6 @@ with tab_transferencias:
                 for sub_tab, filial in zip(sub_tabs, filiais_envolvidas):
                     with sub_tab:
                         nome_filial = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
-
                         st.markdown(f"### 📥 ENTRADAS em {nome_filial}")
                         df_ent = df_entradas_all[df_entradas_all["FilialDestino"] == filial]
                         if df_ent.empty:
@@ -1608,10 +1645,8 @@ with tab_transferencias:
                         st.write("")
 
                         st.markdown(f"### 💰 SALDO em {nome_filial} (Entradas − Saídas)")
-
                         tot_ent_mes = {m: (df_ent[df_ent["Mes_Nome"] == m]["Valor"].sum() if not df_ent.empty else 0.0) for m in meses_colunas}
                         tot_sai_mes = {m: (df_sai[df_sai["Mes_Nome"] == m]["Valor"].sum() if not df_sai.empty else 0.0) for m in meses_colunas}
-
                         tot_ent_ano = sum(tot_ent_mes.values())
                         tot_sai_ano = sum(tot_sai_mes.values())
                         saldo_ano = tot_ent_ano - tot_sai_ano
@@ -1648,217 +1683,100 @@ with tab_transferencias:
                         )
 
 # ==========================================
-# ABA TRIBUTOS
+# ABA CONTAS A PAGAR
 # ==========================================
-with tab_tributos:
-    if "dt_ini_trib" not in st.session_state: st.session_state["dt_ini_trib"] = hoje.replace(day=1)
-    if "dt_fim_trib" not in st.session_state: st.session_state["dt_fim_trib"] = hoje
+with tab_contas_pagar:
+    if "dt_ini_cp" not in st.session_state: st.session_state["dt_ini_cp"] = hoje
+    if "dt_fim_cp" not in st.session_state: st.session_state["dt_fim_cp"] = hoje + timedelta(days=30)
+    if "filial_cp" not in st.session_state: st.session_state["filial_cp"] = "Todas"
 
     with st.container(border=True):
-        c1, c2, c_acoes = st.columns([1.2, 1.2, 2.5], vertical_alignment="bottom")
-        data_ini_t = c1.date_input("De:", key="dt_ini_trib", format="DD/MM/YYYY")
-        data_fim_t = c2.date_input("Até:", key="dt_fim_trib", format="DD/MM/YYYY")
+        c1, c2, c3, c_acoes = st.columns([1.2, 1.2, 1.2, 2.5], vertical_alignment="bottom")
+        data_ini_cp = c1.date_input("Vencimento De:", key="dt_ini_cp", format="DD/MM/YYYY")
+        data_fim_cp = c2.date_input("Até:", key="dt_fim_cp", format="DD/MM/YYYY")
+        filial_cp_sel = c3.selectbox("Filial:", ["Todas"] + list(filiais_inv.keys()), key="filial_cp")
 
         with c_acoes:
             col_b1, col_b2, col_b3 = st.columns(3)
             with col_b1:
-                btn_atualizar_trib = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_trib")
+                btn_cp = st.button("🔄 Atualizar", use_container_width=True, type="primary", key="btn_atualizar_cp")
             with col_b2:
-                st.button("🧹 Limpar", use_container_width=True, on_click=limpar_tributos, key="btn_limpar_trib")
+                st.button("🧹 Limpar", use_container_width=True, on_click=limpar_contas_pagar, key="btn_limpar_cp")
             with col_b3:
-                pdf_bytes_t = st.session_state.get("pdf_bytes_trib")
-                if pdf_bytes_t:
+                pdf_bytes_cp = st.session_state.get("pdf_bytes_cp")
+                if pdf_bytes_cp:
                     ts = datetime.now(tz_br).strftime("%Y%m%d %H%M%S") if tz_br else datetime.now().strftime("%Y%m%d %H%M%S")
-                    st.download_button(label="📄 Gerar PDF", data=pdf_bytes_t, file_name=f"Acompanhamento Gerencial - Tributos {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_trib")
+                    st.download_button(label="📄 Gerar PDF", data=pdf_bytes_cp, file_name=f"Acompanhamento Gerencial - Contas Pagar {ts}.pdf", mime="application/pdf", use_container_width=True, key="btn_pdf_cp")
                 else:
-                    st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_trib_disabled")
+                    st.button("📄 Gerar PDF", disabled=True, use_container_width=True, key="btn_pdf_cp_disabled")
 
-    if btn_atualizar_trib:
+    if btn_cp:
+        filial_cod_cp = "" if filial_cp_sel == "Todas" else filiais_inv[filial_cp_sel]
         try:
-            with st.spinner("Carregando dados tributários..."):
-                df_trib = buscar_tributos(data_ini_t.strftime("%Y-%m-%d"), data_fim_t.strftime("%Y-%m-%d"))
-                if not df_trib.empty:
-                    df_trib["CodFilial"] = pd.to_numeric(df_trib["CodFilial"], errors="coerce").fillna(0).astype(int)
-                    cols_numeric = ["VendasBruto", "VendasLiquidoDesconto", "ICMS_Vendas", "DevolucaoVendas", "TransfEnvTotal", "TransfEnvTrib", "TransfEnvNaoTrib", "ICMS_TransfEnv", "ComprasTotal", "ComprasTrib", "ComprasNaoTrib", "ICMS_Compras", "TransfRecTotal", "TransfRecTrib", "TransfRecNaoTrib", "ICMS_TransfRec", "TributosAntecipados"]
-                    for c in cols_numeric:
-                        df_trib[c] = pd.to_numeric(df_trib[c], errors="coerce").fillna(0)
-                    tem_movimento = ((df_trib["VendasBruto"] > 0) | (df_trib["ComprasTotal"] > 0) | (df_trib["TransfEnvTotal"] > 0) | (df_trib["TransfRecTotal"] > 0) | (df_trib["TributosAntecipados"] != 0))
-                    df_trib = df_trib[tem_movimento].copy()
-                    if not df_trib.empty:
-                        df_trib["vendasLiquido"] = df_trib["VendasLiquidoDesconto"] - df_trib["DevolucaoVendas"]
-                        df_trib["tributoVendasIntegral"] = df_trib["ICMS_Vendas"]
-                        df_trib["pctVendasEfetivo"] = (df_trib["ICMS_Vendas"] / df_trib["VendasBruto"] * 100).fillna(0)
-                        df_trib["tributoVendasAdicional"] = 0.0
-                        df_trib["pctAdicional"] = 0.0
-                        df_trib["icmsTransfEnv"] = df_trib["ICMS_TransfEnv"]
-                        df_trib["pctTransfEnvEfetivo"] = (df_trib["ICMS_TransfEnv"] / df_trib["TransfEnvTotal"] * 100).fillna(0)
-                        mask_atacado = df_trib["CodFilial"] == 5
-                        df_trib.loc[mask_atacado, "tributoVendasIntegral"] = df_trib.loc[mask_atacado, "VendasBruto"] * 0.071
-                        df_trib.loc[mask_atacado, "pctVendasEfetivo"] = 7.10
-                        mask_adic = mask_atacado & (df_trib["vendasLiquido"] < 400000.0)
-                        df_trib.loc[mask_adic, "tributoVendasAdicional"] = df_trib.loc[mask_adic, "vendasLiquido"] * 0.049
-                        df_trib.loc[mask_adic, "pctAdicional"] = 4.90
-                        df_trib.loc[mask_atacado, "icmsTransfEnv"] = df_trib.loc[mask_atacado, "TransfEnvTrib"] * 0.071
-                        df_trib.loc[mask_atacado, "pctTransfEnvEfetivo"] = 7.10
-                        df_trib.loc[mask_atacado, "ICMS_Compras"] = 0.0
-                        df_trib.loc[mask_atacado, "ICMS_TransfRec"] = 0.0
-                        df_trib.loc[mask_atacado, "ComprasTrib"] = 0.0
-                        df_trib.loc[mask_atacado, "TransfRecTrib"] = 0.0
-                        df_trib.loc[mask_atacado, "ComprasNaoTrib"] = df_trib.loc[mask_atacado, "ComprasTotal"]
-                        df_trib.loc[mask_atacado, "TransfRecNaoTrib"] = df_trib.loc[mask_atacado, "TransfRecTotal"]
-                        mask_srb = df_trib["CodFilial"] == 4
-                        df_trib.loc[mask_srb, "tributoVendasIntegral"] = df_trib.loc[mask_srb, "VendasBruto"] * 0.143
-                        df_trib.loc[mask_srb, "pctVendasEfetivo"] = 14.30
-                        df_trib.loc[mask_srb, "icmsTransfEnv"] = 0.0
-                        df_trib.loc[mask_srb, "pctTransfEnvEfetivo"] = 0.0
-                        df_trib.loc[mask_srb, "ICMS_Compras"] = 0.0
-                        df_trib.loc[mask_srb, "ICMS_TransfRec"] = 0.0
-                        df_trib.loc[mask_srb, "TransfEnvTrib"] = 0.0
-                        df_trib.loc[mask_srb, "TransfEnvNaoTrib"] = df_trib.loc[mask_srb, "TransfEnvTotal"]
-                        df_trib.loc[mask_srb, "ComprasTrib"] = 0.0
-                        df_trib.loc[mask_srb, "TransfRecTrib"] = 0.0
-                        df_trib.loc[mask_srb, "ComprasNaoTrib"] = df_trib.loc[mask_srb, "ComprasTotal"]
-                        df_trib.loc[mask_srb, "TransfRecNaoTrib"] = df_trib.loc[mask_srb, "TransfRecTotal"]
-                        df_trib["totalSaidas"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTotal"]
-                        df_trib["totalSaidasTrib"] = df_trib["vendasLiquido"] + df_trib["TransfEnvTrib"]
-                        df_trib["totalSaidasNaoTrib"] = df_trib["TransfEnvNaoTrib"]
-                        df_trib["totalEntradas"] = df_trib["ComprasTotal"] + df_trib["TransfRecTotal"] + df_trib["TributosAntecipados"]
-                        df_trib["totalEntradasTrib"] = df_trib["ComprasTrib"] + df_trib["TransfRecTrib"] + df_trib["TributosAntecipados"]
-                        df_trib["totalEntradasNaoTrib"] = df_trib["ComprasNaoTrib"] + df_trib["TransfRecNaoTrib"]
-                        df_trib["debitoICMS"] = df_trib["tributoVendasIntegral"] + df_trib["tributoVendasAdicional"] + df_trib["icmsTransfEnv"]
-                        df_trib["creditoICMS"] = df_trib["ICMS_Compras"] + df_trib["ICMS_TransfRec"] + df_trib["TributosAntecipados"]
-                        df_trib["resultado"] = df_trib["creditoICMS"] - df_trib["debitoICMS"]
-                        atacado = df_trib[df_trib["CodFilial"] == 5]
-                        pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
-                        srb = df_trib[df_trib["CodFilial"] == 4]
-                        colunas = pd.concat([atacado, pb, srb])
-                        rows_saidas = [
-                            ("Valor Vendas Bruto", "VendasBruto", {}),
-                            ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
-                            ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
-                            ("Tributo Vendas Integral", "tributoVendasIntegral", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"}),
-                            ("Tributo Vendas Adicional", "tributoVendasAdicional", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"}),
-                            ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
-                            ("Tributo Transferências Enviadas", "icmsTransfEnv", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"}),
-                            ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
-                            ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
-                            ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                            ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
-                        ]
-                        rows_entradas = [
-                            ("Valor Compras", "ComprasTotal", {}),
-                            ("Tributo Compras", "ICMS_Compras", {}),
-                            ("Valor Transferências Recebidas", "TransfRecTotal", {}),
-                            ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
-                            ("Tributos Antecipados", "TributosAntecipados", {}),
-                            ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
-                            ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
-                            ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                            ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
-                        ]
-                        rows_resultado = [("Resultado", "resultado", {"bold": True, "cls": "resultado"})]
-                        pdf_bytes = gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini_t, data_fim_t)
-                        st.session_state["pdf_bytes_trib"] = pdf_bytes
-                        st.session_state["df_trib"] = df_trib
-                    else:
-                        st.session_state["df_trib"] = df_trib
-                        st.session_state["pdf_bytes_trib"] = None
+            with st.spinner("Carregando contas a pagar..."):
+                df_cp = buscar_contas_pagar(data_ini_cp.strftime("%Y-%m-%d"), data_fim_cp.strftime("%Y-%m-%d"), filial_cod_cp)
+                if not df_cp.empty:
+                    df_cp['DTVENCIMENTO'] = pd.to_datetime(df_cp['DTVENCIMENTO']).dt.date
+                    df_cp['DTEMISSAO'] = pd.to_datetime(df_cp['DTEMISSAO']).dt.date
+                    df_cp['ValorTitulo'] = pd.to_numeric(df_cp['ValorTitulo'], errors="coerce").fillna(0)
+                    st.session_state["df_cp"] = df_cp
+                    st.session_state["pdf_bytes_cp"] = gerar_pdf_contas_pagar(df_cp, data_ini_cp, data_fim_cp)
                 else:
-                    st.session_state["df_trib"] = df_trib
-                    st.session_state["pdf_bytes_trib"] = None
+                    st.session_state["df_cp"] = df_cp
+                    st.session_state["pdf_bytes_cp"] = None
         except Exception as e:
-            st.error(f"Erro ao carregar tributos: {e}")
+            st.error(f"Erro ao carregar contas a pagar: {e}")
             st.stop()
 
-    # RENDERIZAÇÃO
-    if "df_trib" not in st.session_state:
-        st.info("👋 Clique em '🔄 Atualizar' acima para carregar os dados tributários.")
+    if "df_cp" not in st.session_state:
+        st.info("👋 Clique em '🔄 Atualizar' acima para carregar as contas a pagar.")
     else:
-        df_trib = st.session_state.get("df_trib", pd.DataFrame())
-        if df_trib.empty:
-            st.info("Nenhum dado encontrado para o período.")
+        df_cp = st.session_state.get("df_cp", pd.DataFrame())
+        if df_cp.empty:
+            st.info("Nenhuma conta a pagar encontrada para o período/filtros.")
         else:
-            atacado = df_trib[df_trib["CodFilial"] == 5]
-            pb = df_trib[df_trib["CodFilial"].isin([1, 2, 3])].sort_values("NomeFilial")
-            srb = df_trib[df_trib["CodFilial"] == 4]
-            colunas = pd.concat([atacado, pb, srb])
-            rows_saidas = [
-                ("Valor Vendas Bruto", "VendasBruto", {}),
-                ("Valor Devolução Vendas", "DevolucaoVendas", {"cls": "devolucao"}),
-                ("Valor Vendas Líquido", "vendasLiquido", {"bold": True}),
-                ("Tributo Vendas Integral", "tributoVendasIntegral", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctVendasEfetivo']:.2f}%)"}),
-                ("Tributo Vendas Adicional", "tributoVendasAdicional", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctAdicional']:.2f}%)"}),
-                ("Valor Transferências Enviadas", "TransfEnvTotal", {}),
-                ("Tributo Transferências Enviadas", "icmsTransfEnv", {"fmt": lambda v, f: f"{formatar_numero(v)} ({f['pctTransfEnvEfetivo']:.2f}%)"}),
-                ("Total de Saídas", "totalSaidas", {"bold": True, "cls": "total-saida"}),
-                ("Saídas Tributadas", "totalSaidasTrib", {"bold": True, "cls": "subtotal-saida"}),
-                ("Saídas Não Tributadas", "totalSaidasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                ("Tributos Saídas", "debitoICMS", {"bold": True, "cls": "debito bloco-fim"})
-            ]
-            rows_entradas = [
-                ("Valor Compras", "ComprasTotal", {}),
-                ("Tributo Compras", "ICMS_Compras", {}),
-                ("Valor Transferências Recebidas", "TransfRecTotal", {}),
-                ("Tributo Transferências Recebidas", "ICMS_TransfRec", {}),
-                ("Tributos Antecipados", "TributosAntecipados", {}),
-                ("Total de Entradas", "totalEntradas", {"bold": True, "cls": "total-entrada"}),
-                ("Entradas Tributadas", "totalEntradasTrib", {"bold": True, "cls": "subtotal-entrada"}),
-                ("Entradas Não Tributadas", "totalEntradasNaoTrib", {"bold": True, "cls": "nao-tributada"}),
-                ("Tributos Entradas", "creditoICMS", {"bold": True, "cls": "credito bloco-fim"})
-            ]
-            rows_resultado = [("Resultado", "resultado", {"bold": True, "cls": "resultado"})]
+            # Lógica de Vencimentos
+            dt_hoje = hoje
+            dt_amanha = hoje + timedelta(days=1)
+            dt_fim_semana = hoje + timedelta(days=(6 - hoje.weekday()))
+            dt_fim_mes = hoje.replace(day=calendar.monthrange(hoje.year, hoje.month)[1])
 
-            saldo_atacado = atacado["resultado"].sum() if not atacado.empty else 0
-            saldo_pb = pb["resultado"].sum() if not pb.empty else 0
-            saldo_srb = srb["resultado"].sum() if not srb.empty else 0
-            saldo_cons = saldo_atacado + saldo_pb + saldo_srb
-
+            total_hoje = df_cp[df_cp['DTVENCIMENTO'] == dt_hoje]['ValorTitulo'].sum()
+            total_amanha = df_cp[df_cp['DTVENCIMENTO'] == dt_amanha]['ValorTitulo'].sum()
+            total_semana = df_cp[(df_cp['DTVENCIMENTO'] > dt_amanha) & (df_cp['DTVENCIMENTO'] <= dt_fim_semana)]['ValorTitulo'].sum()
+            total_mes = df_cp[(df_cp['DTVENCIMENTO'] > dt_fim_semana) & (df_cp['DTVENCIMENTO'] <= dt_fim_mes)]['ValorTitulo'].sum()
+            
+            # Renderizar Cards
             c_cards = st.columns(4)
-            def render_card_trib(col, title, val):
-                cor = "#3FB950" if val >= 0 else "#F85149"
+            def render_card_cp(col, title, val, cor):
                 with col:
                     st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
-            render_card_trib(c_cards[0], "📊 Resultado PB - ATACADO", saldo_atacado)
-            render_card_trib(c_cards[1], "📊 Resultado PB - FILIAIS", saldo_pb)
-            render_card_trib(c_cards[2], "📊 Resultado SRB", saldo_srb)
-            render_card_trib(c_cards[3], "📊 Consolidado", saldo_cons)
+            
+            render_card_cp(c_cards[0], "🔴 VENCE HOJE", total_hoje, "#F85149")
+            render_card_cp(c_cards[1], "🟠 VENCE AMANHÃ", total_amanha, "#F0883E")
+            render_card_cp(c_cards[2], "🔵 ESTA SEMANA", total_semana, "#58A6FF")
+            render_card_cp(c_cards[3], "🟢 ESTE MÊS", total_mes, "#3FB950")
 
             st.write("")
 
-            def build_trib_table(rows_list):
-                html = '<div class="tabela-wrapper"><table class="tributos-tabela">'
-                html += '<thead><tr><th style="text-align:left;">Operação</th>'
-                for _, f in colunas.iterrows():
-                    html += f'<th style="text-align:right;">{f["NomeFilial"]}</th>'
-                html += '<th style="text-align:right;">📊 Total</th></tr></thead><tbody>'
-                for label, key, opts in rows_list:
-                    cls = opts.get("cls", "")
-                    bold = opts.get("bold", False)
-                    label_fmt = f"<strong>{label}</strong>" if bold else label
-                    html += f'<tr class="{cls}"><td style="text-align:left; padding-left:8px;">{label_fmt}</td>'
-                    total = 0
-                    for _, f in colunas.iterrows():
-                        val = f[key] if key else 0
-                        total += val
-                        if "fmt" in opts:
-                            val_str = opts["fmt"](val, f)
-                        else:
-                            val_str = formatar_numero(val)
-                        if key == "resultado":
-                            val_str = formatar_numero(val) if val >= 0 else f"-{formatar_numero(abs(val))}"
-                        html += f'<td style="text-align:right;" class="{cls}">{val_str}</td>'
-                    if key == "resultado":
-                        total_str = formatar_numero(total) if total >= 0 else f"-{formatar_numero(abs(total))}"
-                    else:
-                        total_str = formatar_numero(total)
-                    html += f'<td style="text-align:right;" class="{cls}">{total_str}</td></tr>'
-                html += '</tbody></table></div>'
-                return html
+            # Tabela de Títulos
+            st.markdown('<div class="tema-titulo">📋 Títulos a Pagar (Em Aberto)</div>', unsafe_allow_html=True)
+            
+            df_display = df_cp.sort_values('DTVENCIMENTO').copy()
+            
+            # Formatação da tabela
+            df_display['Vencimento'] = df_display['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
+            df_display['Fornecedor'] = df_display['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 30)
+            df_display['Documento'] = df_display['NUMDOC'].fillna('').astype(str)
+            df_display['Histórico'] = df_display['HISTORICO'].fillna('').astype(str).str.slice(0, 50)
+            df_display['Valor (R$)'] = df_display['ValorTitulo'].apply(formatar_moeda)
 
-            tab_saidas, tab_entradas, tab_resultado = st.tabs(["📉 Saídas", "📈 Entradas", "📊 Resultado"])
-            with tab_saidas:
-                st.markdown(build_trib_table(rows_saidas), unsafe_allow_html=True)
-            with tab_entradas:
-                st.markdown(build_trib_table(rows_entradas), unsafe_allow_html=True)
-            with tab_resultado:
-                st.markdown(build_trib_table(rows_resultado), unsafe_allow_html=True)
+            def color_vencimento(row):
+                if row['DTVENCIMENTO'] < dt_hoje:
+                    return ['background-color: rgba(248, 81, 73, 0.15); color: #F85149; font-weight: bold;'] * len(row)
+                if row['DTVENCIMENTO'] == dt_hoje:
+                    return ['background-color: rgba(248, 81, 73, 0.1); color: #FF7B72; font-weight: bold;'] * len(row)
+                return [''] * len(row)
+
+            styled_df = df_display[['Vencimento', 'Fornecedor', 'Documento', 'Histórico', 'Valor (R$)']].style.apply(color_vencimento, axis=1)
+            st.dataframe(styled_df, use_container_width=True)
