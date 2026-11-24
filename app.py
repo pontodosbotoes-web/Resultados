@@ -218,8 +218,8 @@ def limpar_sazonalidade():
         if k in st.session_state: del st.session_state[k]
 
 def limpar_contas_pagar():
-    st.session_state["dt_ini_cp"] = hoje
-    st.session_state["dt_fim_cp"] = hoje + timedelta(days=30)
+    st.session_state["dt_ini_cp"] = hoje.replace(day=1) # Primeiro dia do mês
+    st.session_state["dt_fim_cp"] = hoje.replace(day=calendar.monthrange(hoje.year, hoje.month)[1]) # Último dia do mês
     st.session_state["filial_cp"] = "Todas"
     for k in ["df_cp", "pdf_bytes_cp"]:
         if k in st.session_state: del st.session_state[k]
@@ -1686,8 +1686,9 @@ with tab_transferencias:
 # ABA CONTAS A PAGAR
 # ==========================================
 with tab_contas_pagar:
-    if "dt_ini_cp" not in st.session_state: st.session_state["dt_ini_cp"] = hoje
-    if "dt_fim_cp" not in st.session_state: st.session_state["dt_fim_cp"] = hoje + timedelta(days=30)
+    # Filtro padrão: Mês corrente
+    if "dt_ini_cp" not in st.session_state: st.session_state["dt_ini_cp"] = hoje.replace(day=1)
+    if "dt_fim_cp" not in st.session_state: st.session_state["dt_fim_cp"] = hoje.replace(day=calendar.monthrange(hoje.year, hoje.month)[1])
     if "filial_cp" not in st.session_state: st.session_state["filial_cp"] = "Todas"
 
     with st.container(border=True):
@@ -1741,21 +1742,24 @@ with tab_contas_pagar:
             dt_fim_semana = hoje + timedelta(days=(6 - hoje.weekday()))
             dt_fim_mes = hoje.replace(day=calendar.monthrange(hoje.year, hoje.month)[1])
 
+            # NOVO: Soma os atrasados (tudo que venceu antes de hoje dentro do período filtrado)
+            total_atrasados = df_cp[df_cp['DTVENCIMENTO'] < dt_hoje]['ValorTitulo'].sum()
             total_hoje = df_cp[df_cp['DTVENCIMENTO'] == dt_hoje]['ValorTitulo'].sum()
             total_amanha = df_cp[df_cp['DTVENCIMENTO'] == dt_amanha]['ValorTitulo'].sum()
             total_semana = df_cp[(df_cp['DTVENCIMENTO'] > dt_amanha) & (df_cp['DTVENCIMENTO'] <= dt_fim_semana)]['ValorTitulo'].sum()
             total_mes = df_cp[(df_cp['DTVENCIMENTO'] > dt_fim_semana) & (df_cp['DTVENCIMENTO'] <= dt_fim_mes)]['ValorTitulo'].sum()
             
-            # Renderizar Cards
-            c_cards = st.columns(4)
+            # Renderizar 5 Cards
+            c_cards = st.columns(5)
             def render_card_cp(col, title, val, cor):
                 with col:
                     st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
             
-            render_card_cp(c_cards[0], "🔴 VENCE HOJE", total_hoje, "#F85149")
-            render_card_cp(c_cards[1], "🟠 VENCE AMANHÃ", total_amanha, "#F0883E")
-            render_card_cp(c_cards[2], "🔵 ESTA SEMANA", total_semana, "#58A6FF")
-            render_card_cp(c_cards[3], "🟢 ESTE MÊS", total_mes, "#3FB950")
+            render_card_cp(c_cards[0], "🔴 ATRASADOS", total_atrasados, "#DA3633")
+            render_card_cp(c_cards[1], "🔴 VENCE HOJE", total_hoje, "#F85149")
+            render_card_cp(c_cards[2], "🟠 VENCE AMANHÃ", total_amanha, "#F0883E")
+            render_card_cp(c_cards[3], "🔵 ESTA SEMANA", total_semana, "#58A6FF")
+            render_card_cp(c_cards[4], "🟢 ESTE MÊS", total_mes, "#3FB950")
 
             st.write("")
 
@@ -1764,7 +1768,6 @@ with tab_contas_pagar:
             
             df_display = df_cp.sort_values('DTVENCIMENTO').copy()
             
-            # Formatação da tabela
             df_display['Vencimento'] = df_display['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
             df_display['Fornecedor'] = df_display['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 30)
             df_display['Documento'] = df_display['NUMDOC'].fillna('').astype(str)
@@ -1772,11 +1775,17 @@ with tab_contas_pagar:
             df_display['Valor (R$)'] = df_display['ValorTitulo'].apply(formatar_moeda)
 
             def color_vencimento(row):
-                if row['DTVENCIMENTO'] < dt_hoje:
+                venc = row['DTVENCIMENTO']
+                if venc < dt_hoje:
+                    return ['background-color: rgba(218, 54, 51, 0.25); color: #FF7B72; font-weight: bold;'] * len(row)
+                if venc == dt_hoje:
                     return ['background-color: rgba(248, 81, 73, 0.15); color: #F85149; font-weight: bold;'] * len(row)
-                if row['DTVENCIMENTO'] == dt_hoje:
-                    return ['background-color: rgba(248, 81, 73, 0.1); color: #FF7B72; font-weight: bold;'] * len(row)
                 return [''] * len(row)
 
-            styled_df = df_display[['Vencimento', 'Fornecedor', 'Documento', 'Histórico', 'Valor (R$)']].style.apply(color_vencimento, axis=1)
+            styled = df_display.style.apply(color_vencimento, axis=1)
+            
+            cols_visiveis = ['Vencimento', 'Fornecedor', 'Documento', 'Histórico', 'Valor (R$)']
+            cols_ocultas = [c for c in df_display.columns if c not in cols_visiveis]
+            styled_df = styled.hide(axis='columns', subset=cols_ocultas)
+            
             st.dataframe(styled_df, use_container_width=True)
