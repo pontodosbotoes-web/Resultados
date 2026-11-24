@@ -51,7 +51,7 @@ st.markdown("""
         .card-item:hover { 
             transform: translateY(-2px);
             box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.5); 
-            border-color: #58A6FF;
+            border-color: var(--accent-color, #58A6FF);
         }
         .card-label { font-size: 12px; font-weight: 700; color: #8B949E; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: 0.05em;}
         .card-value { font-size: 26px; font-weight: 800; color: #F8FAFC; line-height: 1.2; font-variant-numeric: tabular-nums; }
@@ -1686,7 +1686,6 @@ with tab_transferencias:
 # ABA CONTAS A PAGAR
 # ==========================================
 with tab_contas_pagar:
-    # Filtro padrão: Mês corrente
     if "dt_ini_cp" not in st.session_state: st.session_state["dt_ini_cp"] = hoje.replace(day=1)
     if "dt_fim_cp" not in st.session_state: st.session_state["dt_fim_cp"] = hoje.replace(day=calendar.monthrange(hoje.year, hoje.month)[1])
     if "filial_cp" not in st.session_state: st.session_state["filial_cp"] = "Todas"
@@ -1736,42 +1735,48 @@ with tab_contas_pagar:
         if df_cp.empty:
             st.info("Nenhuma conta a pagar encontrada para o período/filtros.")
         else:
-            # Lógica de Vencimentos
             dt_hoje = hoje
             dt_amanha = hoje + timedelta(days=1)
             dt_fim_semana = hoje + timedelta(days=(6 - hoje.weekday()))
             dt_fim_mes = hoje.replace(day=calendar.monthrange(hoje.year, hoje.month)[1])
 
-            # NOVO: Soma os atrasados (tudo que venceu antes de hoje dentro do período filtrado)
             total_atrasados = df_cp[df_cp['DTVENCIMENTO'] < dt_hoje]['ValorTitulo'].sum()
             total_hoje = df_cp[df_cp['DTVENCIMENTO'] == dt_hoje]['ValorTitulo'].sum()
             total_amanha = df_cp[df_cp['DTVENCIMENTO'] == dt_amanha]['ValorTitulo'].sum()
             total_semana = df_cp[(df_cp['DTVENCIMENTO'] > dt_amanha) & (df_cp['DTVENCIMENTO'] <= dt_fim_semana)]['ValorTitulo'].sum()
             total_mes = df_cp[(df_cp['DTVENCIMENTO'] > dt_fim_semana) & (df_cp['DTVENCIMENTO'] <= dt_fim_mes)]['ValorTitulo'].sum()
             
-            # Renderizar 5 Cards
+            # Renderizar 5 Cards (Cores refinadas e borda no hover dinâmica)
             c_cards = st.columns(5)
             def render_card_cp(col, title, val, cor):
                 with col:
-                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'''
+                        <div class="card-item" style="--accent-color: {cor}; border-left: 5px solid {cor}; background-color: #161B22;">
+                            <div class="card-label" style="color: {cor}; white-space: normal;">{title}</div>
+                            <div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div>
+                        </div>
+                    ''', unsafe_allow_html=True)
             
-            render_card_cp(c_cards[0], "🔴 ATRASADOS", total_atrasados, "#DA3633")
-            render_card_cp(c_cards[1], "🔴 VENCE HOJE", total_hoje, "#F85149")
-            render_card_cp(c_cards[2], "🟠 VENCE AMANHÃ", total_amanha, "#F0883E")
-            render_card_cp(c_cards[3], "🔵 ESTA SEMANA", total_semana, "#58A6FF")
-            render_card_cp(c_cards[4], "🟢 ESTE MÊS", total_mes, "#3FB950")
+            render_card_cp(c_cards[0], "🔴 ATRASADOS", total_atrasados, "#EF4444")   # Vermelho vivo
+            render_card_cp(c_cards[1], "🟠 VENCE HOJE", total_hoje, "#F97316")        # Laranja intenso
+            render_card_cp(c_cards[2], "🟡 VENCE AMANHÃ", total_amanha, "#F59E0B")    # Âmbar/Dourado
+            render_card_cp(c_cards[3], "🔵 ESTA SEMANA", total_semana, "#3B82F6")     # Azul claro
+            render_card_cp(c_cards[4], "🟢 ESTE MÊS", total_mes, "#10B981")           # Verde esmeralda
 
             st.write("")
 
-            # Tabela de Títulos
+            # Tabela de Títulos (Enxuta)
             st.markdown('<div class="tema-titulo">📋 Títulos a Pagar (Em Aberto)</div>', unsafe_allow_html=True)
             
             df_display = df_cp.sort_values('DTVENCIMENTO').copy()
             
+            # Novas colunas mais gerenciais
+            df_display['Filial'] = df_display['CodFilial'].map(NOMES_FILIAIS)
             df_display['Vencimento'] = df_display['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
+            df_display['Documento'] = df_display['TipoDoc'].fillna('') + " " + df_display['NUMDOC'].fillna('').astype(str)
+            df_display['Parcela'] = df_display['NumeroParcela'].fillna('').astype(str)
             df_display['Fornecedor'] = df_display['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 30)
-            df_display['Documento'] = df_display['NUMDOC'].fillna('').astype(str)
-            df_display['Histórico'] = df_display['HISTORICO'].fillna('').astype(str).str.slice(0, 50)
+            df_display['Histórico'] = df_display['HISTORICO'].fillna('').astype(str).str.slice(0, 35)
             df_display['Valor (R$)'] = df_display['ValorTitulo'].apply(formatar_moeda)
 
             def color_vencimento(row):
@@ -1784,7 +1789,8 @@ with tab_contas_pagar:
 
             styled = df_display.style.apply(color_vencimento, axis=1)
             
-            cols_visiveis = ['Vencimento', 'Fornecedor', 'Documento', 'Histórico', 'Valor (R$)']
+            # Colunas exibidas na tela (reduzidas e sem redundância)
+            cols_visiveis = ['Vencimento', 'Filial', 'Fornecedor', 'Documento', 'Parcela', 'Histórico', 'Valor (R$)']
             cols_ocultas = [c for c in df_display.columns if c not in cols_visiveis]
             styled_df = styled.hide(axis='columns', subset=cols_ocultas)
             
