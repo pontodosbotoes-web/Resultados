@@ -1770,7 +1770,7 @@ with tab_contas_pagar:
             
             df_display = df_cp.sort_values('DTVENCIMENTO').copy()
             
-            # Mapeamento e Formatação das colunas solicitadas
+            # Formatação e Mapeamento
             df_display['CodFilial'] = df_display['CodFilial'].map(NOMES_FILIAIS)
             df_display['Vencimento'] = df_display['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
             df_display['Emissão'] = df_display['DTEMISSAO'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
@@ -1778,6 +1778,10 @@ with tab_contas_pagar:
             df_display['Parcela'] = pd.to_numeric(df_display['NumeroParcela'], errors='coerce').fillna(0).astype(int)
             df_display['Fornecedor'] = df_display['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 35)
             df_display['Valor (R$)'] = df_display['ValorTitulo'].apply(formatar_moeda)
+
+            # Seleciona EXPLICITAMENTE as colunas que vão para a tela + a coluna de data oculta
+            cols_exibir = ['Vencimento', 'CodFilial', 'Fornecedor', 'Emissão', 'Baixa', 'Parcela', 'Valor (R$)', 'DTVENCIMENTO']
+            df_render = df_display[cols_exibir].copy()
 
             # Função de coloração baseada no vencimento
             def color_vencimento(row):
@@ -1788,13 +1792,8 @@ with tab_contas_pagar:
                     return ['background-color: rgba(248, 81, 73, 0.15); color: #F85149; font-weight: bold;'] * len(row)
                 return [''] * len(row)
 
-            styled = df_display.style.apply(color_vencimento, axis=1)
+            # Aplica o estilo e esconde APENAS a coluna DTVENCIMENTO
+            styled = df_render.style.apply(color_vencimento, axis=1)
+            styled = styled.hide(axis='columns', subset=['DTVENCIMENTO'])
             
-            # Colunas que serão exibidas na tela
-            cols_visiveis = ['Vencimento', 'CodFilial', 'Fornecedor', 'Emissão', 'Baixa', 'Parcela', 'Valor (R$)']
-            
-            # Esconde todas as outras colunas (IdCPR, Filial antiga, NumeroParcela, Historico, ValorTitulo, Documento, etc)
-            cols_ocultas = [c for c in df_display.columns if c not in cols_visiveis]
-            styled_df = styled.hide(axis='columns', subset=cols_ocultas)
-            
-            st.dataframe(styled_df, use_container_width=True)
+            st.dataframe(styled, use_container_width=True)
