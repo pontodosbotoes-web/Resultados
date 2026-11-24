@@ -15,8 +15,7 @@ FROM CPR c
 INNER JOIN TipoDoc td ON c.CodTipoDoc = td.CodTipoDoc
 LEFT JOIN Cli_For cf ON c.CodCliFor = cf.CodCliFor
 WHERE td.TipoLancamento = 'P'
-  AND c.DTBAIXA IS NULL -- Apenas títulos em aberto
-  AND c.CodTipoDoc IN ('01', '05', '09', '14', '57') -- NOVO: Filtro de Tipos de Documento
+  AND c.CodTipoDoc IN ('01', '05', '09', '14', '57')
   AND c.DTVENCIMENTO >= CONVERT(date, :data_inicio, 23)
   AND c.DTVENCIMENTO < DATEADD(day, 1, CONVERT(date, :data_fim, 23))
   /* FILTRO_FILIAL */
