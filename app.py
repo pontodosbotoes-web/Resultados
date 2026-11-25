@@ -51,7 +51,7 @@ st.markdown("""
         .card-item:hover { 
             transform: translateY(-2px);
             box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.5); 
-            border-color: var(--accent-color, #58A6FF);
+            border-color: #58A6FF;
         }
         .card-label { font-size: 12px; font-weight: 700; color: #8B949E; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: 0.05em;}
         .card-value { font-size: 26px; font-weight: 800; color: #F8FAFC; line-height: 1.2; font-variant-numeric: tabular-nums; }
@@ -218,8 +218,8 @@ def limpar_sazonalidade():
         if k in st.session_state: del st.session_state[k]
 
 def limpar_contas_pagar():
-    st.session_state["dt_ini_cp"] = hoje.replace(day=1)
-    st.session_state["dt_fim_cp"] = hoje.replace(day=calendar.monthrange(hoje.year, hoje.month)[1])
+    st.session_state["dt_ini_cp"] = hoje
+    st.session_state["dt_fim_cp"] = hoje + timedelta(days=30)
     st.session_state["filial_cp"] = "Todas"
     for k in ["df_cp", "pdf_bytes_cp"]:
         if k in st.session_state: del st.session_state[k]
@@ -274,7 +274,7 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
         r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
         bg_color = f"rgba({r}, {g}, {b}, 0.05)"
         border_left = f"5px solid {cor_hex}"
-        style_str = f"--accent-color: {cor_hex}; border-left: {border_left};"
+        style_str = f"border-left: {border_left};"
         label_nome = "🏆 Consolidado" if is_consolidado else nome
         label_style = f"color: {cor_hex};" if is_consolidado else ""
         value_style = f"color: {cor_hex};" if is_consolidado else ""
@@ -353,6 +353,7 @@ class NumberedCanvas(canvas.Canvas):
         self.setFont("Helvetica", 8)
         self.setFillColor(colors.HexColor('#64748B'))
         self.drawRightString(self._pagesize[0] - 20, 15, f"página {self._pageNumber} de {page_count}")
+
 
 def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
     buffer = BytesIO()
@@ -462,6 +463,7 @@ def gerar_pdf_vendas(df_vendas, df_depto, df_pag, data_ini, data_fim):
     buffer.seek(0)
     return buffer
 
+
 def gerar_pdf_compras(df_compras, data_ini, data_fim):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
@@ -537,6 +539,7 @@ def gerar_pdf_compras(df_compras, data_ini, data_fim):
     buffer.seek(0)
     return buffer
 
+
 def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
@@ -548,15 +551,19 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
     header_table = Table(header_data, colWidths=[400, 400])
     header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 15), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
     elements.append(header_table)
+
     header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=7, alignment=1)
     cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=7, alignment=0)
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=7, alignment=2)
     cell_bold_left = ParagraphStyle('CellBoldLeft', parent=styles['Normal'], fontSize=7, alignment=0, fontName='Helvetica-Bold')
     cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=7, alignment=2, fontName='Helvetica-Bold')
     sub_heading = ParagraphStyle('SubHeading', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, spaceBefore=6, spaceAfter=3, textColor=colors.HexColor('#1E293B'))
+
     meses_colunas = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
     df_entradas_all = df_transf[df_transf["TipoDado"] == "ENTRADA"].copy()
     df_saidas_all = df_transf[df_transf["TipoDado"] == "SAIDA"].copy()
+
     df_resumo = df_saidas_all.pivot_table(index="FilialDestino", columns="Mes_Nome", values="Valor", aggfunc="sum")
     for m in meses_colunas:
         if m not in df_resumo.columns: df_resumo[m] = 0.0
@@ -566,9 +573,11 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
         df_resumo = df_resumo[meses_colunas]
         df_resumo["Total"] = df_resumo.sum(axis=1)
         df_resumo = df_resumo.fillna(0).sort_index()
+
     linha_total_geral = df_resumo.sum().to_frame().T
     linha_total_geral.index = ["TOTAL GERAL"]
     df_resumo_final = pd.concat([df_resumo, linha_total_geral])
+
     elements.append(Paragraph("<b>RESUMO POR FILIAL DESTINO (MENSAL) — baseado em SAÍDAS</b>", styles['Heading3']))
     resumo_headers = ['Filial Destino'] + meses_colunas + ['Total Anual']
     resumo_data = [[Paragraph(h, header_style) for h in resumo_headers]]
@@ -586,6 +595,7 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
     t_resumo.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), 4), ('TOPPADDING', (0, 0), (-1, -1), 4), ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')), ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor('#1E293B'))]))
     elements.append(t_resumo)
     elements.append(Spacer(1, 10))
+
     def montar_tabela_pivot(df_sub, coluna_index, cor_header_hex):
         if df_sub.empty:
             return None
@@ -613,35 +623,44 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
         t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(cor_header_hex)), ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')), ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]), ('BOTTOMPADDING', (0, 0), (-1, -1), 4), ('TOPPADDING', (0, 0), (-1, -1), 4)]))
         return t
+
     todas_filiais = sorted(set(df_entradas_all["FilialDestino"].unique().tolist() + df_saidas_all["FilialOrigem"].unique().tolist()))
+
     for filial in todas_filiais:
         nome_filial = NOMES_FILIAIS.get(int(filial), f"Filial {filial}")
         elements.append(Paragraph(f"<b>■ Filial: {nome_filial}</b>", styles['Heading3']))
+
         df_ent = df_entradas_all[df_entradas_all["FilialDestino"] == filial]
         elements.append(Paragraph(f"<b>📥 ENTRADAS em {nome_filial}</b>", sub_heading))
         t_ent = montar_tabela_pivot(df_ent, "FilialOrigem", '#065F46')
         if t_ent: elements.append(t_ent)
         else: elements.append(Paragraph("<i>Nenhuma entrada no período.</i>", styles['Normal']))
         elements.append(Spacer(1, 6))
+
         df_sai = df_saidas_all[df_saidas_all["FilialOrigem"] == filial]
         elements.append(Paragraph(f"<b>📤 SAÍDAS de {nome_filial}</b>", sub_heading))
         t_sai = montar_tabela_pivot(df_sai, "FilialDestino", '#7F1D1D')
         if t_sai: elements.append(t_sai)
         else: elements.append(Paragraph("<i>Nenhuma saída no período.</i>", styles['Normal']))
         elements.append(Spacer(1, 6))
+
         elements.append(Paragraph(f"<b>💰 SALDO em {nome_filial} (Entradas − Saídas)</b>", sub_heading))
+
         tot_ent_mes = {m: (df_ent[df_ent["Mes_Nome"] == m]["Valor"].sum() if not df_ent.empty else 0.0) for m in meses_colunas}
         tot_sai_mes = {m: (df_sai[df_sai["Mes_Nome"] == m]["Valor"].sum() if not df_sai.empty else 0.0) for m in meses_colunas}
         tot_ent_ano = sum(tot_ent_mes.values())
         tot_sai_ano = sum(tot_sai_mes.values())
         saldo_ano = tot_ent_ano - tot_sai_ano
+
         saldo_rows = [
             ("📥 Total Entradas", tot_ent_mes, tot_ent_ano),
             ("📤 Total Saídas", tot_sai_mes, tot_sai_ano),
             ("💰 Saldo", {m: tot_ent_mes[m] - tot_sai_mes[m] for m in meses_colunas}, saldo_ano),
         ]
+
         saldo_headers = ['Descrição'] + meses_colunas + ['Total']
         saldo_data = [[Paragraph(h, header_style) for h in saldo_headers]]
+
         for label, vals_mes, val_total in saldo_rows:
             is_saldo = label.startswith("💰")
             row_cells = [Paragraph(label, cell_bold_left if is_saldo else cell_left)]
@@ -662,6 +681,7 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
                 txt_total = formatar_numero(val_total)
             row_cells.append(Paragraph(txt_total, cell_bold_right if is_saldo else cell_right))
             saldo_data.append(row_cells)
+
         col_widths_saldo = [130] + [50] * len(meses_colunas) + [70]
         t_saldo = Table(saldo_data, colWidths=col_widths_saldo, repeatRows=1)
         style_saldo = [
@@ -678,9 +698,11 @@ def gerar_pdf_transferencias(df_transf, data_ini, data_fim):
         t_saldo.setStyle(TableStyle(style_saldo))
         elements.append(t_saldo)
         elements.append(Spacer(1, 12))
+
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer
+
 
 def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atacado, pb, srb, data_ini, data_fim):
     buffer = BytesIO()
@@ -740,6 +762,7 @@ def gerar_pdf_tributos(colunas, rows_saidas, rows_entradas, rows_resultado, atac
     buffer.seek(0)
     return buffer
 
+
 def gerar_pdf_contas_pagar(df_cp, data_ini, data_fim):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=portrait(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
@@ -751,38 +774,44 @@ def gerar_pdf_contas_pagar(df_cp, data_ini, data_fim):
     header_table = Table(header_data, colWidths=[400, 400])
     header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 15), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
     elements.append(header_table)
+
     header_style = ParagraphStyle('Header', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=8, alignment=1)
     cell_left = ParagraphStyle('CellLeft', parent=styles['Normal'], fontSize=8, alignment=0)
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=8, alignment=2)
-    headers = ['Vencimento', 'Filial', 'Fornecedor', 'Emissão', 'Baixa', 'Parcela', 'Valor (R$)']
+
+    # Tabela de Títulos
+    headers = ['Vencimento', 'Fornecedor', 'Documento', 'Histórico', 'Valor (R$)']
     data = [[Paragraph(h, header_style) for h in headers]]
+    
     df_sorted = df_cp.sort_values('DTVENCIMENTO')
     total = 0
     for _, row in df_sorted.iterrows():
         venc = row['DTVENCIMENTO'].strftime('%d/%m/%Y') if pd.notnull(row['DTVENCIMENTO']) else ''
-        filial = NOMES_FILIAIS.get(row['CodFilial'], 'Desconhecida')
         forn = str(row['Fornecedor'])[:30] if pd.notnull(row['Fornecedor']) else ''
-        emis = row['DTEMISSAO'].strftime('%d/%m/%Y') if pd.notnull(row['DTEMISSAO']) else ''
-        baixa = row['DTBAIXA'].strftime('%d/%m/%Y') if pd.notnull(row['DTBAIXA']) else ''
-        parc = int(row['NumeroParcela']) if pd.notnull(row['NumeroParcela']) else 0
+        doc_num = str(row['NUMDOC']) if pd.notnull(row['NUMDOC']) else ''
+        hist = str(row['HISTORICO'])[:40] if pd.notnull(row['HISTORICO']) else ''
         val = row['ValorTitulo']
         total += val
+        
         cells = [
             Paragraph(venc, cell_left),
-            Paragraph(filial, cell_left),
             Paragraph(forn, cell_left),
-            Paragraph(emis, cell_left),
-            Paragraph(baixa, cell_left),
-            Paragraph(str(parc), cell_right),
+            Paragraph(doc_num, cell_left),
+            Paragraph(hist, cell_left),
             Paragraph(formatar_moeda(val), cell_right)
         ]
         data.append(cells)
+    
+    # Linha de Total
     data.append([
         Paragraph("<b>TOTAL</b>", cell_left),
-        Paragraph("", cell_left), Paragraph("", cell_left), Paragraph("", cell_left), Paragraph("", cell_left), Paragraph("", cell_left),
+        Paragraph("", cell_left),
+        Paragraph("", cell_left),
+        Paragraph("", cell_left),
         Paragraph(f"<b>{formatar_moeda(total)}</b>", cell_right)
     ])
-    col_widths = [70, 100, 120, 70, 70, 50, 80]
+
+    col_widths = [70, 130, 80, 160, 80]
     t = Table(data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
@@ -795,6 +824,7 @@ def gerar_pdf_contas_pagar(df_cp, data_ini, data_fim):
         ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#FEF3C7')),
     ]))
     elements.append(t)
+
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer
@@ -816,11 +846,13 @@ def formatar_variacao_pct(v):
 def _calc_idx_generic(df, col_name, index_range, multiplier):
     if df.empty:
         return pd.DataFrame()
+
     df = df.copy()
     df["CodFilial"] = pd.to_numeric(df["CodFilial"], errors="coerce").fillna(0).astype(int)
     df[col_name] = pd.to_numeric(df[col_name], errors="coerce").fillna(0).astype(int)
     df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0)
     df["QtdDias"] = pd.to_numeric(df["QtdDias"], errors="coerce").fillna(0)
+
     resultado = {}
     for cod in [1, 2, 3, 4]:
         sub = df[df["CodFilial"] == cod]
@@ -838,11 +870,14 @@ def _calc_idx_generic(df, col_name, index_range, multiplier):
             continue
         idx_norm = idx_bruto * multiplier / soma_idx
         resultado[cod] = idx_norm
+
     if not resultado:
         return pd.DataFrame()
+
     df_idx = pd.DataFrame(resultado)
     df_idx = df_idx.reindex(index_range).fillna(0)
     df_idx["Total"] = df_idx.mean(axis=1)
+    
     nomes = {cod: NOMES_FILIAIS.get(cod, f"Filial {cod}") for cod in [1, 2, 3, 4]}
     df_idx = df_idx.rename(columns=nomes)
     return df_idx
@@ -861,7 +896,7 @@ def calcular_indices_sazonalidade_hora(df):
     if not df_idx.empty:
         df_idx.index = [f"{h:02d}:00" for h in df_idx.index]
         df_idx.index.name = "Hora"
-        df_idx = df_idx[df_idx["Total"] > 0]
+        df_idx = df_idx[df_idx["Total"] > 0]  # ← NOVO: remove horas sem movimento
     return df_idx
 
 @st.cache_data    
@@ -880,19 +915,25 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
     styles = getSampleStyleSheet()
     left_style = ParagraphStyle('Left', parent=styles['Heading2'], alignment=0, fontSize=12, spaceAfter=0)
     right_style = ParagraphStyle('Right', parent=styles['Normal'], alignment=2, fontSize=10, spaceAfter=0)
+    
     txt_periodo = f"Período: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')} | {h_ini.strftime('%H:%M')} às {h_fim.strftime('%H:%M')}"
     header_data = [[Paragraph("<b>Acompanhamento Gerencial - Sazonalidade</b>", left_style), Paragraph(txt_periodo, right_style)]]
+    
     header_table = Table(header_data, colWidths=[300, 255])
     header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 15), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
     elements.append(header_table)
+
     def montar_tabela(df_idx, formato_func, com_pct=False, is_hora=False):
         if df_idx is None or df_idx.empty:
             return Paragraph("<i>Sem dados.</i>", styles['Normal'])
+        
         font_sz = 6.5 if is_hora else 8
         pad_v = 1 if is_hora else 4
+        
         header_style = ParagraphStyle(f'Header_{is_hora}', parent=styles['Normal'], textColor=colors.white, fontName='Helvetica-Bold', fontSize=font_sz, alignment=1)
         cell_left = ParagraphStyle(f'CellLeft_{is_hora}', parent=styles['Normal'], fontSize=font_sz, alignment=0)
         cell_right = ParagraphStyle(f'CellRight_{is_hora}', parent=styles['Normal'], fontSize=font_sz, alignment=2)
+
         headers = [df_idx.index.name or "Index"] + list(df_idx.columns)
         data = [[Paragraph(h, header_style) for h in headers]]
         for idx, row in df_idx.iterrows():
@@ -907,6 +948,7 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
                     txt = formato_func(v)
                 cells.append(Paragraph(txt, cell_right))
             data.append(cells)
+        
         col_widths = [90] + [93] * len(df_idx.columns) 
         t = Table(data, colWidths=col_widths, repeatRows=1)
         t.setStyle(TableStyle([
@@ -919,8 +961,10 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
             ('TOPPADDING', (0, 0), (-1, -1), pad_v),
         ]))
         return t
+
     heading_dia = ParagraphStyle('H_Dia', parent=styles['Heading3'], fontSize=10, spaceBefore=6, spaceAfter=4, textColor=colors.HexColor('#1E293B'))
     heading_hora = ParagraphStyle('H_Hora', parent=styles['Heading3'], fontSize=8, spaceBefore=4, spaceAfter=2, textColor=colors.HexColor('#1E293B'))
+
     elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS) — HISTÓRICO COMPLETO</b>", heading_dia))
     elements.append(montar_tabela(df_hist_idx, formatar_indice, com_pct=True))
     elements.append(Spacer(1, 15))
@@ -1422,7 +1466,7 @@ with tab_compras:
                 cols = st.columns(5)
                 for j, (nome, valor, cor, pct_html) in enumerate(chunk):
                     with cols[j]:
-                        st.markdown(f'<div class="card-item" style="--accent-color: {cor}; border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value">{formatar_moeda(valor)} {pct_html}</div></div>', unsafe_allow_html=True)
             st.write("")
             if not df_tot_depto.empty:
                 deptos_nomes = df_tot_depto['Departamento'].tolist()
@@ -1530,7 +1574,7 @@ with tab_transferencias:
                 cols = st.columns(5)
                 for j, (nome, valor, cor) in enumerate(chunk):
                     with cols[j]:
-                        st.markdown(f'<div class="card-item" style="--accent-color: {cor}; border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor};" title="{nome}">{nome}</div><div class="card-value" style="color: {cor};">{fmt_saldo_card(valor)}</div></div>', unsafe_allow_html=True)
 
             st.write("")
 
@@ -1642,8 +1686,8 @@ with tab_transferencias:
 # ABA CONTAS A PAGAR
 # ==========================================
 with tab_contas_pagar:
-    if "dt_ini_cp" not in st.session_state: st.session_state["dt_ini_cp"] = hoje.replace(day=1)
-    if "dt_fim_cp" not in st.session_state: st.session_state["dt_fim_cp"] = hoje.replace(day=calendar.monthrange(hoje.year, hoje.month)[1])
+    if "dt_ini_cp" not in st.session_state: st.session_state["dt_ini_cp"] = hoje
+    if "dt_fim_cp" not in st.session_state: st.session_state["dt_fim_cp"] = hoje + timedelta(days=30)
     if "filial_cp" not in st.session_state: st.session_state["filial_cp"] = "Todas"
 
     with st.container(border=True):
@@ -1674,12 +1718,7 @@ with tab_contas_pagar:
                 if not df_cp.empty:
                     df_cp['DTVENCIMENTO'] = pd.to_datetime(df_cp['DTVENCIMENTO']).dt.date
                     df_cp['DTEMISSAO'] = pd.to_datetime(df_cp['DTEMISSAO']).dt.date
-                    df_cp['DTBAIXA'] = pd.to_datetime(df_cp['DTBAIXA']).dt.date
                     df_cp['ValorTitulo'] = pd.to_numeric(df_cp['ValorTitulo'], errors="coerce").fillna(0)
-                    
-                    df_cp['CodFilial'] = pd.to_numeric(df_cp['CodFilial'], errors='coerce').fillna(0).astype(int)
-                    df_cp['Filial'] = df_cp['CodFilial'].map(NOMES_FILIAIS).fillna('Desconhecida')
-
                     st.session_state["df_cp"] = df_cp
                     st.session_state["pdf_bytes_cp"] = gerar_pdf_contas_pagar(df_cp, data_ini_cp, data_fim_cp)
                 else:
@@ -1696,108 +1735,48 @@ with tab_contas_pagar:
         if df_cp.empty:
             st.info("Nenhuma conta a pagar encontrada para o período/filtros.")
         else:
-            # Separação dos Dados
-            df_aberto = df_cp[df_cp['DTBAIXA'].isna()].copy()
-            df_pagos = df_cp[df_cp['DTBAIXA'].notna()].copy()
-
-            # --- CARDS (Calculados com base apenas no que está Em Aberto) ---
+            # Lógica de Vencimentos
             dt_hoje = hoje
             dt_amanha = hoje + timedelta(days=1)
             dt_fim_semana = hoje + timedelta(days=(6 - hoje.weekday()))
             dt_fim_mes = hoje.replace(day=calendar.monthrange(hoje.year, hoje.month)[1])
 
-            total_atrasados = df_aberto[df_aberto['DTVENCIMENTO'] < dt_hoje]['ValorTitulo'].sum()
-            total_hoje = df_aberto[df_aberto['DTVENCIMENTO'] == dt_hoje]['ValorTitulo'].sum()
-            total_amanha = df_aberto[df_aberto['DTVENCIMENTO'] == dt_amanha]['ValorTitulo'].sum()
-            total_semana = df_aberto[(df_aberto['DTVENCIMENTO'] > dt_amanha) & (df_aberto['DTVENCIMENTO'] <= dt_fim_semana)]['ValorTitulo'].sum()
-            total_mes = df_aberto[(df_aberto['DTVENCIMENTO'] > dt_fim_semana) & (df_aberto['DTVENCIMENTO'] <= dt_fim_mes)]['ValorTitulo'].sum()
+            total_hoje = df_cp[df_cp['DTVENCIMENTO'] == dt_hoje]['ValorTitulo'].sum()
+            total_amanha = df_cp[df_cp['DTVENCIMENTO'] == dt_amanha]['ValorTitulo'].sum()
+            total_semana = df_cp[(df_cp['DTVENCIMENTO'] > dt_amanha) & (df_cp['DTVENCIMENTO'] <= dt_fim_semana)]['ValorTitulo'].sum()
+            total_mes = df_cp[(df_cp['DTVENCIMENTO'] > dt_fim_semana) & (df_cp['DTVENCIMENTO'] <= dt_fim_mes)]['ValorTitulo'].sum()
             
-            c_cards = st.columns(5)
+            # Renderizar Cards
+            c_cards = st.columns(4)
             def render_card_cp(col, title, val, cor):
                 with col:
-                    st.markdown(f'''
-                        <div class="card-item" style="--accent-color: {cor}; border-left: 5px solid {cor}; background-color: #161B22;">
-                            <div class="card-label" style="color: {cor}; white-space: normal;">{title}</div>
-                            <div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div>
-                        </div>
-                    ''', unsafe_allow_html=True)
+                    st.markdown(f'<div class="card-item" style="border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor}; white-space: normal;">{title}</div><div class="card-value" style="color: {cor};">{formatar_moeda(val)}</div></div>', unsafe_allow_html=True)
             
-            render_card_cp(c_cards[0], "🔴 ATRASADOS", total_atrasados, "#EF4444")
-            render_card_cp(c_cards[1], "🟠 VENCE HOJE", total_hoje, "#F97316")
-            render_card_cp(c_cards[2], "🟡 VENCE AMANHÃ", total_amanha, "#F59E0B")
-            render_card_cp(c_cards[3], "🔵 ESTA SEMANA", total_semana, "#3B82F6")
-            render_card_cp(c_cards[4], "🟢 ESTE MÊS", total_mes, "#10B981")
+            render_card_cp(c_cards[0], "🔴 VENCE HOJE", total_hoje, "#F85149")
+            render_card_cp(c_cards[1], "🟠 VENCE AMANHÃ", total_amanha, "#F0883E")
+            render_card_cp(c_cards[2], "🔵 ESTA SEMANA", total_semana, "#58A6FF")
+            render_card_cp(c_cards[3], "🟢 ESTE MÊS", total_mes, "#3FB950")
 
             st.write("")
 
-            # --- ABAS DE TÍTULOS ---
-            tab_aberto, tab_pagos = st.tabs(["📋 Títulos a Pagar (Em Aberto)", "✅ Títulos Pagos"])
+            # Tabela de Títulos
+            st.markdown('<div class="tema-titulo">📋 Títulos a Pagar (Em Aberto)</div>', unsafe_allow_html=True)
             
-            # ABA 1: EM ABERTO
-            with tab_aberto:
-                if df_aberto.empty:
-                    st.info("Nenhum título em aberto no período.")
-                else:
-                    df_disp = df_aberto.sort_values('DTVENCIMENTO').copy()
-                    df_disp['Vencimento'] = df_disp['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
-                    df_disp['Emissão'] = df_disp['DTEMISSAO'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
-                    df_disp['Parcela'] = pd.to_numeric(df_disp['NumeroParcela'], errors='coerce').fillna(0).astype(int)
-                    df_disp['Fornecedor'] = df_disp['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 35)
-                    df_disp['Valor (R$)'] = df_disp['ValorTitulo'].apply(formatar_moeda)
+            df_display = df_cp.sort_values('DTVENCIMENTO').copy()
+            
+            # Formatação da tabela
+            df_display['Vencimento'] = df_display['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
+            df_display['Fornecedor'] = df_display['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 30)
+            df_display['Documento'] = df_display['NUMDOC'].fillna('').astype(str)
+            df_display['Histórico'] = df_display['HISTORICO'].fillna('').astype(str).str.slice(0, 50)
+            df_display['Valor (R$)'] = df_display['ValorTitulo'].apply(formatar_moeda)
 
-                    df_disp['_DTV'] = df_disp['DTVENCIMENTO']
+            def color_vencimento(row):
+                if row['DTVENCIMENTO'] < dt_hoje:
+                    return ['background-color: rgba(248, 81, 73, 0.15); color: #F85149; font-weight: bold;'] * len(row)
+                if row['DTVENCIMENTO'] == dt_hoje:
+                    return ['background-color: rgba(248, 81, 73, 0.1); color: #FF7B72; font-weight: bold;'] * len(row)
+                return [''] * len(row)
 
-                    def color_venc(row):
-                        venc = row['_DTV']
-                        if venc < dt_hoje:
-                            return ['background-color: rgba(218, 54, 51, 0.25); color: #FF7B72; font-weight: bold;'] * len(row)
-                        if venc == dt_hoje:
-                            return ['background-color: rgba(248, 81, 73, 0.15); color: #F85149; font-weight: bold;'] * len(row)
-                        return [''] * len(row)
-
-                    styled = df_disp.style.apply(color_venc, axis=1)
-                    
-                    st.dataframe(
-                        styled,
-                        use_container_width=True,
-                        column_config={
-                            "Vencimento": st.column_config.TextColumn("Vencimento"),
-                            "CodFilial": st.column_config.TextColumn("Filial"),
-                            "Fornecedor": st.column_config.TextColumn("Fornecedor"),
-                            "Emissão": st.column_config.TextColumn("Emissão"),
-                            "Parcela": st.column_config.NumberColumn("Parcela"),
-                            "Valor (R$)": st.column_config.TextColumn("Valor (R$)"),
-                            "_DTV": None,
-                            "DTVENCIMENTO": None, "DTEMISSAO": None, "DTBAIXA": None,
-                            "IdCPR": None, "NUMDOC": None, "CodCliFor": None, "NumeroParcela": None, "HISTORICO": None, "ValorTitulo": None, "TipoDoc": None, "Filial": None
-                        }
-                    )
-
-            # ABA 2: PAGOS
-            with tab_pagos:
-                if df_pagos.empty:
-                    st.info("Nenhum título pago no período.")
-                else:
-                    df_disp_p = df_pagos.sort_values('DTBAIXA').copy()
-                    df_disp_p['Vencimento'] = df_disp_p['DTVENCIMENTO'].apply(lambda x: x.strftime('%d/%m/%Y'))
-                    df_disp_p['Emissão'] = df_disp_p['DTEMISSAO'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
-                    df_disp_p['Baixa'] = df_disp_p['DTBAIXA'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else '')
-                    df_disp_p['Parcela'] = pd.to_numeric(df_disp_p['NumeroParcela'], errors='coerce').fillna(0).astype(int)
-                    df_disp_p['Fornecedor'] = df_disp_p['Fornecedor'].fillna('N/A').astype(str).str.slice(0, 35)
-                    df_disp_p['Valor (R$)'] = df_disp_p['ValorTitulo'].apply(formatar_moeda)
-
-                    st.dataframe(
-                        df_disp_p,
-                        use_container_width=True,
-                        column_config={
-                            "Vencimento": st.column_config.TextColumn("Vencimento"),
-                            "CodFilial": st.column_config.TextColumn("Filial"),
-                            "Fornecedor": st.column_config.TextColumn("Fornecedor"),
-                            "Emissão": st.column_config.TextColumn("Emissão"),
-                            "Baixa": st.column_config.TextColumn("Baixa"),
-                            "Parcela": st.column_config.NumberColumn("Parcela"),
-                            "Valor (R$)": st.column_config.TextColumn("Valor (R$)"),
-                            "DTVENCIMENTO": None, "DTEMISSAO": None, "DTBAIXA": None,
-                            "IdCPR": None, "NUMDOC": None, "CodCliFor": None, "NumeroParcela": None, "HISTORICO": None, "ValorTitulo": None, "TipoDoc": None, "Filial": None
-                        }
-                    )
+            styled_df = df_display[['Vencimento', 'Fornecedor', 'Documento', 'Histórico', 'Valor (R$)']].style.apply(color_vencimento, axis=1)
+            st.dataframe(styled_df, use_container_width=True)
