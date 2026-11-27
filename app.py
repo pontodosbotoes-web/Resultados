@@ -776,25 +776,38 @@ def gerar_pdf_contas_pagar(df_cp, totais_cards, filtros_txt, data_ini, data_fim)
     elements.append(t_cards)
     elements.append(Spacer(1, 10))
 
-    def tabela_faixa(df_sub, titulo):
+    def _formata_parcela_pdf(v):
+        try:
+            n = int(v) if pd.notnull(v) else 0
+        except Exception:
+            n = 0
+        return "Única" if n == 0 else str(n)
+
+    def tabela_faixa(df_sub, titulo, com_baixa=False):
         if df_sub is None or df_sub.empty:
             return
         elements.append(Paragraph(f"<b>{titulo} — {len(df_sub)} título(s) — {formatar_moeda(df_sub['ValorTitulo'].sum())}</b>", sec_title))
-        df_o = df_sub.sort_values("DTVENCIMENTO").copy()
-        headers = ['Vencimento', 'Filial', 'Fornecedor', 'Emissão', 'Baixa', 'Parcela', 'Valor (R$)']
+        df_o = df_sub.sort_values("DTVENCIMENTO").copy().reset_index(drop=True)
+        if com_baixa:
+            headers = ['Nº', 'Vencimento', 'Filial', 'Fornecedor', 'Emissão', 'Baixa', 'Parcela', 'Valor (R$)']
+        else:
+            headers = ['Nº', 'Vencimento', 'Filial', 'Fornecedor', 'Emissão', 'Parcela', 'Valor (R$)']
         data = [[Paragraph(h, header_style) for h in headers]]
-        for _, r in df_o.iterrows():
+        for i, r in df_o.iterrows():
             venc = r['DTVENCIMENTO'].strftime('%d/%m/%Y') if pd.notnull(r['DTVENCIMENTO']) else ''
             emis = r['DTEMISSAO'].strftime('%d/%m/%Y') if pd.notnull(r['DTEMISSAO']) else ''
             baix = r['DTBAIXA'].strftime('%d/%m/%Y') if pd.notnull(r['DTBAIXA']) else ''
             forn = str(r['Fornecedor'])[:40] if pd.notnull(r['Fornecedor']) else ''
-            parc = int(r['NumeroParcela']) if pd.notnull(r['NumeroParcela']) else 0
-            data.append([
-                Paragraph(venc, cell_left), Paragraph(str(r.get('FilialNome', '')), cell_left),
-                Paragraph(forn, cell_left), Paragraph(emis, cell_left), Paragraph(baix, cell_left),
-                Paragraph(str(parc), cell_right), Paragraph(formatar_moeda(r['ValorTitulo']), cell_right)
-            ])
-        t = Table(data, colWidths=[65, 110, 160, 65, 65, 45, 85], repeatRows=1)
+            parc = _formata_parcela_pdf(r.get('NumeroParcela', 0))
+            row = [Paragraph(str(i + 1), cell_right), Paragraph(venc, cell_left), Paragraph(str(r.get('FilialNome', '')), cell_left),
+                   Paragraph(forn, cell_left), Paragraph(emis, cell_left)]
+            if com_baixa:
+                row.append(Paragraph(baix, cell_left))
+            row.append(Paragraph(parc, cell_right))
+            row.append(Paragraph(formatar_moeda(r['ValorTitulo']), cell_right))
+            data.append(row)
+        widths = [25, 65, 110, 160, 65, 65, 50, 85] if com_baixa else [25, 65, 120, 175, 65, 50, 90]
+        t = Table(data, colWidths=widths, repeatRows=1)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -808,7 +821,7 @@ def gerar_pdf_contas_pagar(df_cp, totais_cards, filtros_txt, data_ini, data_fim)
     df_aberto = df_cp[df_cp["DTBAIXA"].isna()].copy() if not df_cp.empty else pd.DataFrame()
     dt_hoje = hoje
 
-    # ---- Diário do Mês (nova) ----
+    # ---- Diário do Mês ----
     if not df_aberto.empty:
         primeiro = dt_hoje
         ultimo = dt_hoje.replace(day=calendar.monthrange(dt_hoje.year, dt_hoje.month)[1])
@@ -823,11 +836,11 @@ def gerar_pdf_contas_pagar(df_cp, totais_cards, filtros_txt, data_ini, data_fim)
             rotulo = "Hoje" if dia == dt_hoje else ("Amanhã" if (dia - dt_hoje).days == 1 else "")
             elementos_diario.append([
                 Paragraph(dia.strftime('%d/%m/%Y'), cell_left),
-                Paragraph(dia.strftime('%A')[:3], cell_left),
+                Paragraph(["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"][dia.weekday()], cell_left),
                 Paragraph(rotulo, cell_left),
                 Paragraph(str(qtd) if qtd > 0 else '-', cell_right),
                 Paragraph(formatar_moeda(val) if qtd > 0 else '-', cell_right),
-                Paragraph(formatar_moeda(acumulado) if qtd > 0 else '-', cell_right),
+                Paragraph(formatar_moeda(acumulado), cell_right),
             ])
         if elementos_diario:
             elements.append(Paragraph(f"<b>📆 DIÁRIO DO MÊS — {dt_hoje.strftime('%B/%Y')}</b>", sec_title))
@@ -842,42 +855,85 @@ def gerar_pdf_contas_pagar(df_cp, totais_cards, filtros_txt, data_ini, data_fim)
             elements.append(t_d)
             elements.append(Spacer(1, 10))
 
-    # ---- Faixas de vencimento ----
+    # ---- Faixas (sem coluna Baixa) ----
     if not df_aberto.empty:
-        tabela_faixa(df_aberto[df_aberto["DTVENCIMENTO"].dt.date == dt_hoje], "🔥 Vence Hoje")
-        tabela_faixa(df_aberto[(df_aberto["DTVENCIMENTO"].dt.date > dt_hoje) & (df_aberto["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=30))], "📅 Vence em 30 dias")
-        tabela_faixa(df_aberto[(df_aberto["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=30)) & (df_aberto["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=60))], "📅 Vence em 30-60 dias")
-        tabela_faixa(df_aberto[(df_aberto["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=60)) & (df_aberto["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=90))], "📅 Vence em 60-90 dias")
-        tabela_faixa(df_aberto[(df_aberto["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=90)) & (df_aberto["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=120))], "📅 Vence em 90-120 dias")
-        tabela_faixa(df_aberto[df_aberto["DTVENCIMENTO"].dt.date < dt_hoje], "🔴 Atrasados")
+        tabela_faixa(df_aberto[df_aberto["DTVENCIMENTO"].dt.date == dt_hoje], "🔥 Vence Hoje", com_baixa=False)
+        tabela_faixa(df_aberto[(df_aberto["DTVENCIMENTO"].dt.date > dt_hoje) & (df_aberto["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=30))], "📅 Vence em 30 dias", com_baixa=False)
+        tabela_faixa(df_aberto[(df_aberto["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=30)) & (df_aberto["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=60))], "📅 Vence em 30-60 dias", com_baixa=False)
+        tabela_faixa(df_aberto[(df_aberto["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=60)) & (df_aberto["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=90))], "📅 Vence em 60-90 dias", com_baixa=False)
+        tabela_faixa(df_aberto[(df_aberto["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=90)) & (df_aberto["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=120))], "📅 Vence em 90-120 dias", com_baixa=False)
+        tabela_faixa(df_aberto[df_aberto["DTVENCIMENTO"].dt.date < dt_hoje], "🔴 Atrasados", com_baixa=False)
 
     if not df_cp.empty:
-        tabela_faixa(df_cp[df_cp["DTBAIXA"].notna()], "✅ Títulos Pagos")
+        tabela_faixa(df_cp[df_cp["DTBAIXA"].notna()], "✅ Títulos Pagos", com_baixa=True)
+
+    # ---- Faixas de Atraso ----
+    if not df_aberto.empty:
+        elements.append(PageBreak())
+        elements.append(Paragraph("<b>📊 FAIXAS DE ATRASO</b>", sec_title))
+        df_atraso = df_aberto[df_aberto["DTVENCIMENTO"].dt.date < dt_hoje].copy()
+        if df_atraso.empty:
+            elements.append(Paragraph("<i>Nenhum título atrasado.</i>", styles['Normal']))
+        else:
+            df_atraso["dias"] = (pd.Timestamp(dt_hoje) - df_atraso["DTVENCIMENTO"]).dt.days
+            faixas_def = [("0-30 dias", 0, 30), ("31-60 dias", 31, 60), ("61-90 dias", 61, 90), (">90 dias", 91, 99999)]
+            total_atraso = df_atraso["ValorTitulo"].sum()
+            data_fa = [[Paragraph(h, header_style) for h in ['Faixa de Atraso', 'Qtd Títulos', 'Total', '% do Total']]]
+            tot_q = 0
+            for lbl, ini, fim in faixas_def:
+                df_f = df_atraso[(df_atraso["dias"] >= ini) & (df_atraso["dias"] <= fim)]
+                v = df_f["ValorTitulo"].sum()
+                q = len(df_f)
+                tot_q += q
+                pct = (v / total_atraso * 100) if total_atraso > 0 else 0
+                data_fa.append([
+                    Paragraph(lbl, cell_left), Paragraph(str(q), cell_right),
+                    Paragraph(formatar_moeda(v), cell_right), Paragraph(f"{pct:.2f}%".replace(".", ","), cell_right),
+                ])
+            data_fa.append([
+                Paragraph("<b>TOTAL</b>", cell_left), Paragraph(f"<b>{tot_q}</b>", cell_right),
+                Paragraph(f"<b>{formatar_moeda(total_atraso)}</b>", cell_right), Paragraph("<b>100,00%</b>", cell_right),
+            ])
+            t_fa = Table(data_fa, colWidths=[150, 80, 130, 100], repeatRows=1)
+            t_fa.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#F8FAFC')]),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3), ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ]))
+            elements.append(t_fa)
 
     # ---- Calendário Semanal ----
     if not df_aberto.empty:
-        elements.append(PageBreak())
-        elements.append(Paragraph("<b>📅 CALENDÁRIO SEMANAL — PRÓXIMAS 8 SEMANAS</b>", sec_title))
+        elements.append(Spacer(1, 10))
+        elements.append(Paragraph("<b>📅 CALENDÁRIO SEMANAL</b>", sec_title))
+        semanas = []
+        # Linha 1: hoje -> domingo desta semana
+        domingo = dt_hoje + timedelta(days=(6 - dt_hoje.weekday()))
+        semanas.append((dt_hoje, domingo))
+        # Próximas 7 semanas seg-dom
+        seg_atual = domingo + timedelta(days=1)
+        for _ in range(7):
+            semanas.append((seg_atual, seg_atual + timedelta(days=6)))
+            seg_atual = seg_atual + timedelta(days=7)
         data_c = [[Paragraph(h, header_style) for h in ['Semana', 'Qtd', 'Total (R$)']]]
-        total_sem_geral = 0
-        total_qtd_geral = 0
-        for i in range(8):
-            ini_s = dt_hoje + timedelta(days=i * 7)
-            fim_s = ini_s + timedelta(days=6)
+        tot_q = 0
+        tot_v = 0
+        for ini_s, fim_s in semanas:
             df_s = df_aberto[(df_aberto["DTVENCIMENTO"].dt.date >= ini_s) & (df_aberto["DTVENCIMENTO"].dt.date <= fim_s)]
             v = df_s["ValorTitulo"].sum()
             q = len(df_s)
-            total_sem_geral += v
-            total_qtd_geral += q
+            tot_q += q
+            tot_v += v
             data_c.append([
                 Paragraph(f"{ini_s.strftime('%d/%m')} – {fim_s.strftime('%d/%m')}", cell_left),
                 Paragraph(str(q) if q > 0 else '-', cell_right),
                 Paragraph(formatar_moeda(v) if q > 0 else '-', cell_right),
             ])
         data_c.append([
-            Paragraph("<b>TOTAL</b>", cell_left),
-            Paragraph(f"<b>{total_qtd_geral}</b>", cell_right),
-            Paragraph(f"<b>{formatar_moeda(total_sem_geral)}</b>", cell_right),
+            Paragraph("<b>TOTAL</b>", cell_left), Paragraph(f"<b>{tot_q}</b>", cell_right),
+            Paragraph(f"<b>{formatar_moeda(tot_v)}</b>", cell_right),
         ])
         t_c = Table(data_c, colWidths=[200, 60, 130], repeatRows=1)
         t_c.setStyle(TableStyle([
@@ -896,23 +952,22 @@ def gerar_pdf_contas_pagar(df_cp, totais_cards, filtros_txt, data_ini, data_fim)
         df_pg_pdf = df_cp[df_cp["DTBAIXA"].notna()].copy()
         df_pg_pdf = df_pg_pdf[df_pg_pdf["DTBAIXA"].dt.year == dt_hoje.year]
         data_e = [[Paragraph(h, header_style) for h in ['Mês', 'Qtd', 'Total Pago']]]
-        total_ev = 0
-        total_q_ev = 0
+        tot_q_e = 0
+        tot_v_e = 0
         for m in range(1, 13):
             df_m = df_pg_pdf[df_pg_pdf["DTBAIXA"].dt.month == m]
             v = df_m["ValorTitulo"].sum()
             q = len(df_m)
-            total_ev += v
-            total_q_ev += q
+            tot_q_e += q
+            tot_v_e += v
             data_e.append([
                 Paragraph(["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][m-1], cell_left),
                 Paragraph(str(q) if q > 0 else '-', cell_right),
                 Paragraph(formatar_moeda(v) if q > 0 else '-', cell_right),
             ])
         data_e.append([
-            Paragraph("<b>TOTAL</b>", cell_left),
-            Paragraph(f"<b>{total_q_ev}</b>", cell_right),
-            Paragraph(f"<b>{formatar_moeda(total_ev)}</b>", cell_right),
+            Paragraph("<b>TOTAL</b>", cell_left), Paragraph(f"<b>{tot_q_e}</b>", cell_right),
+            Paragraph(f"<b>{formatar_moeda(tot_v_e)}</b>", cell_right),
         ])
         t_e = Table(data_e, colWidths=[120, 60, 130], repeatRows=1)
         t_e.setStyle(TableStyle([
@@ -923,6 +978,32 @@ def gerar_pdf_contas_pagar(df_cp, totais_cards, filtros_txt, data_ini, data_fim)
             ('BOTTOMPADDING', (0, 0), (-1, -1), 3), ('TOPPADDING', (0, 0), (-1, -1), 3),
         ]))
         elements.append(t_e)
+
+    # ---- Por Fornecedor (todos) ----
+    if not df_cp.empty:
+        elements.append(PageBreak())
+        elements.append(Paragraph("<b>📊 POR FORNECEDOR</b>", sec_title))
+        df_ag = df_cp.groupby("Fornecedor").agg(
+            Qtd=("ValorTitulo", "count"),
+            EmAberto=("ValorTitulo", lambda s: s[df_cp.loc[s.index, "DTBAIXA"].isna()].sum()),
+            Pago=("ValorTitulo", lambda s: s[df_cp.loc[s.index, "DTBAIXA"].notna()].sum()),
+            Total=("ValorTitulo", "sum"),
+        ).sort_values("Total", ascending=False).reset_index()
+        data_ag = [[Paragraph(h, header_style) for h in ['Fornecedor', 'Qtd', 'Em Aberto', 'Pago', 'Total']]]
+        for _, r in df_ag.iterrows():
+            data_ag.append([
+                Paragraph(str(r['Fornecedor'])[:40], cell_left), Paragraph(str(int(r['Qtd'])), cell_right),
+                Paragraph(formatar_moeda(r['EmAberto']), cell_right), Paragraph(formatar_moeda(r['Pago']), cell_right),
+                Paragraph(formatar_moeda(r['Total']), cell_right),
+            ])
+        t_ag = Table(data_ag, colWidths=[270, 45, 105, 105, 105], repeatRows=1)
+        t_ag.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3), ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(t_ag)
 
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
@@ -2118,6 +2199,19 @@ with tab_contas_pagar:
 
             st.write("")
 
+            # ---- Helpers ----
+            def _formata_parcela(v):
+                try:
+                    n = int(v) if pd.notnull(v) else 0
+                except Exception:
+                    n = 0
+                return "Única" if n == 0 else str(n)
+
+            def _altura_tabela(n_linhas):
+                # cabeçalho + linhas, cap em ~11 linhas visíveis → scroll após 10
+                base = 35 * (min(n_linhas, 11) + 1) + 3
+                return max(120, min(base, 420))
+
             def _titulo_faixa(emoji_titulo, df_sub, cor_hex):
                 st.markdown(
                     f"<div class='tema-titulo' style='color:{cor_hex}; border-bottom-color:{cor_hex};'>"
@@ -2126,36 +2220,47 @@ with tab_contas_pagar:
                     unsafe_allow_html=True
                 )
 
-            def _render_tabela_cp(df_sub, titulo, cor_hex):
+            def _render_tabela_cp(df_sub, titulo, cor_hex, com_baixa=False):
                 if df_sub.empty:
                     st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
                     st.info("Nenhum título nesta faixa.")
                     return
                 _titulo_faixa(titulo, df_sub, cor_hex)
-                df_disp = df_sub.sort_values("DTVENCIMENTO").copy()
+                df_disp = df_sub.sort_values("DTVENCIMENTO").copy().reset_index(drop=True)
+                df_disp.insert(0, "Nº", range(1, len(df_disp) + 1))
                 df_disp["Vencimento"] = df_disp["DTVENCIMENTO"].dt.strftime("%d/%m/%Y")
                 df_disp["Emissão"] = df_disp["DTEMISSAO"].dt.strftime("%d/%m/%Y").fillna("")
-                df_disp["Baixa"] = df_disp["DTBAIXA"].dt.strftime("%d/%m/%Y").fillna("")
                 df_disp["Filial"] = df_disp["FilialNome"]
                 df_disp["Fornecedor"] = df_disp["Fornecedor"].str.slice(0, 45)
-                df_disp["Parcela"] = pd.to_numeric(df_disp["NumeroParcela"], errors="coerce").fillna(0).astype(int)
+                df_disp["Parcela"] = df_disp["NumeroParcela"].apply(_formata_parcela)
                 df_disp["Valor (R$)"] = df_disp["ValorTitulo"].apply(formatar_moeda)
-                df_view = df_disp[["Vencimento", "Filial", "Fornecedor", "Emissão", "Baixa", "Parcela", "Valor (R$)"]].copy()
-                st.dataframe(df_view, use_container_width=True, hide_index=True)
+                cols = ["Nº", "Vencimento", "Filial", "Fornecedor", "Emissão"]
+                if com_baixa:
+                    df_disp["Baixa"] = df_disp["DTBAIXA"].dt.strftime("%d/%m/%Y").fillna("")
+                    cols.append("Baixa")
+                cols += ["Parcela", "Valor (R$)"]
+                st.dataframe(df_disp[cols], use_container_width=True, hide_index=True, height=_altura_tabela(len(df_disp)))
                 st.write("")
 
-            sub_a, sub_diario, sub_b, sub_c, sub_d, sub_e, sub_f, sub_pagos, sub_forn, sub_filial, sub_calend, sub_top, sub_aging, sub_evol, sub_tipodoc = st.tabs([
-                "🔥 Hoje", "📆 Diário do Mês", "📅 30 dias", "📅 30-60", "📅 60-90", "📅 90-120", "🔴 Atrasados",
-                "✅ Pagos", "📊 Por Fornecedor", "🏢 Por Filial", "📅 Calendário Semanal",
-                "⚠️ Top 10", "🕐 Aging", "📈 Evolução Mensal", "📄 Tipo de Doc",
+            # ---- Ordem das sub-abas: A PAGAR → ATRASADOS → ANÁLISE → PAGOS ----
+            (
+                sub_a, sub_diario, sub_b, sub_c, sub_d, sub_e,          # A PAGAR
+                sub_f, sub_faixas, sub_top,                              # ATRASADOS
+                sub_calend, sub_evol, sub_forn, sub_filial, sub_tipodoc, # ANÁLISE
+                sub_pagos                                                # PAGOS
+            ) = st.tabs([
+                "🔥 Hoje", "📆 Diário do Mês", "📅 30 dias", "📅 30-60", "📅 60-90", "📅 90-120",
+                "🔴 Atrasados", "📊 Faixas de Atraso", "⚠️ Top 10",
+                "📅 Calendário Semanal", "📈 Evolução Mensal", "📊 Por Fornecedor", "🏢 Por Filial", "📄 Tipo de Doc",
+                "✅ Pagos",
             ])
 
             df_aberto_all = df_cp[df_cp["DTBAIXA"].isna()].copy()
 
             with sub_a:
-                _render_tabela_cp(df_aberto_all[df_aberto_all["DTVENCIMENTO"].dt.date == dt_hoje], "🔥 Vence Hoje", "#F97316")
+                _render_tabela_cp(df_aberto_all[df_aberto_all["DTVENCIMENTO"].dt.date == dt_hoje], "🔥 Vence Hoje", "#F97316", com_baixa=False)
 
-            # ---- NOVA: Diário do Mês (Opção C — com acumulado) ----
+            # ---- Diário do Mês ----
             with sub_diario:
                 primeiro = dt_hoje
                 ultimo = dt_hoje.replace(day=calendar.monthrange(dt_hoje.year, dt_hoje.month)[1])
@@ -2177,17 +2282,17 @@ with tab_contas_pagar:
                         acumulado += val
                         rotulo = "Hoje" if dia == dt_hoje else ("Amanhã" if (dia - dt_hoje).days == 1 else "")
                         linhas.append({
+                            "Nº": len(linhas) + 1,
                             "Data": dia.strftime("%d/%m/%Y"),
                             "Dia": ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"][dia.weekday()],
                             "Situação": rotulo,
                             "Qtd": qtd if qtd > 0 else 0,
                             "Total a Pagar": formatar_moeda(val) if qtd > 0 else "-",
-                            "Acumulado": formatar_moeda(acumulado) if qtd > 0 else formatar_moeda(acumulado),
+                            "Acumulado": formatar_moeda(acumulado),
                         })
                     df_diario = pd.DataFrame(linhas)
-                    # linha TOTAL
                     df_total = pd.DataFrame([{
-                        "Data": "TOTAL", "Dia": "", "Situação": "",
+                        "Nº": "", "Data": "TOTAL", "Dia": "", "Situação": "",
                         "Qtd": int(df_diario["Qtd"].sum()),
                         "Total a Pagar": formatar_moeda(df_aberto_all[df_aberto_all["DTVENCIMENTO"].dt.month == dt_hoje.month]["ValorTitulo"].sum()),
                         "Acumulado": "-",
@@ -2201,98 +2306,23 @@ with tab_contas_pagar:
                         if row["Situação"] == "Amanhã":
                             return ['background-color: rgba(210,153,34,0.15); color: #D29922; font-weight: bold;'] * len(row)
                         return [''] * len(row)
-                    st.dataframe(df_show.style.apply(_hl_diario, axis=1), use_container_width=True, hide_index=True)
+                    st.dataframe(df_show.style.apply(_hl_diario, axis=1), use_container_width=True, hide_index=True, height=_altura_tabela(len(df_show)))
 
             with sub_b:
-                _render_tabela_cp(df_aberto_all[(df_aberto_all["DTVENCIMENTO"].dt.date > dt_hoje) & (df_aberto_all["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=30))], "📅 Vence em 30 dias", "#3B82F6")
+                _render_tabela_cp(df_aberto_all[(df_aberto_all["DTVENCIMENTO"].dt.date > dt_hoje) & (df_aberto_all["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=30))], "📅 Vence em 30 dias", "#3B82F6", com_baixa=False)
             with sub_c:
-                _render_tabela_cp(df_aberto_all[(df_aberto_all["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=30)) & (df_aberto_all["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=60))], "📅 Vence em 30-60 dias", "#3B82F6")
+                _render_tabela_cp(df_aberto_all[(df_aberto_all["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=30)) & (df_aberto_all["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=60))], "📅 Vence em 30-60 dias", "#3B82F6", com_baixa=False)
             with sub_d:
-                _render_tabela_cp(df_aberto_all[(df_aberto_all["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=60)) & (df_aberto_all["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=90))], "📅 Vence em 60-90 dias", "#3B82F6")
+                _render_tabela_cp(df_aberto_all[(df_aberto_all["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=60)) & (df_aberto_all["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=90))], "📅 Vence em 60-90 dias", "#3B82F6", com_baixa=False)
             with sub_e:
-                _render_tabela_cp(df_aberto_all[(df_aberto_all["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=90)) & (df_aberto_all["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=120))], "📅 Vence em 90-120 dias", "#3B82F6")
+                _render_tabela_cp(df_aberto_all[(df_aberto_all["DTVENCIMENTO"].dt.date > dt_hoje + timedelta(days=90)) & (df_aberto_all["DTVENCIMENTO"].dt.date <= dt_hoje + timedelta(days=120))], "📅 Vence em 90-120 dias", "#3B82F6", com_baixa=False)
+
             with sub_f:
-                _render_tabela_cp(df_aberto_all[df_aberto_all["DTVENCIMENTO"].dt.date < dt_hoje], "🔴 Atrasados", "#EF4444")
-            with sub_pagos:
-                _render_tabela_cp(df_cp[df_cp["DTBAIXA"].notna()].copy(), "✅ Títulos Pagos", "#34D399")
+                _render_tabela_cp(df_aberto_all[df_aberto_all["DTVENCIMENTO"].dt.date < dt_hoje], "🔴 Atrasados", "#EF4444", com_baixa=False)
 
-            with sub_forn:
-                st.markdown("<div class='tema-titulo'>📊 Por Fornecedor (Top 20)</div>", unsafe_allow_html=True)
-                if df_cp.empty:
-                    st.info("Nenhum dado.")
-                else:
-                    df_ag = df_cp.groupby("Fornecedor").agg(
-                        Qtd=("ValorTitulo", "count"),
-                        EmAberto=("ValorTitulo", lambda s: s[df_cp.loc[s.index, "DTBAIXA"].isna()].sum()),
-                        Pago=("ValorTitulo", lambda s: s[df_cp.loc[s.index, "DTBAIXA"].notna()].sum()),
-                        Total=("ValorTitulo", "sum"),
-                    ).sort_values("Total", ascending=False).head(20).reset_index()
-                    tg = df_ag["Total"].sum()
-                    df_ag["%"] = (df_ag["Total"] / tg * 100).apply(lambda x: f"{x:.2f}%".replace(".", ",")) if tg > 0 else "0,00%"
-                    df_ag["Em Aberto"] = df_ag["EmAberto"].apply(formatar_moeda)
-                    df_ag["Pago"] = df_ag["Pago"].apply(formatar_moeda)
-                    df_ag["Total (R$)"] = df_ag["Total"].apply(formatar_moeda)
-                    st.dataframe(df_ag[["Fornecedor", "Qtd", "Em Aberto", "Pago", "Total (R$)", "%"]], use_container_width=True, hide_index=True)
-
-            with sub_filial:
-                st.markdown("<div class='tema-titulo'>🏢 Por Filial</div>", unsafe_allow_html=True)
-                if df_cp.empty:
-                    st.info("Nenhum dado.")
-                else:
-                    df_agf = df_cp.groupby("FilialNome").agg(
-                        Qtd=("ValorTitulo", "count"),
-                        EmAberto=("ValorTitulo", lambda s: s[df_cp.loc[s.index, "DTBAIXA"].isna()].sum()),
-                        Pago=("ValorTitulo", lambda s: s[df_cp.loc[s.index, "DTBAIXA"].notna()].sum()),
-                        Total=("ValorTitulo", "sum"),
-                    ).sort_values("Total", ascending=False).reset_index()
-                    df_agf["Em Aberto"] = df_agf["EmAberto"].apply(formatar_moeda)
-                    df_agf["Pago"] = df_agf["Pago"].apply(formatar_moeda)
-                    df_agf["Total (R$)"] = df_agf["Total"].apply(formatar_moeda)
-                    st.dataframe(df_agf[["FilialNome", "Qtd", "Em Aberto", "Pago", "Total (R$)"]].rename(columns={"FilialNome": "Filial"}), use_container_width=True, hide_index=True)
-
-            with sub_calend:
-                st.markdown("<div class='tema-titulo'>📅 Calendário Semanal — Próximas 8 Semanas</div>", unsafe_allow_html=True)
-                if df_aberto_all.empty:
-                    st.info("Nenhum título em aberto.")
-                else:
-                    linhas_c = []
-                    tot_q = 0
-                    tot_v = 0
-                    for i in range(8):
-                        ini_s = dt_hoje + timedelta(days=i * 7)
-                        fim_s = ini_s + timedelta(days=6)
-                        df_s = df_aberto_all[(df_aberto_all["DTVENCIMENTO"].dt.date >= ini_s) & (df_aberto_all["DTVENCIMENTO"].dt.date <= fim_s)]
-                        v = df_s["ValorTitulo"].sum()
-                        q = len(df_s)
-                        tot_q += q
-                        tot_v += v
-                        linhas_c.append({
-                            "Semana": f"{ini_s.strftime('%d/%m')} – {fim_s.strftime('%d/%m')}",
-                            "Qtd": q,
-                            "Total (R$)": formatar_moeda(v) if q > 0 else "-",
-                        })
-                    linhas_c.append({"Semana": "TOTAL", "Qtd": tot_q, "Total (R$)": formatar_moeda(tot_v)})
-                    df_cal = pd.DataFrame(linhas_c)
-                    def _hl_cal(row):
-                        if row["Semana"] == "TOTAL":
-                            return ['font-weight: bold; background-color: rgba(88,166,255,0.15); color: #58A6FF;'] * len(row)
-                        return [''] * len(row)
-                    st.dataframe(df_cal.style.apply(_hl_cal, axis=1), use_container_width=True, hide_index=True)
-
-            with sub_top:
-                st.markdown("<div class='tema-titulo'>⚠️ Top 10 Maiores Títulos em Aberto</div>", unsafe_allow_html=True)
-                if df_aberto_all.empty:
-                    st.info("Nenhum título em aberto.")
-                else:
-                    df_top = df_aberto_all.sort_values("ValorTitulo", ascending=False).head(10).copy()
-                    df_top["Vencimento"] = df_top["DTVENCIMENTO"].dt.strftime("%d/%m/%Y")
-                    df_top["Filial"] = df_top["FilialNome"]
-                    df_top["Fornecedor"] = df_top["Fornecedor"].str.slice(0, 45)
-                    df_top["Valor (R$)"] = df_top["ValorTitulo"].apply(formatar_moeda)
-                    st.dataframe(df_top[["Vencimento", "Filial", "Fornecedor", "Valor (R$)"]], use_container_width=True, hide_index=True)
-
-            with sub_aging:
-                st.markdown("<div class='tema-titulo'>🕐 Aging — Faixas de Atraso</div>", unsafe_allow_html=True)
+            # ---- Faixas de Atraso (tabela) ----
+            with sub_faixas:
+                st.markdown("<div class='tema-titulo'>📊 Faixas de Atraso</div>", unsafe_allow_html=True)
                 if df_aberto_all.empty:
                     st.info("Nenhum título em aberto.")
                 else:
@@ -2301,12 +2331,74 @@ with tab_contas_pagar:
                         st.success("✅ Nenhum título atrasado.")
                     else:
                         df_atraso["dias"] = (pd.Timestamp(dt_hoje) - df_atraso["DTVENCIMENTO"]).dt.days
-                        faixas = [("0-30", 0, 30, "#D29922"), ("31-60", 31, 60, "#F97316"), ("61-90", 61, 90, "#EF4444"), (">90", 91, 99999, "#DA3633")]
-                        cols_ag = st.columns(4)
-                        for col, (lbl, ini, fim, cor) in zip(cols_ag, faixas):
-                            v = df_atraso[(df_atraso["dias"] >= ini) & (df_atraso["dias"] <= fim)]["ValorTitulo"].sum()
-                            with col:
-                                st.markdown(f'<div class="card-item" style="--accent-color: {cor}; border-left: 5px solid {cor}; background-color: #161B22;"><div class="card-label" style="color: {cor};">{lbl} dias</div><div class="card-value" style="color: {cor};">{formatar_moeda(v)}</div></div>', unsafe_allow_html=True)
+                        faixas_def = [("0-30 dias", 0, 30), ("31-60 dias", 31, 60), ("61-90 dias", 61, 90), (">90 dias", 91, 99999)]
+                        total_atraso = df_atraso["ValorTitulo"].sum()
+                        linhas_f = []
+                        tot_q = 0
+                        for lbl, ini, fim in faixas_def:
+                            df_fa = df_atraso[(df_atraso["dias"] >= ini) & (df_atraso["dias"] <= fim)]
+                            v = df_fa["ValorTitulo"].sum()
+                            q = len(df_fa)
+                            tot_q += q
+                            pct = (v / total_atraso * 100) if total_atraso > 0 else 0
+                            linhas_f.append({"Faixa de Atraso": lbl, "Qtd Títulos": q, "Total": formatar_moeda(v), "% do Total": f"{pct:.2f}%".replace(".", ",")})
+                        linhas_f.append({"Faixa de Atraso": "TOTAL", "Qtd Títulos": tot_q, "Total": formatar_moeda(total_atraso), "% do Total": "100,00%"})
+                        df_faixas = pd.DataFrame(linhas_f)
+                        def _hl_faixas(row):
+                            if row["Faixa de Atraso"] == "TOTAL":
+                                return ['font-weight: bold; background-color: rgba(88,166,255,0.15); color: #58A6FF;'] * len(row)
+                            return [''] * len(row)
+                        st.dataframe(df_faixas.style.apply(_hl_faixas, axis=1), use_container_width=True, hide_index=True, height=_altura_tabela(len(df_faixas)))
+
+            with sub_top:
+                st.markdown("<div class='tema-titulo'>⚠️ Top 10 Maiores Títulos em Aberto</div>", unsafe_allow_html=True)
+                if df_aberto_all.empty:
+                    st.info("Nenhum título em aberto.")
+                else:
+                    df_top = df_aberto_all.sort_values("ValorTitulo", ascending=False).head(10).copy().reset_index(drop=True)
+                    df_top.insert(0, "Nº", range(1, len(df_top) + 1))
+                    df_top["Vencimento"] = df_top["DTVENCIMENTO"].dt.strftime("%d/%m/%Y")
+                    df_top["Filial"] = df_top["FilialNome"]
+                    df_top["Fornecedor"] = df_top["Fornecedor"].str.slice(0, 45)
+                    df_top["Parcela"] = df_top["NumeroParcela"].apply(_formata_parcela)
+                    df_top["Valor (R$)"] = df_top["ValorTitulo"].apply(formatar_moeda)
+                    st.dataframe(df_top[["Nº", "Vencimento", "Filial", "Fornecedor", "Parcela", "Valor (R$)"]], use_container_width=True, hide_index=True, height=_altura_tabela(len(df_top)))
+
+            # ---- Calendário Semanal (seg-dom, 1ª linha começa hoje) ----
+            with sub_calend:
+                st.markdown("<div class='tema-titulo'>📅 Calendário Semanal</div>", unsafe_allow_html=True)
+                if df_aberto_all.empty:
+                    st.info("Nenhum título em aberto.")
+                else:
+                    semanas = []
+                    domingo = dt_hoje + timedelta(days=(6 - dt_hoje.weekday()))
+                    semanas.append((dt_hoje, domingo))
+                    seg_atual = domingo + timedelta(days=1)
+                    for _ in range(7):
+                        semanas.append((seg_atual, seg_atual + timedelta(days=6)))
+                        seg_atual = seg_atual + timedelta(days=7)
+                    linhas_c = []
+                    tot_q = 0
+                    tot_v = 0
+                    for i, (ini_s, fim_s) in enumerate(semanas, start=1):
+                        df_s = df_aberto_all[(df_aberto_all["DTVENCIMENTO"].dt.date >= ini_s) & (df_aberto_all["DTVENCIMENTO"].dt.date <= fim_s)]
+                        v = df_s["ValorTitulo"].sum()
+                        q = len(df_s)
+                        tot_q += q
+                        tot_v += v
+                        linhas_c.append({
+                            "Nº": i,
+                            "Semana": f"{ini_s.strftime('%d/%m')} – {fim_s.strftime('%d/%m')}",
+                            "Qtd": q,
+                            "Total (R$)": formatar_moeda(v) if q > 0 else "-",
+                        })
+                    linhas_c.append({"Nº": "", "Semana": "TOTAL", "Qtd": tot_q, "Total (R$)": formatar_moeda(tot_v)})
+                    df_cal = pd.DataFrame(linhas_c)
+                    def _hl_cal(row):
+                        if row["Semana"] == "TOTAL":
+                            return ['font-weight: bold; background-color: rgba(88,166,255,0.15); color: #58A6FF;'] * len(row)
+                        return [''] * len(row)
+                    st.dataframe(df_cal.style.apply(_hl_cal, axis=1), use_container_width=True, hide_index=True, height=_altura_tabela(len(df_cal)))
 
             with sub_evol:
                 st.markdown("<div class='tema-titulo'>📈 Evolução Mensal — Pagos no Ano</div>", unsafe_allow_html=True)
@@ -2325,17 +2417,54 @@ with tab_contas_pagar:
                         tot_q_e += q
                         tot_v_e += v
                         linhas_e.append({
+                            "Nº": m,
                             "Mês": ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][m-1],
                             "Qtd": q,
                             "Total Pago": formatar_moeda(v) if q > 0 else "-",
                         })
-                    linhas_e.append({"Mês": "TOTAL", "Qtd": tot_q_e, "Total Pago": formatar_moeda(tot_v_e)})
+                    linhas_e.append({"Nº": "", "Mês": "TOTAL", "Qtd": tot_q_e, "Total Pago": formatar_moeda(tot_v_e)})
                     df_ev = pd.DataFrame(linhas_e)
                     def _hl_ev(row):
                         if row["Mês"] == "TOTAL":
                             return ['font-weight: bold; background-color: rgba(88,166,255,0.15); color: #58A6FF;'] * len(row)
                         return [''] * len(row)
-                    st.dataframe(df_ev.style.apply(_hl_ev, axis=1), use_container_width=True, hide_index=True)
+                    st.dataframe(df_ev.style.apply(_hl_ev, axis=1), use_container_width=True, hide_index=True, height=_altura_tabela(len(df_ev)))
+
+            with sub_forn:
+                st.markdown("<div class='tema-titulo'>📊 Por Fornecedor</div>", unsafe_allow_html=True)
+                if df_cp.empty:
+                    st.info("Nenhum dado.")
+                else:
+                    df_ag = df_cp.groupby("Fornecedor").agg(
+                        Qtd=("ValorTitulo", "count"),
+                        EmAberto=("ValorTitulo", lambda s: s[df_cp.loc[s.index, "DTBAIXA"].isna()].sum()),
+                        Pago=("ValorTitulo", lambda s: s[df_cp.loc[s.index, "DTBAIXA"].notna()].sum()),
+                        Total=("ValorTitulo", "sum"),
+                    ).sort_values("Total", ascending=False).reset_index()
+                    tg = df_ag["Total"].sum()
+                    df_ag.insert(0, "Nº", range(1, len(df_ag) + 1))
+                    df_ag["%"] = (df_ag["Total"] / tg * 100).apply(lambda x: f"{x:.2f}%".replace(".", ",")) if tg > 0 else "0,00%"
+                    df_ag["Em Aberto"] = df_ag["EmAberto"].apply(formatar_moeda)
+                    df_ag["Pago"] = df_ag["Pago"].apply(formatar_moeda)
+                    df_ag["Total (R$)"] = df_ag["Total"].apply(formatar_moeda)
+                    st.dataframe(df_ag[["Nº", "Fornecedor", "Qtd", "Em Aberto", "Pago", "Total (R$)", "%"]], use_container_width=True, hide_index=True, height=_altura_tabela(len(df_ag)))
+
+            with sub_filial:
+                st.markdown("<div class='tema-titulo'>🏢 Por Filial</div>", unsafe_allow_html=True)
+                if df_cp.empty:
+                    st.info("Nenhum dado.")
+                else:
+                    df_agf = df_cp.groupby("FilialNome").agg(
+                        Qtd=("ValorTitulo", "count"),
+                        EmAberto=("ValorTitulo", lambda s: s[df_cp.loc[s.index, "DTBAIXA"].isna()].sum()),
+                        Pago=("ValorTitulo", lambda s: s[df_cp.loc[s.index, "DTBAIXA"].notna()].sum()),
+                        Total=("ValorTitulo", "sum"),
+                    ).sort_values("Total", ascending=False).reset_index()
+                    df_agf.insert(0, "Nº", range(1, len(df_agf) + 1))
+                    df_agf["Em Aberto"] = df_agf["EmAberto"].apply(formatar_moeda)
+                    df_agf["Pago"] = df_agf["Pago"].apply(formatar_moeda)
+                    df_agf["Total (R$)"] = df_agf["Total"].apply(formatar_moeda)
+                    st.dataframe(df_agf[["Nº", "FilialNome", "Qtd", "Em Aberto", "Pago", "Total (R$)"]].rename(columns={"FilialNome": "Filial"}), use_container_width=True, hide_index=True, height=_altura_tabela(len(df_agf)))
 
             with sub_tipodoc:
                 st.markdown("<div class='tema-titulo'>📄 Por Tipo de Documento</div>", unsafe_allow_html=True)
@@ -2344,11 +2473,15 @@ with tab_contas_pagar:
                 else:
                     df_td = df_cp.groupby("TipoDoc")["ValorTitulo"].agg(["count", "sum"]).reset_index()
                     df_td.columns = ["Tipo de Documento", "Qtd", "Total"]
-                    df_td = df_td.sort_values("Total", ascending=False)
+                    df_td = df_td.sort_values("Total", ascending=False).reset_index(drop=True)
+                    df_td.insert(0, "Nº", range(1, len(df_td) + 1))
                     df_td["Total (R$)"] = df_td["Total"].apply(formatar_moeda)
-                    st.dataframe(df_td[["Tipo de Documento", "Qtd", "Total (R$)"]], use_container_width=True, hide_index=True)
+                    st.dataframe(df_td[["Nº", "Tipo de Documento", "Qtd", "Total (R$)"]], use_container_width=True, hide_index=True, height=_altura_tabela(len(df_td)))
 
-            # ---- Gerar PDF após a primeira carga ou após Atualizar ----
+            with sub_pagos:
+                _render_tabela_cp(df_cp[df_cp["DTBAIXA"].notna()].copy(), "✅ Títulos Pagos", "#34D399", com_baixa=True)
+
+            # ---- Gerar PDF ----
             if btn_cp:
                 try:
                     filtros_txt = f"Vencimento: {data_ini_cp.strftime('%d/%m/%Y')} a {data_fim_cp.strftime('%d/%m/%Y')} | Filial: {filial_cp_sel} | Fornecedor: {fornecedor_cp_sel} | Situação: {situacao_cp_sel}"
