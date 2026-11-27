@@ -1103,7 +1103,7 @@ def calcular_indices_sazonalidade_diautil(df):
         df_idx = df_idx[df_idx["Total"] > 0]
     return df_idx
 
-def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_hora, df_periodo_hora, df_comp_hora, df_hist_diautil, def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_hora, df_periodo_hora, df_comp_hora, df_hist_diautil, df_periodo_diautil, df_comp_diautil, data_ini, data_fim, h_ini, h_fim, destaques=None):
+def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_hora, df_periodo_hora, df_comp_hora, df_hist_diautil, df_periodo_diautil, df_comp_diautil, data_ini, data_fim, h_ini, h_fim, destaques=None):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=portrait(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
     elements = []
