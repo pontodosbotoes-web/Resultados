@@ -10,6 +10,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
+from concurrent.futures import ThreadPoolExecutor
 import calendar
 
 from src.db import carregar_filiais, carregar_fornecedores
@@ -256,12 +257,17 @@ def criar_mini_grafico(df_hora, col_valor, cor_hex, is_moeda=True):
         custom_data = [f"{int(v):,}".replace(",", ".") for v in df_hora[col_valor]]
         hover_tpl = "%{x}h<br>%{customdata}<extra></extra>"
     max_val = df_hora[col_valor].max()
+    min_val = df_hora[col_valor].min()
     r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
     cor_transparente = f"rgba({r}, {g}, {b}, 0.3)"
     cores_barras = []
     for v in df_hora[col_valor]:
-        if v == max_val and max_val > 0: cores_barras.append("#F8FAFC")
-        else: cores_barras.append(cor_transparente)
+        if v == max_val and max_val > 0:
+            cores_barras.append("#3FB950")   # pico = verde
+        elif v == min_val and min_val > 0:
+            cores_barras.append("#F85149")   # vale = vermelho
+        else:
+            cores_barras.append(cor_transparente)
     fig = go.Figure()
     fig.add_trace(go.Bar(x=df_hora["Hora"], y=df_hora[col_valor], marker_color=cores_barras, customdata=custom_data, hovertemplate=hover_tpl))
     fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=45, xaxis=dict(visible=False, showspikes=False), yaxis=dict(visible=False, rangemode='tozero', showspikes=False), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, hovermode="x unified", bargap=0.15)
@@ -271,17 +277,22 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
     st.markdown(f'<div class="tema-titulo">{icone} {titulo}</div>', unsafe_allow_html=True)
     total = dados.get("total", 0)
     itens = dados.get(campo_itens, [])
-    
-    def html_card(nome, valor, pct_html="", is_consolidado=False):
+
+    # Média entre os itens (para badge MELHOR/PIOR)
+    valores_itens = [it["valor"] for it in itens if it["valor"] > 0]
+    media = (sum(valores_itens) / len(valores_itens)) if valores_itens else 0
+    max_item = max(itens, key=lambda x: x["valor"]) if itens else None
+    min_item = min([it for it in itens if it["valor"] > 0], key=lambda x: x["valor"], default=None)
+
+    def html_card(nome, valor, pct_html="", is_consolidado=False, badge_html=""):
         r = int(cor_hex[1:3], 16); g = int(cor_hex[3:5], 16); b = int(cor_hex[5:7], 16)
-        bg_color = f"rgba({r}, {g}, {b}, 0.05)"
         border_left = f"5px solid {cor_hex}"
         style_str = f"--accent-color: {cor_hex}; border-left: {border_left};"
         label_nome = "🏆 Consolidado" if is_consolidado else nome
         label_style = f"color: {cor_hex};" if is_consolidado else ""
         value_style = f"color: {cor_hex};" if is_consolidado else ""
         val_fmt = formatar_moeda(valor) if fmt == "moeda" else (formatar_inteiro(valor) if fmt == "inteiro" else formatar_decimal(valor))
-        return f'<div class="card-item" style="{style_str}"><div class="card-label" style="{label_style}">{label_nome}</div><div class="card-value" style="{value_style}">{val_fmt} {pct_html}</div></div>'
+        return f'<div class="card-item" style="{style_str}"><div class="card-label" style="{label_style}">{label_nome} {badge_html}</div><div class="card-value" style="{value_style}">{val_fmt} {pct_html}</div></div>'
 
     def render_card_col(col, item):
         pct_html = ""
@@ -294,8 +305,17 @@ def renderizar_tema(titulo, icone, dados, col_valor, cor_hex, tipo_pct, fmt="moe
                 sinal = "+" if diff > 0 else ""
                 classe = "pct-positiva" if diff >= 0 else "pct-negativa"
                 pct_html = f'<span class="{classe}">({sinal}{diff:.1f}%)</span>'
+
+        # Badge MELHOR / PIOR (só se diferença > 20% da média)
+        badge_html = ""
+        if media > 0 and item["valor"] > 0:
+            if item == max_item and (item["valor"] - media) / media > 0.20:
+                badge_html = '<span style="font-size:11px;color:#3FB950;font-weight:800;">🥇 MELHOR</span>'
+            elif item == min_item and (media - item["valor"]) / media > 0.20:
+                badge_html = '<span style="font-size:11px;color:#F85149;font-weight:800;">🥉 PIOR</span>'
+
         with col:
-            st.markdown(html_card(item["nome"], item["valor"], pct_html), unsafe_allow_html=True)
+            st.markdown(html_card(item["nome"], item["valor"], pct_html, badge_html=badge_html), unsafe_allow_html=True)
             if "horas" in item and dados.get("labelsHoras"):
                 key_item = f"item_{titulo.replace(' ', '_').replace('/', '')}_{item['nome'].replace(' ', '_').replace('.', '')}_{col_valor}"
                 fig = criar_mini_grafico(pd.DataFrame({"Hora": dados["labelsHoras"], "Val": item["horas"]}), "Val", cor_hex, fmt=="moeda")
@@ -1074,7 +1094,7 @@ def calcular_indices_sazonalidade_hora(df):
         df_idx = df_idx[df_idx["Total"] > 0]
     return df_idx
 
-@st.cache_data    
+@st.cache_data
 def calcular_indices_sazonalidade_diautil(df):
     df_idx = _calc_idx_generic(df, "DiaUtil", range(1, 28), 26)
     if not df_idx.empty:
@@ -1083,7 +1103,7 @@ def calcular_indices_sazonalidade_diautil(df):
         df_idx = df_idx[df_idx["Total"] > 0]
     return df_idx
 
-def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_hora, df_periodo_hora, df_comp_hora, df_hist_diautil, df_periodo_diautil, df_comp_diautil, data_ini, data_fim, h_ini, h_fim):
+def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_hora, df_periodo_hora, df_comp_hora, df_hist_diautil, df_periodo_diautil, df_comp_diautil, data_ini, data_fim, h_ini, h_fim, insights=None):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=portrait(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=30)
     elements = []
@@ -1095,6 +1115,7 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
     header_table = Table(header_data, colWidths=[300, 255])
     header_table.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BOTTOMPADDING', (0, 0), (-1, -1), 15), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
     elements.append(header_table)
+
     def montar_tabela(df_idx, formato_func, com_pct=False, is_hora=False):
         if df_idx is None or df_idx.empty:
             return Paragraph("<i>Sem dados.</i>", styles['Normal'])
@@ -1117,7 +1138,7 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
                     txt = formato_func(v)
                 cells.append(Paragraph(txt, cell_right))
             data.append(cells)
-        col_widths = [90] + [93] * len(df_idx.columns) 
+        col_widths = [90] + [93] * len(df_idx.columns)
         t = Table(data, colWidths=col_widths, repeatRows=1)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
@@ -1129,34 +1150,40 @@ def gerar_pdf_sazonalidade(df_hist_idx, df_periodo_idx, df_comparativo, df_hist_
             ('TOPPADDING', (0, 0), (-1, -1), pad_v),
         ]))
         return t
+
     heading_dia = ParagraphStyle('H_Dia', parent=styles['Heading3'], fontSize=10, spaceBefore=6, spaceAfter=4, textColor=colors.HexColor('#1E293B'))
     heading_hora = ParagraphStyle('H_Hora', parent=styles['Heading3'], fontSize=8, spaceBefore=4, spaceAfter=2, textColor=colors.HexColor('#1E293B'))
-    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS) — HISTÓRICO COMPLETO</b>", heading_dia))
+
+    elements.append(Paragraph("<b>📅 ÍNDICE DE SAZONALIDADE (DIAS)</b>", heading_dia))
     elements.append(montar_tabela(df_hist_idx, formatar_indice, com_pct=True))
-    elements.append(Spacer(1, 15))
-    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS) — PERÍODO SELECIONADO</b>", heading_dia))
+    elements.append(Spacer(1, 10))
     elements.append(montar_tabela(df_periodo_idx, formatar_indice, com_pct=True))
-    elements.append(Spacer(1, 15))
-    elements.append(Paragraph("<b>COMPARATIVO (DIAS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_dia))
+    elements.append(Spacer(1, 10))
     elements.append(montar_tabela(df_comparativo, formatar_variacao_pct))
     elements.append(PageBreak())
-    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (HORAS) — HISTÓRICO COMPLETO</b>", heading_hora))
+
+    elements.append(Paragraph("<b>🕒 ÍNDICE DE SAZONALIDADE (HORAS)</b>", heading_hora))
     elements.append(montar_tabela(df_hist_hora, formatar_indice, com_pct=True, is_hora=True))
     elements.append(Spacer(1, 6))
-    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (HORAS) — PERÍODO SELECIONADO</b>", heading_hora))
     elements.append(montar_tabela(df_periodo_hora, formatar_indice, com_pct=True, is_hora=True))
     elements.append(Spacer(1, 6))
-    elements.append(Paragraph("<b>COMPARATIVO (HORAS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_hora))
     elements.append(montar_tabela(df_comp_hora, formatar_variacao_pct, is_hora=True))
     elements.append(PageBreak())
-    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS ÚTEIS) — HISTÓRICO COMPLETO</b>", heading_dia))
+
+    elements.append(Paragraph("<b>📆 ÍNDICE DE SAZONALIDADE (DIAS ÚTEIS)</b>", heading_dia))
     elements.append(montar_tabela(df_hist_diautil, formatar_indice, com_pct=True))
-    elements.append(Spacer(1, 15))
-    elements.append(Paragraph("<b>ÍNDICE DE SAZONALIDADE (DIAS ÚTEIS) — PERÍODO SELECIONADO</b>", heading_dia))
+    elements.append(Spacer(1, 10))
     elements.append(montar_tabela(df_periodo_diautil, formatar_indice, com_pct=True))
-    elements.append(Spacer(1, 15))
-    elements.append(Paragraph("<b>COMPARATIVO (DIAS ÚTEIS) — PERÍODO vs. HISTÓRICO (variação %)</b>", heading_dia))
+    elements.append(Spacer(1, 10))
     elements.append(montar_tabela(df_comp_diautil, formatar_variacao_pct))
+
+    if insights:
+        elements.append(PageBreak())
+        elements.append(Paragraph("<b>🏆 DESTAQUES</b>", heading_dia))
+        for emoji, label, valor, detalhe in insights:
+            elements.append(Paragraph(f"<b>{emoji} {label}:</b> {valor} — {detalhe}", styles['Normal']))
+            elements.append(Spacer(1, 4))
+
     doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer
@@ -1458,6 +1485,22 @@ with tab_visao:
             tot_vendas = df_vendas["ValorVenda"].sum()
             tot_trans = df_vendas["QtdVendas"].sum()
             tot_itens = df_vendas["QtdItens"].sum()
+
+            # ---- (B) Faixa de contexto no topo ----
+            ticket_geral = (tot_vendas / tot_trans) if tot_trans else 0
+            txt_periodo = data_ini.strftime("%d/%m/%Y")
+            if data_ini != data_fim:
+                txt_periodo = f"{data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}"
+            st.markdown(
+                f'<div style="background:#161B22;border:1px solid #30363D;border-left:5px solid #58A6FF;'
+                f'border-radius:8px;padding:10px 16px;margin-bottom:16px;color:#C9D1D9;font-size:13px;">'
+                f'📅 <b>Período:</b> {txt_periodo} &nbsp;·&nbsp; '
+                f'🛒 <b>{formatar_inteiro(tot_trans)}</b> transações &nbsp;·&nbsp; '
+                f'🎫 <b>Ticket Médio:</b> {formatar_moeda(ticket_geral)}'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
             temas = [
                 {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#58A6FF", "fmt": "moeda", "pct": "participacao"},
                 {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#3FB950", "fmt": "inteiro", "pct": "participacao"},
@@ -1503,6 +1546,7 @@ with tab_visao:
                 dados_tema = {"total": t["total"], "porFilial": itens_filial, "labelsHoras": labels_h, "horasConsolidado": cons_horas}
                 renderizar_tema(t["titulo"], t["icone"], dados_tema, t["col"], t["cor"], t["pct"], t["fmt"], "porFilial", is_filial=True)
 
+            # ---- (C) Departamentos com Top3/Bottom3 + % acumulado ----
             if not df_depto.empty:
                 labels_depto = sorted(df_depto["Hora"].unique().tolist())
                 tot_depto = df_depto["ValorVenda"].sum()
@@ -1517,6 +1561,32 @@ with tab_visao:
                 dados_d = {"total": tot_depto, "departamentos": itens_depto, "labelsHoras": labels_depto, "horasConsolidado": cons_horas_d}
                 renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#38BDF8", "participacao", "moeda", "departamentos", is_filial=False)
 
+                # Tabela de % acumulado
+                st.markdown('<div class="tema-titulo">📊 Participação Acumulada — Departamentos</div>', unsafe_allow_html=True)
+                acum = 0.0
+                linhas_d = []
+                for i, it in enumerate(itens_depto, start=1):
+                    pct = (it["valor"] / tot_depto * 100) if tot_depto > 0 else 0
+                    acum += pct
+                    linhas_d.append({
+                        "Ranking": i,
+                        "Departamento": it["nome"],
+                        "Vendas (R$)": formatar_moeda(it["valor"]),
+                        "Participação %": f"{pct:.2f}%".replace(".", ","),
+                        "Acumulado %": f"{acum:.2f}%".replace(".", ","),
+                    })
+                df_d_part = pd.DataFrame(linhas_d)
+
+                def _hl_depto(row):
+                    idx = row["Ranking"] - 1
+                    if idx < 3:
+                        return ['background-color: rgba(63,185,80,0.12); color: #3FB950;'] * len(row)
+                    if idx >= len(df_d_part) - 3:
+                        return ['background-color: rgba(248,81,73,0.12); color: #F85149;'] * len(row)
+                    return [''] * len(row)
+                st.dataframe(df_d_part.style.apply(_hl_depto, axis=1), use_container_width=True, hide_index=True)
+
+            # ---- (D) Forma de Pagamento com destaque da dominante ----
             if not df_pag.empty:
                 labels_pag = sorted(df_pag["Hora"].unique().tolist())
                 tot_pag = df_pag["Valor"].sum()
@@ -1531,6 +1601,18 @@ with tab_visao:
                 dados_p = {"total": tot_pag, "porForma": itens_pag, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_p}
                 renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#F0883E", "participacao", "moeda", "porForma", is_filial=False)
 
+                if itens_pag:
+                    dominante = itens_pag[0]
+                    pct_dom = (dominante["valor"] / tot_pag * 100) if tot_pag > 0 else 0
+                    st.markdown(
+                        f'<div style="background:rgba(240,136,62,0.1);border:1px solid #F0883E;border-radius:8px;'
+                        f'padding:10px 16px;margin:10px 0;color:#F0883E;font-weight:600;font-size:13px;">'
+                        f'💳 <b>Forma dominante:</b> {dominante["nome"]} — '
+                        f'{formatar_moeda(dominante["valor"])} ({pct_dom:.1f}% do total)'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
                 df_pag_port = df_pag.dropna(subset=["NomePortador"])
                 if not df_pag_port.empty:
                     itens_port = []
@@ -1543,6 +1625,84 @@ with tab_visao:
                     cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
                     dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
                     renderizar_tema("Portador", "👤", dados_pt, "Valor", "#F97583", "participacao", "moeda", "porPortador", is_filial=False)
+
+                    # (E) Ranking Top 3 Portadores
+                    st.markdown('<div class="tema-titulo">🏆 Ranking de Portadores (Top 3)</div>', unsafe_allow_html=True)
+                    medals = ["🥇", "🥈", "🥉"]
+                    linhas_pt = []
+                    for i, it in enumerate(itens_port[:3]):
+                        pct = (it["valor"] / tot_pag * 100) if tot_pag > 0 else 0
+                        linhas_pt.append({
+                            "Posição": medals[i],
+                            "Portador": it["nome"],
+                            "Vendas (R$)": formatar_moeda(it["valor"]),
+                            "Participação": f"{pct:.2f}%".replace(".", ","),
+                        })
+                    df_pt_rank = pd.DataFrame(linhas_pt)
+                    def _hl_pt(row):
+                        idx = ["🥇", "🥈", "🥉"].index(row["Posição"])
+                        cores = ["rgba(63,185,80,0.12);color:#3FB950", "rgba(210,153,34,0.12);color:#D29922", "rgba(248,81,73,0.12);color:#F85149"]
+                        return [f'background-color:{cores[idx].split(";")[0]};{cores[idx].split(";")[1]};font-weight:bold;'] * len(row)
+                    st.dataframe(df_pt_rank.style.apply(_hl_pt, axis=1), use_container_width=True, hide_index=True)
+
+            # ---- (G) Insights automáticos (rodapé) ----
+            st.markdown('<div class="tema-titulo">🧠 Insights Automáticos</div>', unsafe_allow_html=True)
+            insights = []
+
+            # G1 - Melhor filial
+            vendas_por_filial = {cod: df_vendas[df_vendas["CodFilial"] == cod]["ValorVenda"].sum() for cod in NOMES_FILIAIS.keys()}
+            if vendas_por_filial:
+                melhor_cod = max(vendas_por_filial, key=vendas_por_filial.get)
+                melhor_nome = NOMES_FILIAIS.get(melhor_cod, f"Filial {melhor_cod}")
+                insights.append(("🏆", "Melhor Filial", melhor_nome, formatar_moeda(vendas_por_filial[melhor_cod]), "#3FB950"))
+
+            # G2 - Melhor horário
+            if labels_h:
+                vendas_por_hora = {h: df_vendas[df_vendas["Hora"] == h]["ValorVenda"].sum() for h in labels_h}
+                melhor_h = max(vendas_por_hora, key=vendas_por_hora.get)
+                insights.append(("🎯", "Melhor Horário", f"{melhor_h:02d}:00", formatar_moeda(vendas_por_hora[melhor_h]), "#58A6FF"))
+
+            # G3 - Melhor dia (se período > 1 dia)
+            if data_ini != data_fim:
+                df_vendas_dia = df_vendas.copy()
+                df_vendas_dia["DataStr"] = df_vendas_dia["Hora"].apply(lambda h: "—")  # placeholder
+                # Como a SQL atual só retorna Hora (não data), não é possível extrair o dia.
+                # Marcamos como indisponível
+                insights.append(("📈", "Melhor Dia", "—", "SQL não retorna data", "#8B949E"))
+
+            # G4 - Filial com menor ticket
+            tickets_por_filial = {}
+            for cod in NOMES_FILIAIS.keys():
+                df_f = df_vendas[df_vendas["CodFilial"] == cod]
+                v = df_f["ValorVenda"].sum(); t = df_f["QtdVendas"].sum()
+                if t > 0:
+                    tickets_por_filial[cod] = v / t
+            if tickets_por_filial:
+                pior_cod = min(tickets_por_filial, key=tickets_por_filial.get)
+                pior_nome = NOMES_FILIAIS.get(pior_cod, f"Filial {pior_cod}")
+                insights.append(("⚠️", "Menor Ticket Médio", pior_nome, formatar_moeda(tickets_por_filial[pior_cod]), "#F85149"))
+
+            # G5 - Forma de pagamento dominante
+            if not df_pag.empty:
+                tot_pag_ins = df_pag["Valor"].sum()
+                pag_agg = df_pag.groupby("Denominacao")["Valor"].sum()
+                if not pag_agg.empty and tot_pag_ins > 0:
+                    forma_dom = pag_agg.idxmax()
+                    pct_dom = pag_agg.max() / tot_pag_ins * 100
+                    insights.append(("💳", "Forma Dominante", forma_dom, f"{pct_dom:.1f}% do total", "#D29922"))
+
+            if insights:
+                cols_ins = st.columns(len(insights))
+                for col, (emoji, label, valor, detalhe, cor) in zip(cols_ins, insights):
+                    with col:
+                        st.markdown(
+                            f'<div class="card-item" style="--accent-color: {cor}; border-left: 5px solid {cor}; background-color: #161B22;">'
+                            f'<div class="card-label" style="color: {cor}; white-space: normal;">{emoji} {label}</div>'
+                            f'<div class="card-value" style="color: {cor}; font-size: 18px;">{valor}</div>'
+                            f'<div style="color:#8B949E;font-size:12px;margin-top:4px;">{detalhe}</div>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
 
 # ==========================================
 # ABA SAZONALIDADE
@@ -1576,25 +1736,35 @@ with tab_sazonalidade:
 
     if btn_saz:
         try:
-            with st.spinner("Carregando dados de sazonalidade..."):
+            with st.spinner("Carregando sazonalidade (paralelo)..."):
                 data_hist_ini = (hoje - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
                 data_hist_fim = hoje.strftime("%Y-%m-%d")
                 hist_hash = f"{h_ini_saz.hour}_{h_fim_saz.hour}"
-                _recalcular_hist = st.session_state.get("saz_hist_hash") != hist_hash or "df_saz_hist" not in st.session_state
 
-                if _recalcular_hist:
-                    df_hist = buscar_sazonalidade(data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
-                    df_hist_hora = buscar_sazonalidade_hora(data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
-                    df_hist_diautil = buscar_sazonalidade_diautil(data_hist_ini, data_hist_fim, "")
+                # Verifica se histórico precisa recarregar
+                precisa_hist = st.session_state.get("saz_hist_hash") != hist_hash or "df_saz_hist" not in st.session_state
 
-                    st.session_state["df_saz_hist"] = calcular_indices_sazonalidade(df_hist)
-                    st.session_state["df_saz_hist_hora"] = calcular_indices_sazonalidade_hora(df_hist_hora)
-                    st.session_state["df_saz_hist_diautil"] = calcular_indices_sazonalidade_diautil(df_hist_diautil)
-                    st.session_state["saz_hist_hash"] = hist_hash
-                    
-                df_periodo = buscar_sazonalidade(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
-                df_periodo_hora = buscar_sazonalidade_hora(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
-                df_periodo_diautil = buscar_sazonalidade_diautil(data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), "")
+                # ---- Paralelismo: 6 consultas simultâneas ----
+                with ThreadPoolExecutor(max_workers=6) as executor:
+                    fut_hist_dias = executor.submit(buscar_sazonalidade, data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
+                    fut_hist_horas = executor.submit(buscar_sazonalidade_hora, data_hist_ini, data_hist_fim, h_ini_saz.hour, h_fim_saz.hour, "")
+                    fut_hist_diautil = executor.submit(buscar_sazonalidade_diautil, data_hist_ini, data_hist_fim, "")
+                    fut_per_dias = executor.submit(buscar_sazonalidade, data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
+                    fut_per_horas = executor.submit(buscar_sazonalidade_hora, data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), h_ini_saz.hour, h_fim_saz.hour, "")
+                    fut_per_diautil = executor.submit(buscar_sazonalidade_diautil, data_ini_saz.strftime("%Y-%m-%d"), data_fim_saz.strftime("%Y-%m-%d"), "")
+
+                    if precisa_hist:
+                        df_hist = fut_hist_dias.result()
+                        df_hist_hora = fut_hist_horas.result()
+                        df_hist_diautil = fut_hist_diautil.result()
+                        st.session_state["df_saz_hist"] = calcular_indices_sazonalidade(df_hist)
+                        st.session_state["df_saz_hist_hora"] = calcular_indices_sazonalidade_hora(df_hist_hora)
+                        st.session_state["df_saz_hist_diautil"] = calcular_indices_sazonalidade_diautil(df_hist_diautil)
+                        st.session_state["saz_hist_hash"] = hist_hash
+
+                    df_periodo = fut_per_dias.result()
+                    df_periodo_hora = fut_per_horas.result()
+                    df_periodo_diautil = fut_per_diautil.result()
 
                 df_hist_idx = st.session_state["df_saz_hist"]
                 df_hist_hora_idx = st.session_state["df_saz_hist_hora"]
@@ -1628,16 +1798,6 @@ with tab_sazonalidade:
                 st.session_state["df_saz_comp_hora"] = df_comp_hora
                 st.session_state["df_saz_periodo_diautil"] = df_periodo_diautil_idx
                 st.session_state["df_saz_comp_diautil"] = df_comp_diautil
-
-                if not df_hist_idx.empty and not df_periodo_idx.empty:
-                    st.session_state["pdf_bytes_saz"] = gerar_pdf_sazonalidade(
-                        df_hist_idx, df_periodo_idx, df_comparativo, 
-                        df_hist_hora_idx, df_periodo_hora_idx, df_comp_hora,
-                        df_hist_diautil_idx, df_periodo_diautil_idx, df_comp_diautil,
-                        data_ini_saz, data_fim_saz, h_ini_saz, h_fim_saz
-                    )
-                else:
-                    st.session_state["pdf_bytes_saz"] = None
         except Exception as e:
             st.error(f"Erro ao carregar sazonalidade: {e}")
             st.stop()
@@ -1658,6 +1818,7 @@ with tab_sazonalidade:
         if df_hist_idx.empty and df_periodo_idx.empty:
             st.info("Nenhum dado de vendas encontrado.")
         else:
+            # ---- Cores por faixa ----
             def _cor_idx(v):
                 if pd.isna(v): return ""
                 if v > 1.05: return "background-color: rgba(63, 185, 80, 0.25); color: #56D364; font-weight: 700;"
@@ -1684,7 +1845,7 @@ with tab_sazonalidade:
 
             def _render(df_idx, titulo, fmt_func, cor_func):
                 st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
-                if df_idx.empty:
+                if df_idx is None or df_idx.empty:
                     st.info("Sem dados para o período.")
                     return
                 df_display = df_idx.copy()
@@ -1696,20 +1857,22 @@ with tab_sazonalidade:
                     txt = fmt_func(val)
                     if col_name in max_vals and col_name in min_vals:
                         if val == max_vals[col_name]: txt += " 🏆"
-                        elif val == min_vals[col_name]: txt += " 🍍"
+                        elif val == min_vals[col_name]: txt += " ⚠️"
                     return txt
 
                 for col in df_display.columns:
                     df_display[col] = df_display.apply(lambda row: fmt_val(row[col], row.name, col), axis=1)
+
                 def apply_colors(row):
                     return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
+
                 styled = df_display.style.apply(apply_colors, axis=1)
                 styled = styled.set_properties(**{'text-align': 'right'})
                 st.dataframe(styled, use_container_width=True)
-                
+
             def _render_com_pct(df_idx, titulo, cor_func):
                 st.markdown(f"<div class='tema-titulo'>{titulo}</div>", unsafe_allow_html=True)
-                if df_idx.empty:
+                if df_idx is None or df_idx.empty:
                     st.info("Sem dados para o período.")
                     return
                 df_display = df_idx.copy()
@@ -1722,7 +1885,7 @@ with tab_sazonalidade:
                     txt = f"{val:.4f} ({pct:+.2f}%)".replace(".", ",")
                     if col_name in max_vals and col_name in min_vals:
                         if val == max_vals[col_name]: txt += " 🏆"
-                        elif val == min_vals[col_name]: txt += " 🍍"
+                        elif val == min_vals[col_name]: txt += " ⚠️"
                     return txt
 
                 for col in df_display.columns:
@@ -1730,12 +1893,29 @@ with tab_sazonalidade:
                         df_display[col] = df_display.apply(lambda row: fmt_with_pct(row[col], row["Total"], row.name, col), axis=1)
                     else:
                         df_display[col] = df_display[col].apply(lambda x: f"{x:.4f}".replace(".", ",") if not pd.isna(x) else "-")
+
                 def apply_colors(row):
                     return [cor_func(df_idx.loc[row.name, col]) for col in df_idx.columns]
+
                 styled = df_display.style.apply(apply_colors, axis=1)
                 styled = styled.set_properties(**{'text-align': 'right'})
                 st.dataframe(styled, use_container_width=True)
 
+            # ---- Função: clima geral da dimensão ----
+            def _clima(df_comp):
+                if df_comp is None or df_comp.empty:
+                    return "🟡 Estável", "#D29922"
+                vals = df_comp.drop(columns=["Total"], errors="ignore").values.flatten()
+                vals = [v for v in vals if not pd.isna(v) and v != 0]
+                if not vals:
+                    return "🟡 Estável", "#D29922"
+                pos = sum(1 for v in vals if v > 0)
+                neg = sum(1 for v in vals if v < 0)
+                if pos > neg: return "🟢 Tendência de Alta", "#3FB950"
+                if neg > pos: return "🔴 Tendência de Queda", "#F85149"
+                return "🟡 Estável", "#D29922"
+
+            # ---- Legenda ----
             legenda_dias = '''
             <div class="legenda-container">
                 <div class="legenda-item"><div class="legenda-cor" style="background-color:rgba(63,185,80,0.25); border-color:#56D364;"></div> > 1,05 (Melhor)</div>
@@ -1764,26 +1944,104 @@ with tab_sazonalidade:
             </div>
             '''
 
-            _render_com_pct(df_hist_idx, "📊 Índice de Sazonalidade (DIAS) — Histórico Completo", _cor_idx)
-            st.markdown(legenda_dias, unsafe_allow_html=True)
-            _render_com_pct(df_periodo_idx, f"📊 Índice de Sazonalidade (DIAS) — Período", _cor_idx)
-            st.markdown(legenda_dias, unsafe_allow_html=True)
-            _render(df_comparativo, "📈 Comparativo (DIAS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
-            st.markdown(legenda_comp, unsafe_allow_html=True)
-            st.markdown("---")
-            _render_com_pct(df_hist_hora_idx, "🕒 Índice de Sazonalidade (HORAS) — Histórico Completo", _cor_hora_idx)
-            st.markdown(legenda_horas, unsafe_allow_html=True)
-            _render_com_pct(df_periodo_hora_idx, f"🕒 Índice de Sazonalidade (HORAS) — Período", _cor_hora_idx)
-            st.markdown(legenda_horas, unsafe_allow_html=True)
-            _render(df_comp_hora, "📈 Comparativo (HORAS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
-            st.markdown(legenda_comp, unsafe_allow_html=True)
-            st.markdown("---")
-            _render_com_pct(df_hist_diautil_idx, "📊 Índice de Sazonalidade (DIAS ÚTEIS) — Histórico Completo", _cor_idx)
-            st.markdown(legenda_dias, unsafe_allow_html=True)
-            _render_com_pct(df_periodo_diautil_idx, f"📊 Índice de Sazonalidade (DIAS ÚTEIS) — Período", _cor_idx)
-            st.markdown(legenda_dias, unsafe_allow_html=True)
-            _render(df_comp_diautil, "📈 Comparativo (DIAS ÚTEIS) — Período vs. Histórico", formatar_variacao_pct, _cor_comp)
-            st.markdown(legenda_comp, unsafe_allow_html=True)
+            # ---- Sub-abas ----
+            sub_dias, sub_horas, sub_diautil, sub_destaques = st.tabs([
+                "📅 Dias da Semana", "🕒 Horas do Dia", "📆 Dias Úteis", "🏆 Destaques"
+            ])
+
+            with sub_dias:
+                clima_txt, clima_cor = _clima(df_comparativo)
+                st.markdown(f"<div class='tema-titulo' style='color:{clima_cor}; border-bottom-color:{clima_cor};'>📅 Dias da Semana — {clima_txt}</div>", unsafe_allow_html=True)
+                _render_com_pct(df_hist_idx, "🟢 Histórico Completo", _cor_idx)
+                st.markdown(legenda_dias, unsafe_allow_html=True)
+                _render_com_pct(df_periodo_idx, "🔵 Período Selecionado", _cor_idx)
+                st.markdown(legenda_dias, unsafe_allow_html=True)
+                _render(df_comparativo, "🟡 Comparativo (Período vs. Histórico)", formatar_variacao_pct, _cor_comp)
+                st.markdown(legenda_comp, unsafe_allow_html=True)
+
+            with sub_horas:
+                clima_txt, clima_cor = _clima(df_comp_hora)
+                st.markdown(f"<div class='tema-titulo' style='color:{clima_cor}; border-bottom-color:{clima_cor};'>🕒 Horas do Dia — {clima_txt}</div>", unsafe_allow_html=True)
+                _render_com_pct(df_hist_hora_idx, "🟢 Histórico Completo", _cor_hora_idx)
+                st.markdown(legenda_horas, unsafe_allow_html=True)
+                _render_com_pct(df_periodo_hora_idx, "🔵 Período Selecionado", _cor_hora_idx)
+                st.markdown(legenda_horas, unsafe_allow_html=True)
+                _render(df_comp_hora, "🟡 Comparativo (Período vs. Histórico)", formatar_variacao_pct, _cor_comp)
+                st.markdown(legenda_comp, unsafe_allow_html=True)
+
+            with sub_diautil:
+                clima_txt, clima_cor = _clima(df_comp_diautil)
+                st.markdown(f"<div class='tema-titulo' style='color:{clima_cor}; border-bottom-color:{clima_cor};'>📆 Dias Úteis — {clima_txt}</div>", unsafe_allow_html=True)
+                _render_com_pct(df_hist_diautil_idx, "🟢 Histórico Completo", _cor_idx)
+                st.markdown(legenda_dias, unsafe_allow_html=True)
+                _render_com_pct(df_periodo_diautil_idx, "🔵 Período Selecionado", _cor_idx)
+                st.markdown(legenda_dias, unsafe_allow_html=True)
+                _render(df_comp_diautil, "🟡 Comparativo (Período vs. Histórico)", formatar_variacao_pct, _cor_comp)
+                st.markdown(legenda_comp, unsafe_allow_html=True)
+
+            with sub_destaques:
+                st.markdown("<div class='tema-titulo'>🏆 Destaques da Sazonalidade</div>", unsafe_allow_html=True)
+
+                insights = []
+
+                # Melhor/Pior Dia
+                if not df_periodo_idx.empty and "Total" in df_periodo_idx.columns:
+                    melhor_dia = df_periodo_idx["Total"].idxmax()
+                    pior_dia = df_periodo_idx["Total"].idxmin()
+                    insights.append(("🥇", "Melhor Dia", str(melhor_dia), formatar_indice(df_periodo_idx.loc[melhor_dia, "Total"]), "#3FB950"))
+                    insights.append(("⚠️", "Pior Dia", str(pior_dia), formatar_indice(df_periodo_idx.loc[pior_dia, "Total"]), "#F85149"))
+
+                # Melhor/Pior Hora
+                if not df_periodo_hora_idx.empty and "Total" in df_periodo_hora_idx.columns:
+                    melhor_h = df_periodo_hora_idx["Total"].idxmax()
+                    pior_h = df_periodo_hora_idx["Total"].idxmin()
+                    insights.append(("🎯", "Melhor Hora", str(melhor_h), formatar_indice(df_periodo_hora_idx.loc[melhor_h, "Total"]), "#3FB950"))
+                    insights.append(("⚠️", "Pior Hora", str(pior_h), formatar_indice(df_periodo_hora_idx.loc[pior_h, "Total"]), "#F85149"))
+
+                # Melhor Dia Útil
+                if not df_periodo_diautil_idx.empty and "Total" in df_periodo_diautil_idx.columns:
+                    melhor_du = df_periodo_diautil_idx["Total"].idxmax()
+                    insights.append(("📆", "Melhor Dia Útil", str(melhor_du), formatar_indice(df_periodo_diautil_idx.loc[melhor_du, "Total"]), "#3FB950"))
+
+                # Maior Crescimento e Maior Queda (Comparativo)
+                if not df_comparativo.empty:
+                    vals_comp = df_comparativo.drop(columns=["Total"], errors="ignore")
+                    if not vals_comp.empty and vals_comp.notna().any().any():
+                        idx_max = vals_comp.stack().idxmax()
+                        idx_min = vals_comp.stack().idxmin()
+                        insights.append(("📈", "Maior Crescimento", f"{idx_max[0]} · {idx_max[1]}", formatar_variacao_pct(vals_comp.stack().max()), "#3FB950"))
+                        insights.append(("📉", "Maior Queda", f"{idx_min[0]} · {idx_min[1]}", formatar_variacao_pct(vals_comp.stack().min()), "#F85149"))
+
+                if insights:
+                    cols1 = st.columns(4)
+                    cols2 = st.columns(3)
+                    todas_cols = list(cols1) + list(cols2)
+                    for col, (emoji, label, valor, detalhe, cor) in zip(todas_cols, insights[:7]):
+                        with col:
+                            st.markdown(
+                                f'<div class="card-item" style="--accent-color: {cor}; border-left: 5px solid {cor}; background-color: #161B22;">'
+                                f'<div class="card-label" style="color: {cor}; white-space: normal;">{emoji} {label}</div>'
+                                f'<div class="card-value" style="color: {cor}; font-size: 18px;">{valor}</div>'
+                                f'<div style="color:#8B949E;font-size:12px;margin-top:4px;">{detalhe}</div>'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                else:
+                    st.info("Sem dados suficientes para gerar destaques.")
+
+            # ---- Gerar PDF após a primeira carga ou após Atualizar ----
+            if btn_saz:
+                try:
+                    st.session_state["pdf_bytes_saz"] = gerar_pdf_sazonalidade(
+                        df_hist_idx, df_periodo_idx, df_comparativo,
+                        df_hist_hora_idx, df_periodo_hora_idx, df_comp_hora,
+                        df_hist_diautil_idx, df_periodo_diautil_idx, df_comp_diautil,
+                        data_ini_saz, data_fim_saz, h_ini_saz, h_fim_saz,
+                        insights=insights if 'insights' in locals() else None
+                    )
+                except Exception as e:
+                    st.session_state["pdf_bytes_saz"] = None
+                    st.warning(f"Não foi possível gerar o PDF: {e}")
 
 # ==========================================
 # ABA COMPRAS
