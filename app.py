@@ -1620,22 +1620,6 @@ with tab_visao:
             tot_vendas = df_vendas["ValorVenda"].sum()
             tot_trans = df_vendas["QtdVendas"].sum()
             tot_itens = df_vendas["QtdItens"].sum()
-
-            # ---- (B) Faixa de contexto no topo ----
-            ticket_geral = (tot_vendas / tot_trans) if tot_trans else 0
-            txt_periodo = data_ini.strftime("%d/%m/%Y")
-            if data_ini != data_fim:
-                txt_periodo = f"{data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}"
-            st.markdown(
-                f'<div style="background:#161B22;border:1px solid #30363D;border-left:5px solid #58A6FF;'
-                f'border-radius:8px;padding:10px 16px;margin-bottom:16px;color:#C9D1D9;font-size:13px;">'
-                f'📅 <b>Período:</b> {txt_periodo} &nbsp;·&nbsp; '
-                f'🛒 <b>{formatar_inteiro(tot_trans)}</b> transações &nbsp;·&nbsp; '
-                f'🎫 <b>Ticket Médio:</b> {formatar_moeda(ticket_geral)}'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-
             temas = [
                 {"id": "vendas", "titulo": "Vendas", "icone": "💰", "total": tot_vendas, "col": "ValorVenda", "cor": "#58A6FF", "fmt": "moeda", "pct": "participacao"},
                 {"id": "transacoes", "titulo": "Transações", "icone": "🛒", "total": tot_trans, "col": "QtdVendas", "cor": "#3FB950", "fmt": "inteiro", "pct": "participacao"},
@@ -1681,7 +1665,6 @@ with tab_visao:
                 dados_tema = {"total": t["total"], "porFilial": itens_filial, "labelsHoras": labels_h, "horasConsolidado": cons_horas}
                 renderizar_tema(t["titulo"], t["icone"], dados_tema, t["col"], t["cor"], t["pct"], t["fmt"], "porFilial", is_filial=True)
 
-            # ---- (C) Departamentos com Top3/Bottom3 + % acumulado ----
             if not df_depto.empty:
                 labels_depto = sorted(df_depto["Hora"].unique().tolist())
                 tot_depto = df_depto["ValorVenda"].sum()
@@ -1696,32 +1679,6 @@ with tab_visao:
                 dados_d = {"total": tot_depto, "departamentos": itens_depto, "labelsHoras": labels_depto, "horasConsolidado": cons_horas_d}
                 renderizar_tema("Vendas por Departamento", "📂", dados_d, "ValorVenda", "#38BDF8", "participacao", "moeda", "departamentos", is_filial=False)
 
-                # Tabela de % acumulado
-                st.markdown('<div class="tema-titulo">📊 Participação Acumulada — Departamentos</div>', unsafe_allow_html=True)
-                acum = 0.0
-                linhas_d = []
-                for i, it in enumerate(itens_depto, start=1):
-                    pct = (it["valor"] / tot_depto * 100) if tot_depto > 0 else 0
-                    acum += pct
-                    linhas_d.append({
-                        "Ranking": i,
-                        "Departamento": it["nome"],
-                        "Vendas (R$)": formatar_moeda(it["valor"]),
-                        "Participação %": f"{pct:.2f}%".replace(".", ","),
-                        "Acumulado %": f"{acum:.2f}%".replace(".", ","),
-                    })
-                df_d_part = pd.DataFrame(linhas_d)
-
-                def _hl_depto(row):
-                    idx = row["Ranking"] - 1
-                    if idx < 3:
-                        return ['background-color: rgba(63,185,80,0.12); color: #3FB950;'] * len(row)
-                    if idx >= len(df_d_part) - 3:
-                        return ['background-color: rgba(248,81,73,0.12); color: #F85149;'] * len(row)
-                    return [''] * len(row)
-                st.dataframe(df_d_part.style.apply(_hl_depto, axis=1), use_container_width=True, hide_index=True)
-
-            # ---- (D) Forma de Pagamento com destaque da dominante ----
             if not df_pag.empty:
                 labels_pag = sorted(df_pag["Hora"].unique().tolist())
                 tot_pag = df_pag["Valor"].sum()
@@ -1736,18 +1693,6 @@ with tab_visao:
                 dados_p = {"total": tot_pag, "porForma": itens_pag, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_p}
                 renderizar_tema("Forma de Pagamento", "💳", dados_p, "Valor", "#F0883E", "participacao", "moeda", "porForma", is_filial=False)
 
-                if itens_pag:
-                    dominante = itens_pag[0]
-                    pct_dom = (dominante["valor"] / tot_pag * 100) if tot_pag > 0 else 0
-                    st.markdown(
-                        f'<div style="background:rgba(240,136,62,0.1);border:1px solid #F0883E;border-radius:8px;'
-                        f'padding:10px 16px;margin:10px 0;color:#F0883E;font-weight:600;font-size:13px;">'
-                        f'💳 <b>Forma dominante:</b> {dominante["nome"]} — '
-                        f'{formatar_moeda(dominante["valor"])} ({pct_dom:.1f}% do total)'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-
                 df_pag_port = df_pag.dropna(subset=["NomePortador"])
                 if not df_pag_port.empty:
                     itens_port = []
@@ -1760,84 +1705,6 @@ with tab_visao:
                     cons_horas_pt = [df_pag_port[df_pag_port["Hora"] == h]["Valor"].sum() for h in labels_pag]
                     dados_pt = {"total": tot_pag, "porPortador": itens_port, "labelsHoras": labels_pag, "horasConsolidado": cons_horas_pt}
                     renderizar_tema("Portador", "👤", dados_pt, "Valor", "#F97583", "participacao", "moeda", "porPortador", is_filial=False)
-
-                    # (E) Ranking Top 3 Portadores
-                    st.markdown('<div class="tema-titulo">🏆 Ranking de Portadores (Top 3)</div>', unsafe_allow_html=True)
-                    medals = ["🥇", "🥈", "🥉"]
-                    linhas_pt = []
-                    for i, it in enumerate(itens_port[:3]):
-                        pct = (it["valor"] / tot_pag * 100) if tot_pag > 0 else 0
-                        linhas_pt.append({
-                            "Posição": medals[i],
-                            "Portador": it["nome"],
-                            "Vendas (R$)": formatar_moeda(it["valor"]),
-                            "Participação": f"{pct:.2f}%".replace(".", ","),
-                        })
-                    df_pt_rank = pd.DataFrame(linhas_pt)
-                    def _hl_pt(row):
-                        idx = ["🥇", "🥈", "🥉"].index(row["Posição"])
-                        cores = ["rgba(63,185,80,0.12);color:#3FB950", "rgba(210,153,34,0.12);color:#D29922", "rgba(248,81,73,0.12);color:#F85149"]
-                        return [f'background-color:{cores[idx].split(";")[0]};{cores[idx].split(";")[1]};font-weight:bold;'] * len(row)
-                    st.dataframe(df_pt_rank.style.apply(_hl_pt, axis=1), use_container_width=True, hide_index=True)
-
-            # ---- (G) Insights automáticos (rodapé) ----
-            st.markdown('<div class="tema-titulo">🧠 Insights Automáticos</div>', unsafe_allow_html=True)
-            insights = []
-
-            # G1 - Melhor filial
-            vendas_por_filial = {cod: df_vendas[df_vendas["CodFilial"] == cod]["ValorVenda"].sum() for cod in NOMES_FILIAIS.keys()}
-            if vendas_por_filial:
-                melhor_cod = max(vendas_por_filial, key=vendas_por_filial.get)
-                melhor_nome = NOMES_FILIAIS.get(melhor_cod, f"Filial {melhor_cod}")
-                insights.append(("🏆", "Melhor Filial", melhor_nome, formatar_moeda(vendas_por_filial[melhor_cod]), "#3FB950"))
-
-            # G2 - Melhor horário
-            if labels_h:
-                vendas_por_hora = {h: df_vendas[df_vendas["Hora"] == h]["ValorVenda"].sum() for h in labels_h}
-                melhor_h = max(vendas_por_hora, key=vendas_por_hora.get)
-                insights.append(("🎯", "Melhor Horário", f"{melhor_h:02d}:00", formatar_moeda(vendas_por_hora[melhor_h]), "#58A6FF"))
-
-            # G3 - Melhor dia (se período > 1 dia)
-            if data_ini != data_fim:
-                df_vendas_dia = df_vendas.copy()
-                df_vendas_dia["DataStr"] = df_vendas_dia["Hora"].apply(lambda h: "—")  # placeholder
-                # Como a SQL atual só retorna Hora (não data), não é possível extrair o dia.
-                # Marcamos como indisponível
-                insights.append(("📈", "Melhor Dia", "—", "SQL não retorna data", "#8B949E"))
-
-            # G4 - Filial com menor ticket
-            tickets_por_filial = {}
-            for cod in NOMES_FILIAIS.keys():
-                df_f = df_vendas[df_vendas["CodFilial"] == cod]
-                v = df_f["ValorVenda"].sum(); t = df_f["QtdVendas"].sum()
-                if t > 0:
-                    tickets_por_filial[cod] = v / t
-            if tickets_por_filial:
-                pior_cod = min(tickets_por_filial, key=tickets_por_filial.get)
-                pior_nome = NOMES_FILIAIS.get(pior_cod, f"Filial {pior_cod}")
-                insights.append(("⚠️", "Menor Ticket Médio", pior_nome, formatar_moeda(tickets_por_filial[pior_cod]), "#F85149"))
-
-            # G5 - Forma de pagamento dominante
-            if not df_pag.empty:
-                tot_pag_ins = df_pag["Valor"].sum()
-                pag_agg = df_pag.groupby("Denominacao")["Valor"].sum()
-                if not pag_agg.empty and tot_pag_ins > 0:
-                    forma_dom = pag_agg.idxmax()
-                    pct_dom = pag_agg.max() / tot_pag_ins * 100
-                    insights.append(("💳", "Forma Dominante", forma_dom, f"{pct_dom:.1f}% do total", "#D29922"))
-
-            if insights:
-                cols_ins = st.columns(len(insights))
-                for col, (emoji, label, valor, detalhe, cor) in zip(cols_ins, insights):
-                    with col:
-                        st.markdown(
-                            f'<div class="card-item" style="--accent-color: {cor}; border-left: 5px solid {cor}; background-color: #161B22;">'
-                            f'<div class="card-label" style="color: {cor}; white-space: normal;">{emoji} {label}</div>'
-                            f'<div class="card-value" style="color: {cor}; font-size: 18px;">{valor}</div>'
-                            f'<div style="color:#8B949E;font-size:12px;margin-top:4px;">{detalhe}</div>'
-                            f'</div>',
-                            unsafe_allow_html=True
-                        )
 
 # ==========================================
 # ABA SAZONALIDADE
